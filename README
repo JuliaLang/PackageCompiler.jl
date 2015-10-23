@@ -1,0 +1,24 @@
+# Generate:
+pushd base
+../usr/bin/julia --compile=all -J ../usr/lib/julia/inference.ji --output-bc inference.bc coreimg.jl
+../usr/bin/julia --compile=all -J ../usr/lib/julia/inference.ji --output-bc sys.bc sysimg.jl
+popd
+
+../usr/bin/julia --compile=all --precompiled=no -J ../usr/lib/julia/sys.dylib --output-bc sys-plus.bc userimg.jl
+
+# Direct test via llvm:
+./usr/bin/llc -filetype=obj base/sys.bc -o=usr/lib/julia/sys-all.o
+cp usr/lib/julia/sys-all.o usr/lib/julia/sys-all-debug.o
+make ~+/usr/lib/julia/sys-all.dylib
+make ~+/usr/lib/julia/sys-all-debug.dylib
+
+# Indirect test via the CBackend:
+../julia/usr/bin/llvm-cbe sys.bc -o=sys.cbe.c
+
+WARN='-Wall -Wno-incompatible-pointer-types -Wno-unused-variable -Wno-unused-function'
+clang -shared -dynamic -fPIC sys.cbe.c -L ../julia/usr/lib -ljulia ${WARN}
+clang -fPIC sys.cbe.c -c -o sys.o ${WARN}
+
+# Run:
+
+./usr/bin/julia-debug -J usr/lib/julia/sys-all-debug.dylib --compile=no
