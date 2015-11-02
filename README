@@ -4,21 +4,38 @@ pushd base
 ../usr/bin/julia --compile=all -J ../usr/lib/julia/inference.ji --output-bc sys.bc sysimg.jl
 popd
 
-../usr/bin/julia --compile=all --precompiled=no -J ../usr/lib/julia/sys.dylib --output-bc sys-plus.bc userimg.jl
+../usr/bin/julia --startup-file=no --compile=all --precompiled=no -J ../usr/lib/julia/sys.dylib --output-bc sys-plus.bc program.jl
 
 # Direct test via llvm:
-./usr/bin/llc -filetype=obj base/sys.bc -o=usr/lib/julia/sys-all.o
-cp usr/lib/julia/sys-all.o usr/lib/julia/sys-all-debug.o
-make ~+/usr/lib/julia/sys-all.dylib
-make ~+/usr/lib/julia/sys-all-debug.dylib
+./usr/bin/llc -filetype=obj base/sys-plus.bc -o=usr/lib/julia/sys-plus.o
+cp usr/lib/julia/sys-plus.o usr/lib/julia/sys-plus-debug.o
+make ~+/usr/lib/julia/sys-plus.dylib
+make ~+/usr/lib/julia/sys-plus-debug.dylib
 
 # Indirect test via the CBackend:
-../julia/usr/bin/llvm-cbe sys.bc -o=sys.cbe.c
+../julia/usr/bin/llvm-cbe sys-plus.bc -o=sys-plus.cbe.c
 
-WARN='-Wall -Wno-incompatible-pointer-types -Wno-unused-variable -Wno-unused-function'
-clang -shared -dynamic -fPIC sys.cbe.c -L ../julia/usr/lib -ljulia ${WARN}
-clang -fPIC sys.cbe.c -c -o sys.o ${WARN}
+WARN='-Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -pedantic -std=c99 -Wno-sign-compare'
+clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support #-ggdb3 -O3
+clang -shared -dynamic sys-plus.o -L ../julia/usr/lib -ljulia ${WARN} -o sys-plus.dylib
 
 # Run:
+./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no
 
-./usr/bin/julia-debug -J usr/lib/julia/sys-all-debug.dylib --compile=no
+# Create custom embedded app
+clang ${WARN} program.c -o julia_hello -I../julia/src -I../julia/src/support -I../julia/usr/include -L../julia/usr/lib sys-plus.dylib -ljulia -Wl,-rpath,../julia/usr/lib -ggdb3
+./julia_hello
+
+# Known compiler warnings:
+
+sys-all-debug.cbe.c:185:15: warning: zero size arrays are an extension [-Wzero-length-array]
+   bool array[0];
+==> Proposed solution: Ignore all ghost types of this form
+
+sys-all-debug.cbe.c:738415:81: warning: use of GNU empty initializer extension [-Wgnu-empty-initializer]
+  return (struct l_unnamed_2){ ((unsigned char)0), (struct l_array_0__AC_bool){ { } } };
+==> Proposed solution: convert struct initializers to a functional form
+
+sys-all-debug.cbe.c:126805:104: warning: use of GNU empty initializer extension [-Wgnu-empty-initializer]
+  llvm_cbe_broadcast_2e_splatinsert7 = ((unsigned long long __attribute__((vector_size(16 ))))/*UNDEF*/{});
+==> Proposed solution: eliminate usage of vector
