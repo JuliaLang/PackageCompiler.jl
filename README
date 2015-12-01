@@ -15,8 +15,8 @@ make ~+/usr/lib/julia/sys-plus-debug.dylib
 # Indirect test via the CBackend:
 ../julia/usr/bin/llvm-cbe sys-plus.bc -o=sys-plus.cbe.c
 
-WARN='-Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -pedantic -std=c99 -Wno-sign-compare'
-clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support #-ggdb3 -O3
+WARN='-std=c89 -pedantic -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-but-set-variable -Wno-long-long'
+clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support -pipe # -ggdb3 -O3 -integrated-as
 clang -shared -dynamic sys-plus.o -L ../julia/usr/lib -ljulia ${WARN} -o sys-plus.dylib
 
 cl sys-plus.cbe.c /I..\julia\src /I..\julia\src\support /D__unaligned= /c /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702
@@ -29,18 +29,14 @@ clang ${WARN} program.c -o julia_hello -I../julia/src -I../julia/src/support -I.
 ./julia_hello
 
 # Known compiler warnings:
+#
+../julia/src/APInt-C.h:1:1: error: C++ style comments are not allowed in ISO C90
+Solution: convert Julia public headers to use C-style comments
+Alternative: ignore this error
 
-sys-all-debug.cbe.c:185:15: warning: zero size arrays are an extension [-Wzero-length-array]
-   bool array[0];
-==> Proposed solution: Ignore all ghost types of this form
-
-sys-all-debug.cbe.c:738415:81: warning: use of GNU empty initializer extension [-Wgnu-empty-initializer]
-  return (struct l_unnamed_2){ ((unsigned char)0), (struct l_array_0__AC_bool){ { } } };
-==> Proposed solution: convert struct initializers to a functional form
-
-sys-all-debug.cbe.c:126805:104: warning: use of GNU empty initializer extension [-Wgnu-empty-initializer]
-  llvm_cbe_broadcast_2e_splatinsert7 = ((unsigned long long __attribute__((vector_size(16 ))))/*UNDEF*/{});
-==> Proposed solution: eliminate usage of vector
+sys-plus.cbe.c:89252:58: warning: ISO C forbids conversion of function pointer to object pointer type [-Wpedantic]
+Solution: convert jl_sysimg_gvars from i8*[] to void()*[]
+Alternative: ignore this error
 
 TODO:
 handle stdcall, etc. for function call sites, prototypes
