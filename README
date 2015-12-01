@@ -19,6 +19,8 @@ WARN='-Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parame
 clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support #-ggdb3 -O3
 clang -shared -dynamic sys-plus.o -L ../julia/usr/lib -ljulia ${WARN} -o sys-plus.dylib
 
+cl sys-plus.cbe.c /I..\julia\src /I..\julia\src\support /D__unaligned= /c /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702
+
 # Run:
 ./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no
 
@@ -39,3 +41,8 @@ sys-all-debug.cbe.c:738415:81: warning: use of GNU empty initializer extension [
 sys-all-debug.cbe.c:126805:104: warning: use of GNU empty initializer extension [-Wgnu-empty-initializer]
   llvm_cbe_broadcast_2e_splatinsert7 = ((unsigned long long __attribute__((vector_size(16 ))))/*UNDEF*/{});
 ==> Proposed solution: eliminate usage of vector
+
+TODO:
+handle stdcall, etc. for function call sites, prototypes
+
+use openlibm header instead of math.h (because msvc)
