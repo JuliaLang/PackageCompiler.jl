@@ -19,7 +19,8 @@ WARN='-std=c89 -pedantic -Wall -Wextra -Wno-unused-variable -Wno-unused-function
 clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support -pipe # -ggdb3 -O3 -integrated-as
 clang -shared -dynamic sys-plus.o -L ../julia/usr/lib -ljulia ${WARN} -o sys-plus.dylib
 
-cl sys-plus.cbe.c /I..\julia\src /I..\julia\src\support /D__unaligned= /c /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702
+cl sys-plus.cbe.c /Fosys-plus.cbe.obj /I..\julia\src /I..\julia\src\support /D__unaligned= /c /Zi /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702
+link sys-plus.cbe.obj /out:sys-plus.cbe.dll /dll ..\julia\win32\usr\lib\libjulia.dll.a ..\julia\win32\usr\lib\libopenlibm.a msvcrt.lib /nodefaultlib:libcmt /nodefaultlib:libcpmt /nodefaultlib:oldnames /debug
 
 # Run:
 ./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no
