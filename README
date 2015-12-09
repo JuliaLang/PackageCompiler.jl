@@ -1,37 +1,47 @@
-# Generate:
+# Install / compile llvm-cbe (or see instructions on github repo)
+make -C deps compile-llvm LLVM_VER=3.7.0
+pushd julia/deps/srccache/llvm-3.7.0/projects
+git clone git@github.com:JuliaComputing/llvm-cbe.git
+popd
+pushd julia/deps/build/llvm-3.7.0/build_Release/projects
+make # installs llvm-cbe to julia/deps/build/llvm-3.7.0/build_Release/Release/bin
+popd
+
+# Generate code (choose one):
 pushd base
 ../usr/bin/julia --compile=all -J ../usr/lib/julia/inference.ji --output-bc inference.bc coreimg.jl
 ../usr/bin/julia --compile=all -J ../usr/lib/julia/inference.ji --output-bc sys.bc sysimg.jl
+../usr/bin/julia --startup-file=no --compile=all --precompiled=no -J ../usr/lib/julia/sys.dylib --output-bc sys-plus.bc program.jl
 popd
 
-../usr/bin/julia --startup-file=no --compile=all --precompiled=no -J ../usr/lib/julia/sys.dylib --output-bc sys-plus.bc program.jl
-
-# Direct test via llvm:
+# Direct test via llvm and julia makefile system:
 ./usr/bin/llc -filetype=obj base/sys-plus.bc -o=usr/lib/julia/sys-plus.o
 cp usr/lib/julia/sys-plus.o usr/lib/julia/sys-plus-debug.o
 make ~+/usr/lib/julia/sys-plus.dylib
 make ~+/usr/lib/julia/sys-plus-debug.dylib
 
 # Indirect test via the CBackend:
-../julia/usr/bin/llvm-cbe sys-plus.bc -o=sys-plus.cbe.c
+./usr/bin/llvm-cbe sys-plus.bc -o=sys-plus.cbe.c
 
-WARN='-std=c89 -pedantic -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-but-set-variable -Wno-long-long'
-clang -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -I../julia/src -I../julia/src/support -pipe # -ggdb3 -O3 -integrated-as
-clang -shared -dynamic sys-plus.o -L ../julia/usr/lib -ljulia ${WARN} -o sys-plus.dylib
+  # clang/gcc compiler command
+WARN='-std=c99 -pedantic -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-but-set-variable -Wno-long-long -Wno-invalid-noreturn -Winline'
+cc -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -Isrc -Isrc/support -pipe -finline-functions -g # -O3 -integrated-as
+cc -shared -dynamic sys-plus.o -Lusr/lib -ljulia ${WARN} -o sys-plus.dylib
 
-cl sys-plus.cbe.c /Fosys-plus.cbe.obj /I..\julia\src /I..\julia\src\support /D__unaligned= /c /Zi /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702
-link sys-plus.cbe.obj /out:sys-plus.cbe.dll /dll ..\julia\win32\usr\lib\libjulia.dll.a ..\julia\win32\usr\lib\libopenlibm.a msvcrt.lib /nodefaultlib:libcmt /nodefaultlib:libcpmt /nodefaultlib:oldnames /debug
+  # msvc compiler command
+cl /c sys-plus.cbe.c /Fosys-plus.cbe.obj /Isrc /Isrc\support /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702 /D__unaligned= /Zi
+link sys-plus.cbe.obj /out:sys-plus.cbe.dll /dll usr\lib\libjulia.dll.a usr\lib\libopenlibm.a msvcrt.lib /nodefaultlib:libcmt /nodefaultlib:libcpmt /nodefaultlib:oldnames /debug
 
 # Run:
-./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no
+./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no --precompiled=yes
 
 # Create custom embedded app
-clang ${WARN} program.c -o julia_hello -I../julia/src -I../julia/src/support -I../julia/usr/include -L../julia/usr/lib sys-plus.dylib -ljulia -Wl,-rpath,../julia/usr/lib -ggdb3
+clang ${WARN} program.c -o julia_hello -Isrc -Isrc/support -Iusr/include -Lusr/lib sys-plus.dylib -ljulia -Wl,-rpath,~+/usr/lib -ggdb3
 ./julia_hello
 
 # Known compiler warnings:
 #
-../julia/src/APInt-C.h:1:1: error: C++ style comments are not allowed in ISO C90
+src/APInt-C.h:1:1: error: C++ style comments are not allowed in ISO C90
 Solution: convert Julia public headers to use C-style comments
 Alternative: ignore this error
 
@@ -39,7 +49,5 @@ sys-plus.cbe.c:89252:58: warning: ISO C forbids conversion of function pointer t
 Solution: convert jl_sysimg_gvars from i8*[] to void()*[]
 Alternative: ignore this error
 
-TODO:
-handle stdcall, etc. for function call sites, prototypes
-
-use openlibm header instead of math.h (because msvc)
+MSVC doesn't have a prototype for some libm functions (like pow)
+Solution: use openlibm header instead of math.h
