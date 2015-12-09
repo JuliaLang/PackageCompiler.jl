@@ -31,7 +31,7 @@ int wmain(int argc, wchar_t *wargv[], wchar_t *envp[])
     // initialization
     libsupport_init();
     jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
-    jl_options.image_file = "castech_legacy.cbe.dylib";
+    jl_options.image_file = argv[0]; //"castech_legacy.cbe.dylib";
     julia_init(JL_IMAGE_CWD);
 
     // build arguments

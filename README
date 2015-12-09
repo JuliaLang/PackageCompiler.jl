@@ -27,6 +27,7 @@ make ~+/usr/lib/julia/sys-plus-debug.dylib
 WARN='-std=c99 -pedantic -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-but-set-variable -Wno-long-long -Wno-invalid-noreturn -Winline'
 cc -c -fPIC sys-plus.cbe.c ${WARN} -o sys-plus.o -Isrc -Isrc/support -pipe -finline-functions -g # -O3 -integrated-as
 cc -shared -dynamic sys-plus.o -Lusr/lib -ljulia ${WARN} -o sys-plus.dylib
+install_name_tool -id @rpath/sys-plus.dylib sys-plus.dylib
 
   # msvc compiler command
 cl /c sys-plus.cbe.c /Fosys-plus.cbe.obj /Isrc /Isrc\support /Wall /wd4054 /wd4245 /wd4100 /wd4055 /wd4127 /wd4645 /wd4646 /wd4389 /wd4242 /wd4146 /wd4244 /wd4820 /wd4702 /D__unaligned= /Zi
@@ -36,7 +37,7 @@ link sys-plus.cbe.obj /out:sys-plus.cbe.dll /dll usr\lib\libjulia.dll.a usr\lib\
 ./usr/bin/julia -J usr/lib/julia/sys-plus.dylib --compile=no --precompiled=yes
 
 # Create custom embedded app
-clang ${WARN} program.c -o julia_hello -Isrc -Isrc/support -Iusr/include -Lusr/lib sys-plus.dylib -ljulia -Wl,-rpath,~+/usr/lib -ggdb3
+clang ${WARN} program.c -o julia_hello -Isrc -Isrc/support -Iusr/include -Lusr/lib sys-plus.dylib -ljulia -Wl,-rpath,$(echo ~+/usr/lib) -ggdb3
 ./julia_hello
 
 # Known compiler warnings:
