@@ -24,7 +24,7 @@ Or see instructions on github repo: https://github.com/JuliaComputing/llvm-cbe
 
 # Generate the statically-compiled Julia object file
 
-These are equivalent to the `make julia-sysimg` target,
+These are equivalent to the `make julia-sysimg-release` target,
 with the addition of a `--compile=all` flag.
 Choose one, or make your own from the examples:
 
@@ -41,7 +41,7 @@ Choose one, or make your own from the examples:
     # but starting from an existing inference image for better type information:
     pushd $JULIA_ROOT/base
     $JULIA_ROOT/usr/bin/julia --compile=all \
-        --sysimg $JULIA_ROOT/usr/lib/julia/inference.ji \
+        --sysimage $JULIA_ROOT/usr/lib/julia/inference.ji \
         --output-bc inference.bc \
         coreimg.jl
     popd
@@ -49,7 +49,7 @@ Choose one, or make your own from the examples:
     # build a regular julia sysimg, but with all functions statically compiled
     pushd $JULIA_ROOT/base
     $JULIA_ROOT/usr/bin/julia --compile=all \
-        --sysimg $JULIA_ROOT/usr/lib/julia/inference.ji \
+        --sysimage $JULIA_ROOT/usr/lib/julia/inference.ji \
         --output-bc sys.bc \
         sysimg.jl
     popd
@@ -57,7 +57,7 @@ Choose one, or make your own from the examples:
     # starting from any existing sysimg,
     # add the user code "program.jl" and statically compile everything
     $JULIA_ROOT/usr/bin/julia --startup-file=no --compile=all --precompiled=no \
-        --sysimg $JULIA_ROOT/usr/lib/julia/sys.dylib \
+        --sysimage $JULIA_ROOT/usr/lib/julia/sys.dylib \
         --output-bc sys-plus.bc \
         program.jl
 
@@ -154,7 +154,7 @@ with the resulting library will throw a Julia exception.
 To use this code, explicitly disable runtime code generation via the `--compile=no` flag
 and load using the generic Julia binary:
 
-    $JULIA_ROOT/usr/bin/julia --sysimg=$JULIA_ROOT/usr/lib/julia/sys-plus.dylib --compile=no --precompiled=yes
+    $JULIA_ROOT/usr/bin/julia --sysimage=$JULIA_ROOT/usr/lib/julia/sys-plus.dylib --compile=no --precompiled=yes
 
 # Create custom embedded app
 It is also possible to create a native wrapper around the shared (or static) library.
