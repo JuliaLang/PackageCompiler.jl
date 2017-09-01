@@ -16,7 +16,7 @@ function compile(julia_program_file, julia_install_path,
     JULIA_EXE = joinpath(julia_install_path, "bin", "julia")
     LIB_PATH = joinpath(julia_install_path, "lib")
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
-    if Sys.iswindows()
+    if is_windows()
         julia_pkgdir = replace(julia_pkgdir, "\\", "\\\\")
         julia_program_file = replace(julia_program_file, "\\", "\\\\")
     end
@@ -34,7 +34,7 @@ function compile(julia_program_file, julia_install_path,
     ldflags = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`, String))
     ldlibs = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`, String))
 
-    if Sys.iswindows()
+    if is_windows()
         run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
         run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lopenlibm -Wl,-rpath,\$ORIGIN`)
     else
