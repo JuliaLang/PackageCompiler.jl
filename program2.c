@@ -9,7 +9,7 @@
 #include "julia.h"
 
 // Declare C prototype of a function defined in Julia
-extern int (*c_decl_name)(jl_array_t*);
+extern int julia_main(jl_array_t*);
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 #ifndef _OS_WINDOWS_
@@ -36,21 +36,20 @@ int wmain(int argc, wchar_t *wargv[], wchar_t *envp[])
 
     // initialization
     libsupport_init();
-    jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
-    jl_options.image_file = argv[0];
+    // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
+    jl_options.image_file = "libhello.so";
     julia_init(JL_IMAGE_CWD);
 
-    // build arguments array: `UTF8String[ bytestring(argv[i]) for i in 1:argc ]`
-    jl_array_t *ARGS = jl_alloc_array_1d(jl_apply_array_type(jl_utf8_string_type, 1), 0);
+    // build arguments array: `String[ unsafe_string(argv[i]) for i in 1:argc ]`
+    jl_array_t *ARGS = jl_alloc_array_1d(jl_apply_array_type(jl_string_type, 1), 0);
     JL_GC_PUSH1(&ARGS);
     jl_array_grow_end(ARGS, argc - 1);
     for (i = 1; i < argc; i++) {
         jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-        jl_set_typeof(s, jl_utf8_string_type);
         jl_arrayset(ARGS, s, i - 1);
     }
     // call the work function, and get back a value
-    retcode = c_decl_name(ARGS);
+    retcode = julia_main(ARGS);
     JL_GC_POP();
 
     // Cleanup and gracefully exit
