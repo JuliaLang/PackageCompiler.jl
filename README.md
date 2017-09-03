@@ -7,7 +7,7 @@
 
    Usage: `juliac.jl <Julia Program file> <Julia installation Path> [Julia Package Directory]`
 
-   In my case, I invoke it like this:
+   In my case, I invoke it for hello.jl as follows. For now, make sure that the driver program is also in the static-julia directory:
    `~/julia-0.6/bin/julia juliac.jl hello.jl ~/julia-0.6 ~/.julia`
 
 3. A shared library containing the system image `libhello.so`, and a
