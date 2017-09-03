@@ -3,7 +3,7 @@
 1. Make sure all the packages and modules are precompiled. In my case
    the Julia 0.6 binary is downloaded and installed in `~/julia-0.6`.
 
-2. Use the juliac.jl script. The way to call it is as follows:
+2. Clone this repo and use the juliac.jl script. The way to call it is as follows and make sure to run it from the static-julia directory:
 
    Usage: `juliac.jl <Julia Program file> <Julia installation Path> [Julia Package Directory]`
 
