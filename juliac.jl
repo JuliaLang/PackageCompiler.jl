@@ -1,10 +1,6 @@
 ## Assumptions:
 ## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
 
-## Examples
-## Julia Installation Path on OSX - /Applications/Julia-0.5.app/Contents/Resources/julia
-## Julia Installation Path on Linux - ./julia-2e358ce975/
-
 function compile(julia_program_file, julia_install_path,
                  julia_pkgdir=joinpath(Base.homedir(), ".julia"))
     filename = split(julia_program_file, ".")[1]
@@ -27,16 +23,16 @@ function compile(julia_program_file, julia_install_path,
          empty!(Base.LOAD_CACHE_PATH)
          "`)
 
-    cflags = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --cflags`, String))
-    ldflags = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`, String))
-    ldlibs = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`, String))
+    cflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --cflags`))
+    ldflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`))
+    ldlibs = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`))
 
     if is_windows()
         run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
-        run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lopenlibm -Wl,-rpath,\$ORIGIN`)
+        run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lopenlibm -Wl,-rpath,\$ORIGIN`)
     else
         run(`g++ -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
-        run(`gcc -m64 program.c -o $(filename) $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lm -Wl,-rpath,\$ORIGIN`)
+        run(`gcc -m64 program.c -o $(filename) $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lm -Wl,-rpath,\$ORIGIN`)
     end
 end
 
