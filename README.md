@@ -1,22 +1,22 @@
 ## Building a shared library from your julia code
 
 1. Make sure all the packages and modules are precompiled. In my case
-   the Julia 0.6 binary is downloaded and installed in ~/julia-0.6.
+   the Julia 0.6 binary is downloaded and installed in `~/julia-0.6`.
 
 2. Use the juliac.jl script. The way to call it is as follows:
 
-   Usage: juliac.jl <Julia Program file> <Julia installation Path> [Julia Package Directory]
+   Usage: `juliac.jl <Julia Program file> <Julia installation Path> [Julia Package Directory]`
 
    In my case, I invoke it like this:
-   ~/julia-0.6/bin/julia juliac.jl hello.jl ~/julia-0.6 ~/.julia
+   `~/julia-0.6/bin/julia juliac.jl hello.jl ~/julia-0.6 ~/.julia`
 
 3. A shared library containing the system image `libhello.so`, and a
    driver binary `hello` are created.
-
+```
    $ ./hello
    hello, world
    f() = -0.37549581296986956
-
+```
    The plot command in hello.jl is only meant to exercise a bunch of Gadfly compilation. It is not    expected to produce a plot in the terminal.
 
 ## Under the hood
