@@ -2,7 +2,7 @@
 ## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
 
 function compile(julia_program_file, julia_install_path,
-                 julia_pkgdir=joinpath(Base.homedir(), ".julia"))
+                 julia_pkgdir=joinpath(Pkg.dir(), ".."))
     filename = split(julia_program_file, ".")[1]
     O_FILE = "$(filename).o"
 
