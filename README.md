@@ -1,4 +1,4 @@
-## Building a shared library from your julia code
+## Building a shared library and executable from your julia code
 
 1. Make sure all the packages and modules are precompiled. In my case
    the Julia 0.6 binary is downloaded and installed in `~/julia-0.6`.
