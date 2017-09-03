@@ -12,6 +12,3 @@ Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
 end
 
 end
-
-#using mystuff
-#mystuff.julia_main()

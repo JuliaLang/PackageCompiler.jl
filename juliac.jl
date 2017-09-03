@@ -27,16 +27,16 @@ function compile(julia_program_file, julia_install_path,
          empty!(Base.LOAD_CACHE_PATH)
          "`)
 
-    cflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --cflags`))
-    ldflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`))
-    ldlibs = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`))
+    cflags = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --cflags`, String))
+    ldflags = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`, String))
+    ldlibs = Base.shell_split(read(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`, String))
 
     if is_windows()
         run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
-        run(`x86_64-w64-mingw32-gcc -m64 program2.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lopenlibm -Wl,-rpath,\$ORIGIN`)
+        run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lopenlibm -Wl,-rpath,\$ORIGIN`)
     else
         run(`g++ -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
-        run(`gcc -m64 program2.c -o $(filename) $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lm -Wl,-rpath,\$ORIGIN`)
+        run(`gcc -m64 program.c -o $(filename) $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lLLVM -lm -Wl,-rpath,\$ORIGIN`)
     end
 end
 
