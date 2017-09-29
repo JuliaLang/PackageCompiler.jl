@@ -6,7 +6,7 @@ function compile(julia_program_file, julia_install_path,
     filename = split(julia_program_file, ".")[1]
     O_FILE = "$(filename).o"
 
-    SYS_LIB = joinpath(julia_install_path, "lib", "julia", "sys." * (is_apple() ? "dylib" : "so"))
+    SYS_LIB = joinpath(julia_install_path, "lib", "julia", "sys")
     JULIA_EXE = joinpath(julia_install_path, "bin", "julia")
     LIB_PATH = joinpath(julia_install_path, "lib")
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
