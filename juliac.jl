@@ -27,7 +27,7 @@ function compile(julia_program_file, julia_install_path,
     ldlibs = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`))
 
     if is_windows()
-        run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
+        run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs) -Wl,--export-all-symbols`)
         run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lopenlibm -Wl,-rpath,\$ORIGIN`)
     else
         run(`g++ -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
