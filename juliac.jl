@@ -6,7 +6,6 @@ function compile(julia_program_file, julia_install_path,
     filename = split(julia_program_file, ".")[1]
     O_FILE = "$(filename).o"
 
-    SYS_LIB = joinpath(julia_install_path, "lib", "julia", "sys")
     JULIA_EXE = joinpath(julia_install_path, "bin", "julia")
     LIB_PATH = joinpath(julia_install_path, "lib")
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
@@ -15,7 +14,7 @@ function compile(julia_program_file, julia_install_path,
         julia_program_file = replace(julia_program_file, "\\", "\\\\")
     end
 
-    run(`"$(Base.julia_cmd())" "-J$(SYS_LIB)" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
+    run(`"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
          vers = \""v$(VERSION.major).$(VERSION.minor)"\"
          const DIR_NAME = \"".julia"\"
          push!(Base.LOAD_CACHE_PATH, abspath(\""$julia_pkgdir"\", \""lib"\", vers))
