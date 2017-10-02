@@ -7,15 +7,16 @@ function compile(julia_program_file, julia_install_path,
     O_FILE = "$(filename).o"
 
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
+    julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
+
     if is_windows()
-        julia_pkgdir = replace(julia_pkgdir, "\\", "\\\\")
         julia_program_file = replace(julia_program_file, "\\", "\\\\")
+        julia_pkglibdir = replace(julia_pkglibdir, "\\", "\\\\")
     end
 
     run(`"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
-         vers = \""v$(VERSION.major).$(VERSION.minor)"\"
-         push!(Base.LOAD_CACHE_PATH, abspath(\""$julia_pkgdir"\", \""lib"\", vers))
-         include(\""$(julia_program_file)"\")
+         include(\"$(julia_program_file)\")
+         push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\")
          empty!(Base.LOAD_CACHE_PATH)
          "`)
 
