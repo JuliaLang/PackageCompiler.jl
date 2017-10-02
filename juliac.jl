@@ -1,12 +1,11 @@
 ## Assumptions:
 ## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
 
-function compile(julia_program_file, julia_install_path,
-                 julia_pkgdir=joinpath(Pkg.dir(), ".."))
+function compile(julia_program_file)
     filename = split(julia_program_file, ".")[1]
     O_FILE = "$(filename).o"
-
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
+
     julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
 
     if is_windows()
@@ -34,18 +33,14 @@ function compile(julia_program_file, julia_install_path,
 end
 
 
-if length(ARGS) < 1
-    println("Usage: $(@__FILE__) <Julia Program file> [Julia installation Path [Julia Package Directory]]")
+if length(ARGS) != 1
+    println("Usage: $(@__FILE__) <Julia Program file>")
     exit(1)
 end
+
 JULIA_PROGRAM_FILE = ARGS[1]
-JULIA_INSTALL_PATH = length(ARGS) > 1 ? ARGS[2] : dirname(JULIA_HOME)
 
 println("Program File : $JULIA_PROGRAM_FILE")
-println("Julia Install Path: $JULIA_INSTALL_PATH")
 
-if length(ARGS) > 2
-    return compile(JULIA_PROGRAM_FILE, JULIA_INSTALL_PATH, ARGS[3])
-else
-    return compile(JULIA_PROGRAM_FILE, JULIA_INSTALL_PATH)
-end
+compile(JULIA_PROGRAM_FILE)
+
