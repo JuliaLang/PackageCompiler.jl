@@ -3,4 +3,5 @@
 *.so
 *.dylib
 *.dll
+*.exe
 hello
