@@ -15,7 +15,6 @@ function compile(julia_program_file, julia_install_path,
 
     run(`"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
          vers = \""v$(VERSION.major).$(VERSION.minor)"\"
-         const DIR_NAME = \"".julia"\"
          push!(Base.LOAD_CACHE_PATH, abspath(\""$julia_pkgdir"\", \""lib"\", vers))
          include(\""$(julia_program_file)"\")
          empty!(Base.LOAD_CACHE_PATH)
