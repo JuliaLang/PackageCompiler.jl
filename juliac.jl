@@ -7,7 +7,6 @@ function compile(julia_program_file, julia_install_path,
     O_FILE = "$(filename).o"
 
     JULIA_EXE = joinpath(julia_install_path, "bin", "julia")
-    LIB_PATH = joinpath(julia_install_path, "lib")
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
     if is_windows()
         julia_pkgdir = replace(julia_pkgdir, "\\", "\\\\")
