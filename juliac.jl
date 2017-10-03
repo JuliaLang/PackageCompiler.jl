@@ -13,23 +13,26 @@ function compile(julia_program_file)
         julia_pkglibdir = replace(julia_pkglibdir, "\\", "\\\\")
     end
 
-    run(`"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
-         include(\"$(julia_program_file)\")
-         push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\")
-         empty!(Base.LOAD_CACHE_PATH)
-         "`)
+    command = `"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$O_FILE" "-e"
+               "include(\"$julia_program_file\"); push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\"); empty!(Base.LOAD_CACHE_PATH)"`
+    println("Running command:\n$command")
+    run(command)
 
-    cflags = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --cflags`))
-    ldflags = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --ldflags`))
-    ldlibs = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --ldlibs`))
+    command = `$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
+    cflags = Base.shell_split(readstring(`$command --cflags`))
+    ldflags = Base.shell_split(readstring(`$command --ldflags`))
+    ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
 
+    command = `gcc -m64 -shared -o $SO_FILE $O_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
     if is_windows()
-        run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs) -Wl,--export-all-symbols`)
-        run(`x86_64-w64-mingw32-gcc -m64 program.c -o $(filename).exe $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lopenlibm -Wl,-rpath,\$ORIGIN`)
-    else
-        run(`g++ -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs)`)
-        run(`gcc -m64 program.c -o $(filename) $(SO_FILE) $(cflags) $(ldflags) $(ldlibs) -lm -Wl,-rpath,\$ORIGIN`)
+        command = `$command -Wl,--export-all-symbols`
     end
+    println("Running command:\n$command")
+    run(command)
+
+    command = `gcc -m64 $C_FILE -o $E_FILE $SO_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+    println("Running command:\n$command")
+    run(command)
 end
 
 
@@ -40,7 +43,7 @@ end
 
 JULIA_PROGRAM_FILE = ARGS[1]
 
-println("Program File : $JULIA_PROGRAM_FILE")
+println("Program file:\n$(abspath(JULIA_PROGRAM_FILE))")
 
 compile(JULIA_PROGRAM_FILE)
 
