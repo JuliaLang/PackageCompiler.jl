@@ -1,30 +1,27 @@
 ## Assumptions:
 ## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
 
-function compile(julia_program_file, julia_install_path,
-                 julia_pkgdir=joinpath(Pkg.dir(), ".."))
+function compile(julia_program_file)
     filename = split(julia_program_file, ".")[1]
     O_FILE = "$(filename).o"
-
-    JULIA_EXE = joinpath(julia_install_path, "bin", "julia")
-    LIB_PATH = joinpath(julia_install_path, "lib")
     SO_FILE = "lib$(filename).$(Libdl.dlext)"
+
+    julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
+
     if is_windows()
-        julia_pkgdir = replace(julia_pkgdir, "\\", "\\\\")
         julia_program_file = replace(julia_program_file, "\\", "\\\\")
+        julia_pkglibdir = replace(julia_pkglibdir, "\\", "\\\\")
     end
 
     run(`"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$(O_FILE)" "-e" "
-         vers = \""v$(VERSION.major).$(VERSION.minor)"\"
-         const DIR_NAME = \"".julia"\"
-         push!(Base.LOAD_CACHE_PATH, abspath(\""$julia_pkgdir"\", \""lib"\", vers))
-         include(\""$(julia_program_file)"\")
+         include(\"$(julia_program_file)\")
+         push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\")
          empty!(Base.LOAD_CACHE_PATH)
          "`)
 
-    cflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --cflags`))
-    ldflags = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldflags`))
-    ldlibs = Base.shell_split(readstring(`$(JULIA_EXE) $(joinpath(julia_install_path, "share", "julia", "julia-config.jl")) --ldlibs`))
+    cflags = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --cflags`))
+    ldflags = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --ldflags`))
+    ldlibs = Base.shell_split(readstring(`$(Base.julia_cmd()) $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl")) --ldlibs`))
 
     if is_windows()
         run(`x86_64-w64-mingw32-gcc -m64 -fPIC -shared -o $(SO_FILE) $(O_FILE) $(ldflags) $(ldlibs) -Wl,--export-all-symbols`)
@@ -36,18 +33,14 @@ function compile(julia_program_file, julia_install_path,
 end
 
 
-if length(ARGS) < 1
-    println("Usage: $(@__FILE__) <Julia Program file> [Julia installation Path [Julia Package Directory]]")
+if length(ARGS) != 1
+    println("Usage: $(@__FILE__) <Julia Program file>")
     exit(1)
 end
+
 JULIA_PROGRAM_FILE = ARGS[1]
-JULIA_INSTALL_PATH = length(ARGS) > 1 ? ARGS[2] : dirname(JULIA_HOME)
 
 println("Program File : $JULIA_PROGRAM_FILE")
-println("Julia Install Path: $JULIA_INSTALL_PATH")
 
-if length(ARGS) > 2
-    return compile(JULIA_PROGRAM_FILE, JULIA_INSTALL_PATH, ARGS[3])
-else
-    return compile(JULIA_PROGRAM_FILE, JULIA_INSTALL_PATH)
-end
+compile(JULIA_PROGRAM_FILE)
+
