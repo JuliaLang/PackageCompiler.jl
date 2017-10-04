@@ -2,9 +2,27 @@
 ## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
 
 function compile(julia_program_file)
-    filename = split(julia_program_file, ".")[1]
-    O_FILE = "$(filename).o"
-    SO_FILE = "lib$(filename).$(Libdl.dlext)"
+    julia_program_file = abspath(julia_program_file)
+    if !isfile(julia_program_file)
+        error("Cannot find file: \"$julia_program_file\"")
+    end
+
+    dir_name = dirname(julia_program_file)
+    file_name = splitext(basename(julia_program_file))[1]
+    O_FILE = "$file_name.o"
+    SO_FILE = "lib$file_name.$(Libdl.dlext)"
+    C_FILE = joinpath(@__DIR__, "program.c")
+    E_FILE = file_name * (is_windows() ? ".exe" : "")
+
+    build_dir = joinpath(dir_name, "builddir")
+    if !isdir(build_dir)
+        println("Make directory:\n\"$build_dir\"")
+        mkdir(build_dir)
+    end
+    if pwd() != build_dir
+        println("Change directory:\n\"$build_dir\"")
+        cd(build_dir)
+    end
 
     julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
 
