@@ -1,7 +1,7 @@
 ## Assumptions:
-## 1. g++ / x86_64-w64-mingw32-gcc is available and is in path
+## 1. gcc / x86_64-w64-mingw32-gcc is available and is in path
 
-function compile(julia_program_file)
+function julia_compile(julia_program_file)
     julia_program_file = abspath(julia_program_file)
     if !isfile(julia_program_file)
         error("Cannot find file: \"$julia_program_file\"")
@@ -53,15 +53,15 @@ function compile(julia_program_file)
     run(command)
 end
 
+function main()
+    if length(ARGS) != 1
+        println("Usage: $(basename(@__FILE__)) <Julia Program file>")
+        exit(1)
+    end
 
-if length(ARGS) != 1
-    println("Usage: $(@__FILE__) <Julia Program file>")
-    exit(1)
+    JULIA_PROGRAM_FILE = ARGS[1]
+    println("Program file:\n$(abspath(JULIA_PROGRAM_FILE))")
+    julia_compile(JULIA_PROGRAM_FILE)
 end
 
-JULIA_PROGRAM_FILE = ARGS[1]
-
-println("Program file:\n$(abspath(JULIA_PROGRAM_FILE))")
-
-compile(JULIA_PROGRAM_FILE)
-
+main()
