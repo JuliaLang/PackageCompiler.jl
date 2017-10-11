@@ -34,11 +34,14 @@ function main(args)
         "--julialibs", "-j"
             help = "sync julia libraries to builddir"
             action = :store_true
+        "--clean", "-c"
+            help = "delete builddir"
+            action = :store_true
     end
 
     parsed_args = parse_args(args, s)
 
-    if !any([parsed_args["object"], parsed_args["shared"], parsed_args["executable"], parsed_args["julialibs"]])
+    if !any([parsed_args["object"], parsed_args["shared"], parsed_args["executable"], parsed_args["julialibs"], parsed_args["clean"]])
         if !parsed_args["quiet"]
             println("Nothing to do, exiting\nTry \"$(basename(@__FILE__)) -h\" for more information")
         end
@@ -53,12 +56,13 @@ function main(args)
         parsed_args["object"],
         parsed_args["shared"],
         parsed_args["executable"],
-        parsed_args["julialibs"]
+        parsed_args["julialibs"],
+        parsed_args["clean"]
     )
 end
 
 function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet=false,
-                       object=false, shared=false, executable=true, julialibs=true)
+                       object=false, shared=false, executable=true, julialibs=true, clean=false)
 
     if verbose && quiet
         verbose = false
@@ -76,12 +80,24 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
 
     cd(dir_name)
     build_dir = abspath(build_dir)
-    if !ispath(build_dir)
-        error("Not a valid filesystem path:\n\"$build_dir\"")
-    end
     if !quiet
         println("Build directory:\n\"$build_dir\"")
     end
+
+    if clean
+        if !isdir(build_dir)
+            if verbose
+                println("Build directory does not exist")
+            end
+        else
+            if verbose
+                println("Delete build directory")
+            end
+            rm(build_dir, recursive=true)
+        end
+        return
+    end
+
     if !isdir(build_dir)
         if verbose
             println("Make build directory")
