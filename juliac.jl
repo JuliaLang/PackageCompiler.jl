@@ -1,5 +1,6 @@
 ## Assumptions:
 ## 1. gcc / x86_64-w64-mingw32-gcc is available and is in path
+## 2. Package ArgParse is installed
 
 using ArgParse
 
@@ -145,10 +146,11 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
         cflags = Base.shell_split(readstring(`$command --cflags`))
         ldflags = Base.shell_split(readstring(`$command --ldflags`))
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
+        cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
     end
 
     if shared || executable
-        command = `gcc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
         if is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
@@ -159,7 +161,7 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
     end
 
     if executable
-        command = `gcc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
         if verbose
             println("Build executable file:\n$command")
         end
