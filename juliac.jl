@@ -40,16 +40,15 @@ function julia_compile(julia_program_file)
     cflags = Base.shell_split(readstring(`$command --cflags`))
     ldflags = Base.shell_split(readstring(`$command --ldflags`))
     ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
-    cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
 
-    command = `$cc -m64 -shared -o $SO_FILE $O_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+    command = `gcc -m64 -shared -o $SO_FILE $O_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
     if is_windows()
         command = `$command -Wl,--export-all-symbols`
     end
     println("Running command:\n$command")
     run(command)
 
-    command = `$cc -m64 $C_FILE -o $E_FILE $SO_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+    command = `gcc -m64 $C_FILE -o $E_FILE $SO_FILE $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
     println("Running command:\n$command")
     run(command)
 end
