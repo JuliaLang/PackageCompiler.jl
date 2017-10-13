@@ -1,14 +1,16 @@
 ## Building a shared library and executable from your julia code
 
-1. Make sure all the packages and modules are precompiled. In my case
-   the Julia 0.6 binary is downloaded and installed in `~/julia-0.6`.
+1. Make sure all the packages and modules used by `hello.jl` are precompiled.
+   The `juliac.jl` script uses the `ArgParse` package, make sure it is installed as well.
 
 2. Clone this repo and use the `juliac.jl` script. The way to call it is as follows:
 
-   Usage: `juliac.jl <Julia Program file>`
+   Usage: `juliac.jl [-v] [-q] [-o] [-s] [-e] [-j] [-h] juliaprog [builddir]`
 
-   In my case, I invoke it for `hello.jl` as follows. Make sure that the driver program
-   is also in the `static-julia` directory: `~/julia-0.6/bin/julia juliac.jl hello.jl`
+   Examples:
+   `julia juliac.jl -ve hello.jl`
+   `julia juliac.jl --quiet --object hello.jl`
+   `julia juliac.jl -vosej hello.jl buildtest`
 
    Note: `hello.jl` does not need to be in the `static-julia` directory.
 
@@ -18,7 +20,7 @@
    $ ./hello
    hello, world
    f() = -0.37549581296986956
-       ┌────────────────────────────────────────┐
+       ┌─────────────────────────────────────────────────┐
    100 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠎│
        │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡰⠁⠀│
        │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠊⠀⠀⠀│
@@ -34,7 +36,7 @@
        │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡠⠔⠊⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│
        │⠀⠀⠀⠀⠀⠀⢀⣀⠤⠔⠊⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│
      0 │⣀⠤⠤⠔⠒⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│
-       └────────────────────────────────────────┘
+       └─────────────────────────────────────────────────┘
        1                                       10
 ```
 
