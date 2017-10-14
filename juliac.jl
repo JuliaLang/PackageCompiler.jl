@@ -150,7 +150,7 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
     end
 
     if shared || executable
-        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
         if is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
@@ -161,7 +161,10 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
     end
 
     if executable
-        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs`
+        if is_unix()
+            command = `$command -Wl,-rpath,\$ORIGIN`
+        end
         if verbose
             println("Build executable file \"$e_file\":\n$command")
         end
