@@ -1,4 +1,4 @@
-module mystuff
+module Hello
 
 using UnicodePlots
 using Distributions
