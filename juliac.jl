@@ -133,7 +133,7 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
         command = `"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$o_file" "-e"
                    "include(\"$julia_program\"); push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\"); empty!(Base.LOAD_CACHE_PATH)"`
         if verbose
-            println("Build object file:\n$command")
+            println("Build object file \"$o_file\":\n$command")
         end
         run(command)
         if !object
@@ -150,27 +150,30 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
     end
 
     if shared || executable
-        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
         if is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
         if verbose
-            println("Build shared library:\n$command")
+            println("Build shared library \"$s_file\":\n$command")
         end
         run(command)
     end
 
     if executable
-        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs -Wl,-rpath,\$ORIGIN`
+        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs`
+        if is_unix()
+            command = `$command -Wl,-rpath,\$ORIGIN`
+        end
         if verbose
-            println("Build executable file:\n$command")
+            println("Build executable file \"$e_file\":\n$command")
         end
         run(command)
     end
 
     if delete_object && isfile(o_file)
         if verbose
-            println("Delete object file")
+            println("Delete object file \"$o_file\"")
         end
         rm(o_file)
     end
