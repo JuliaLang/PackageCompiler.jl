@@ -12,6 +12,7 @@
    julia juliac.jl -ve hello.jl                # verbose, create an executable
    julia juliac.jl --quiet --object hello.jl   # builds just the `hello.o` object file
    julia juliac.jl -vosej hello.jl buildtest   # build object, shared lib, exec, and sync julia libs
+   julia juliac.jl -h                          # print help message
    ```
 
    Note: `hello.jl` does not need to be in the `static-julia` directory.
