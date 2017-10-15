@@ -8,9 +8,11 @@
    Usage: `juliac.jl [-v] [-q] [-o] [-s] [-e] [-j] [-h] juliaprog [builddir]`
 
    Examples:
-   `julia juliac.jl -ve hello.jl`
-   `julia juliac.jl --quiet --object hello.jl`
-   `julia juliac.jl -vosej hello.jl buildtest`
+   ```
+   julia juliac.jl -ve hello.jl                # verbose, create an executable
+   julia juliac.jl --quiet --object hello.jl   # builds just the `hello.o` object file
+   julia juliac.jl -vosej hello.jl buildtest   # build object, shared lib, exec, and sync julia libs
+   ```
 
    Note: `hello.jl` does not need to be in the `static-julia` directory.
 
