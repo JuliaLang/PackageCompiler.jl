@@ -13,18 +13,18 @@ extern void julia_main();
 
 int main(int argc, char *argv[])
 {
-  intptr_t v;
-  
-  // Initialize Julia
-  uv_setup_args(argc, argv); // no-op on Windows
-  libsupport_init();
-  jl_options.image_file = "libhello";
-  julia_init(JL_IMAGE_CWD);
+    intptr_t v;
 
-  // Do some work
-  julia_main();
+    // Initialize Julia
+    uv_setup_args(argc, argv); // no-op on Windows
+    libsupport_init();
+    jl_options.image_file = "libhello";
+    julia_init(JL_IMAGE_CWD);
 
-  // Cleanup and graceful exit
-  jl_atexit_hook(0);
-  return 0;
+    // Do some work
+    julia_main();
+
+    // Cleanup and graceful exit
+    jl_atexit_hook(0);
+    return 0;
 }
