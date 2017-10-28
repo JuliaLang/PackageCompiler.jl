@@ -13,6 +13,10 @@ function main(args)
             help = "julia program to compile"
             arg_type = String
             required = true
+        "cprog"
+            help = "c program to compile (if not provided, a minimal standard program is used)"
+            arg_type = String
+            default = nothing
         "builddir"
             help = "build directory, either absolute or relative to the julia program directory"
             arg_type = String
@@ -51,6 +55,7 @@ function main(args)
 
     julia_compile(
         parsed_args["juliaprog"],
+        parsed_args["cprog"],
         parsed_args["builddir"],
         parsed_args["verbose"],
         parsed_args["quiet"],
@@ -62,7 +67,7 @@ function main(args)
     )
 end
 
-function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet=false,
+function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
                        object=false, shared=false, executable=true, julialibs=true, clean=false)
 
     if verbose && quiet
@@ -74,12 +79,23 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
         error("Cannot find file:\n\"$julia_program\"")
     end
     if !quiet
-        println("Program file:\n\"$julia_program\"")
+        println("Julia program file:\n\"$julia_program\"")
     end
-    dir_name = dirname(julia_program)
-    file_name = splitext(basename(julia_program))[1]
 
-    cd(dir_name)
+    if c_program == nothing
+        c_program = joinpath(@__DIR__, "program.c")
+    else
+        c_program = abspath(c_program)
+    end
+    if !isfile(c_program)
+        error("Cannot find file:\n\"$c_program\"")
+    end
+    if !quiet
+        println("C program file:\n\"$c_program\"")
+    end
+
+    cd(dirname(julia_program))
+
     build_dir = abspath(build_dir)
     if !quiet
         println("Build directory:\n\"$build_dir\"")
@@ -116,10 +132,10 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
         end
     end
 
+    file_name = splitext(basename(julia_program))[1]
     o_file = file_name * ".o"
     s_file = "lib" * file_name * ".$(Libdl.dlext)"
     e_file = file_name * (is_windows() ? ".exe" : "")
-    c_file = joinpath(@__DIR__, "program.c")
 
     julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
 
@@ -161,7 +177,7 @@ function julia_compile(julia_program, build_dir="builddir", verbose=false, quiet
     end
 
     if executable
-        command = `$cc -m64 -o $e_file $c_file $s_file $cflags $ldflags $ldlibs`
+        command = `$cc -m64 -o $e_file $c_program $s_file $cflags $ldflags $ldlibs`
         if is_unix()
             command = `$command -Wl,-rpath,\$ORIGIN`
         end
