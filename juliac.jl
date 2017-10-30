@@ -137,7 +137,10 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     s_file = "lib" * file_name * ".$(Libdl.dlext)"
     e_file = file_name * (is_windows() ? ".exe" : "")
 
+    # TODO: these should probably be emitted from julia-config also:
     julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
+    shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
+    private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
     if is_windows()
         julia_program = replace(julia_program, "\\", "\\\\")
@@ -164,12 +167,6 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
     end
-    if julialibs
-        # TODO: these should probably be emitted from julia-config also:
-        shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
-        private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
-    end
-
 
     if shared || executable
         command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
@@ -227,11 +224,11 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
                 if verbose
                     println(" $dst")
                 end
-                cp(src, dst, remove_destination=true)
+                cp(src, dst, remove_destination=true, follow_symlinks=false)
                 sync = true
             end
         end
-        if !sync
+        if verbose && !sync
             println(" none")
         end
     end
