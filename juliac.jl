@@ -164,10 +164,18 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
     end
+    if julialibs
+        # TODO: these should probably be emitted from julia-config also:
+        shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
+        private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+    end
+
 
     if shared || executable
         command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
-        if is_windows()
+        if is_apple()
+            command = `$command -Wl,-install_name,@rpath/lib$file_name.dylib`
+        elseif is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
         if verbose
@@ -178,7 +186,9 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     if executable
         command = `$cc -m64 -o $e_file $c_program $s_file $cflags $ldflags $ldlibs`
-        if is_unix()
+        if is_apple()
+            command = `$command -Wl,-rpath,@executable_path`
+        elseif is_unix()
             command = `$command -Wl,-rpath,\$ORIGIN`
         end
         if verbose
@@ -198,15 +208,14 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         if verbose
             println("Sync Julia libraries:")
         end
-        if is_windows()
-            dir = JULIA_HOME
-            libfiles = joinpath.(dir, filter(x -> ismatch(r".+\.dll$", x), readdir(dir)))
-        else
-            dir = joinpath(JULIA_HOME, "..", "lib")
-            libfiles1 = joinpath.(dir, filter(x -> ismatch(r"^lib.*\.so(?:$|\.)", x), readdir(dir)))
-            dir = joinpath(JULIA_HOME, "..", "lib", "julia")
-            libfiles2 = joinpath.(dir, filter(x -> ismatch(r"^lib.*\.so(?:$|\.)", x), readdir(dir)))
-            libfiles = vcat(libfiles1, libfiles2)
+        libfiles = String[]
+        dlext = "." * Libdl.dlext
+        for dir in (shlibdir, private_shlibdir)
+            if is_windows() || is_apple()
+                append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
+            else
+                append!(libfiles, joinpath.(dir, filter(x -> ismatch(r"^lib.+\.so(?:\.\d+)*$", x), readdir(dir))))
+            end
         end
         sync = false
         for src in libfiles
