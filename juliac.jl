@@ -149,12 +149,18 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     delete_object = false
     if object || shared || executable
-        command = `"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$o_file" "-e"
-                   "include(\"$julia_program\"); push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\"); empty!(Base.LOAD_CACHE_PATH)"`
+        command = `$(Base.julia_cmd()) --startup-file=no -e "
+            VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
+            empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
+            push!(Base.LOAD_CACHE_PATH, abspath(\"ji$VERSION\")) #$(repr(julia_pkglibdir))) # enable usage of precompile files
+            include($(repr(julia_program)))
+            empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths
+            "`
         if verbose
             println("Build object file \"$o_file\":\n$command")
         end
-        run(command)
+        run(command) # first populate the .ji cache (when JULIA_HOME is defined)
+        run(`$command --output-o $o_file`) # then output the combined file
         if !object
             delete_object = true
         end
