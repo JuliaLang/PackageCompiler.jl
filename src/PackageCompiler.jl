@@ -1,16 +1,17 @@
+__precompile__()
 module PackageCompiler
 
 using SnoopCompile
 
-function snoop(path, compilationfile)
-    mktempdir() do tmpfolder
-        csv = joinpath(tmpfolder, "precompile.csv")
-        # Snoop compiler can't handle the path as a variable, so we just create a file
+include("build_sysimg.jl")
 
+function snoop(path, compilationfile)
+    cd(@__DIR__)
+    mktempdir() do tmpfolder
+        csv = joinpath(homedir(), "test.csv") #joinpath(tmpfolder, "precompile.csv")
+        # Snoop compiler can't handle the path as a variable, so we just create a file
         open(joinpath(tmpfolder, "snoopy.jl"), "w") do io
-            println(io, "mod = include(\"$(escape_string(path))\")")
-            println(io, "mod.run()")
-            println(io, "mod")
+            println(io, "include(\"$(escape_string(path))\")")
         end
         cd(tmpfolder)
         SnoopCompile.@snoop csv begin
@@ -18,39 +19,38 @@ function snoop(path, compilationfile)
         end
         data = SnoopCompile.read(csv)
         pc = SnoopCompile.parcel(reverse!(data[2]))
-        mod = include(path) # just get the module name
-        modsym = Symbol(mod)
-        modstr = String(modsym)
         delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
+        tmp_mod = eval(:(module $(gensym()) end))
         open(compilationfile, "w") do io
             for (k, v) in pc
-                k in (:unknown, modsym) && continue
-                println(io, "using $k")
-                eval(:(using $k))
+                k == :unknown && continue
+                println(k)
+                try
+                    eval(tmp_mod, :(using $k))
+                    println(io, "using $k")
+                catch e
+                    warn(e)
+                end
             end
             for (k, v) in pc
-                k == modsym && continue
-                println(k)
                 for ln in v
-                    if !contains(ln, modstr)
-                        # replace `_` for free parameters, which print out a warning otherwise
-                        ln = replace(ln, delims, s"\1XXX\2")
-                        # only print out valid lines
-                        try
-                            eval(parse(ln))
-                            println(io, ln)
-                        catch e
-                            warn(e)
-                        end
+                    # replace `_` for free parameters, which print out a warning otherwise
+                    ln = replace(ln, delims, s"\1XXX\2")
+                    # only print out valid lines
+                    # TODO figure out why some precompile statements have undefined free variables in there
+                    try
+                        eval(tmp_mod, parse(ln))
+                        println(io, ln)
+                    catch e
+                        warn(e)
                     end
                 end
             end
         end
     end
+    cd(@__DIR__)
 end
 
-
-include(joinpath(JULIA_HOME, Base.DATAROOTDIR,"julia", "build_sysimg.jl"))
 
 function compile(file; force = false)
     build_sysimg(default_sysimg_path(), "native", file, force = force)
@@ -60,6 +60,16 @@ function revert(file; force = false)
     build_sysimg(force = true)
 end
 
-
+function compile_package(package, force = false)
+    realpath = if ispath(package)
+        normpath(abspath(package))
+    else
+        Pkg.dir(package)
+    end
+    testroot = joinpath(realpath, "test")
+    precompile_file = joinpath(testroot, "precompile.jl")
+    snoop(joinpath(testroot, "runtests.jl"), precompile_file)
+    build_sysimg(default_sysimg_path(), "native", precompile_file, force = force)
+end
 
 end # module
