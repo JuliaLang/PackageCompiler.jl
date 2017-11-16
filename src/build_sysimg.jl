@@ -33,7 +33,7 @@ end
 
 system_compiler() = gcc
 
-function default_sysimg_path(debug=false)
+function default_sysimg_path(debug = false)
     if is_unix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
@@ -53,31 +53,17 @@ current processor. Include the user image file given by `userimg_path`, which sh
 directives such as `using MyPackage` to include that package in the new system image. New
 system image will not replace an older image unless `force` is set to true.
 """
-function build_sysimg(sysimg_path = nothing, cpu_target="native", userimg_path=nothing; force=false, debug=false)
-    if sysimg_path === nothing
-        sysimg_path = default_sysimg_path(debug)
-    end
-
-    # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
-    sysimg = Libdl.dlopen_e("sys")
-    if sysimg != C_NULL
-        if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
-            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override.")
-            return nothing
-        end
-    end
+function build_sysimg(sysimg_path, cpu_target = "native", userimg_path = nothing; debug=false)
 
     # Canonicalize userimg_path before we enter the base_dir
     if userimg_path !== nothing
         userimg_path = abspath(userimg_path)
     end
-
     # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
         julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
         cc = system_compiler()
-
         # Ensure we have write-permissions to wherever we're trying to write to
         try
             touch("$sysimg_path.ji")
@@ -111,15 +97,6 @@ function build_sysimg(sysimg_path = nothing, cpu_target="native", userimg_path=n
 
             link_sysimg(sysimg_path, cc, debug)
 
-            if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
-                if Base.isfile("$sysimg_path.$(Libdl.dlext)")
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
-                else
-                    info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
-                end
-            else
-                info("Julia will automatically load this system image at next startup.")
-            end
         finally
             # Cleanup userimg.jl
             if userimg_path !== nothing && isfile("userimg.jl")
@@ -130,10 +107,8 @@ function build_sysimg(sysimg_path = nothing, cpu_target="native", userimg_path=n
 end
 
 # Link sys.o into sys.$(dlext)
-function link_sysimg(sysimg_path = nothing, cc = system_compiler(), debug = false)
-    if sysimg_path === nothing
-        sysimg_path = default_sysimg_path(debug)
-    end
+function link_sysimg(sysimg_path, cc = system_compiler(), debug = false)
+
     julia_libdir = dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia"))
 
     FLAGS = ["-L$julia_libdir"]
@@ -148,13 +123,5 @@ function link_sysimg(sysimg_path = nothing, cc = system_compiler(), debug = fals
     info("Linking sys.$(Libdl.dlext)")
     info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
-    if is_windows() && isfile(sysimg_file)
-        if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
-            mv(sysimg_file, "$sysimg_file.old"; remove_destination = true)
-            mv("$sysimg_path.tmp", sysimg_file; remove_destination = true)
-        end
-    else
-        run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
-    end
-    info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
+    run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
 end
