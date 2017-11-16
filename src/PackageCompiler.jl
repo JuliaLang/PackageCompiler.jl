@@ -4,6 +4,9 @@ module PackageCompiler
 using SnoopCompile
 
 include("build_sysimg.jl")
+const sysimage_binaries = (
+    "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
+)
 
 function snoop(path, compilationfile, csv, reuse)
     cd(@__DIR__)
@@ -55,15 +58,14 @@ end
 function revert(debug = false)
     syspath = default_sysimg_path(debug)
     sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
-    sysfiles = ("sys.o", "sys.so", "sys.ji", "inference.o", "inference.ji")
-    if all(x-> isfile(joinpath(sysimg_backup, x)), sysfiles) # we have a backup
+    if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries) # we have a backup
         for file in sysfiles
             # backup
             bfile = joinpath(sysimg_backup, file)
             if isfile(bfile)
                 sfile = joinpath(dirname(syspath), file)
-                isfile(sfile) && rm(sfile)
-                mv(bfile, sfile)
+                isfile(sfile) && mv(sfile, sfile*".old", remove_destination = true)
+                mv(bfile, sfile, remove_destination = false)
             else
                 warn("No backup of $file found")
             end
@@ -71,16 +73,27 @@ function revert(debug = false)
     else
         warn("No backup found but restoring. Need to build a new system image from scratch")
         sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup") # build directly into backup
+        isdir(sysimg_backup) || mkdir(sysimg_backup)
         build_sysimg(joinpath(sysimg_backup, "sys"))
         # now we should have a backup.
         # make sure that we have all files to not end up with an endless recursion!
-        if all(x-> isfile(joinpath(sysimg_backup, x)), sysfiles)
+        if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries)
             revert(debug)
         else
             error("Revert went wrong")
         end
     end
 end
+
+function get_root_dir(path)
+    path, name = splitdir(path)
+    if isempty(name)
+        return splitdir(path)[2]
+    else
+        name
+    end
+end
+
 
 function compile_package(package, force = false, reuse = false; debug = false)
     realpath = if ispath(package)
@@ -89,25 +102,31 @@ function compile_package(package, force = false, reuse = false; debug = false)
         Pkg.dir(package)
     end
     testroot = joinpath(realpath, "test")
-    precompile_file = joinpath(testroot, "precompile.jl")
-    sysimg_tmp = joinpath(@__DIR__, "..", "sysimg_tmp", basename(realpath))
-    snoop(joinpath(testroot, "runtests.jl"), precompile_file, joinpath(sysimg_tmp, "snooped.csv"), reuse)
-    !isdir(sysimg_tmp) && mkdir(sysimg_tmp)
-    build_sysimg(joinpath(sysimg_tmp, "sys"), "native", precompile_file)
+    sysimg_tmp = normpath(joinpath(@__DIR__, "..", "sysimg_tmp", get_root_dir(realpath)))
     sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
+    isdir(sysimg_backup) || mkdir(sysimg_tmp)
+    isdir(sysimg_tmp) || mkdir(sysimg_tmp)
+    precompile_file = joinpath(sysimg_tmp, "precompile.jl")
+    snoop(
+        joinpath(testroot, "runtests.jl"),
+        precompile_file,
+        joinpath(sysimg_tmp, "snooped.csv"),
+        reuse
+    )
+    build_sysimg(joinpath(sysimg_tmp, "sys"), "native", precompile_file)
     if force
         try
             syspath = default_sysimg_path(debug)
-            for file in ("sys.o", "sys.so", "sys.ji", "inference.o", "inference.ji")
+            for file in sysimage_binaries
                 # backup
                 bfile = joinpath(sysimg_backup, file)
                 sfile = joinpath(dirname(syspath), file)
                 if !isfile(bfile) # use the one that is already there
                     mv(sfile, bfile, remove_destination = true)
                 else
-                    rm(sfile) # remove so we don't overwrite (seems to be problematic on windows)
+                    mv(sfile, sfile*".old", remove_destination = true) # remove so we don't overwrite (seems to be problematic on windows)
                 end
-                mv(joinpath(sysimg_tmp, file), sfile)
+                mv(joinpath(sysimg_tmp, file), sfile, remove_destination = false)
             end
         catch e
             warn("An error has occured while replacing sysimg files:")
@@ -116,7 +135,10 @@ function compile_package(package, force = false, reuse = false; debug = false)
             revert(debug)
         end
     else
-        info("Not forcing system image. You can start julia with julia -J $(joinpath(sysimg_tmp, "sys")) to load the compiled files.")
+        info("""
+            Not replacing system image.
+            You can start julia with julia -J $(joinpath(sysimg_tmp, "sys")) to load the compiled files.
+        """)
     end
 end
 

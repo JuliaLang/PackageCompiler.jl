@@ -4,6 +4,7 @@
 deps.jl
 *.csv
 snoopy.jl
+precompile.jl
 *.so
 *.ji
 *.dll

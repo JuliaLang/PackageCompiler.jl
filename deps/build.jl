@@ -40,7 +40,7 @@ function build()
             "sys-root", "mingw", "bin", "gcc.exe"
         )
         if !isfile(gccpath)
-            WinRPM.install("gcc")
+            WinRPM.install("gcc", yes = true)
         end
         if !isfile(gccpath)
             error("Couldn't install gcc via winrpm")
