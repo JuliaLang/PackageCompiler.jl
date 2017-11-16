@@ -4,3 +4,8 @@
 deps.jl
 *.csv
 snoopy.jl
+*.so
+*.ji
+*.dll
+*.dylib
+*.o
