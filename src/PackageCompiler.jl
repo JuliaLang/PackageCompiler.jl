@@ -4,6 +4,7 @@ module PackageCompiler
 using SnoopCompile
 
 include("build_sysimg.jl")
+
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
 )
@@ -59,7 +60,7 @@ function revert(debug = false)
     syspath = default_sysimg_path(debug)
     sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
     if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries) # we have a backup
-        for file in sysfiles
+        for file in sysimage_binaries
             # backup
             bfile = joinpath(sysimg_backup, file)
             if isfile(bfile)
