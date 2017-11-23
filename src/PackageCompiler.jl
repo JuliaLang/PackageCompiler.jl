@@ -74,7 +74,7 @@ function revert(debug = false)
     else
         warn("No backup found but restoring. Need to build a new system image from scratch")
         sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup") # build directly into backup
-        isdir(sysimg_backup) || mkdir(sysimg_backup)
+        isdir(sysimg_backup) || mkpath(sysimg_backup)
         build_sysimg(joinpath(sysimg_backup, "sys"))
         # now we should have a backup.
         # make sure that we have all files to not end up with an endless recursion!
@@ -105,8 +105,8 @@ function compile_package(package, force = false, reuse = false; debug = false)
     testroot = joinpath(realpath, "test")
     sysimg_tmp = normpath(joinpath(@__DIR__, "..", "sysimg_tmp", get_root_dir(realpath)))
     sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
-    isdir(sysimg_backup) || mkdir(sysimg_tmp)
-    isdir(sysimg_tmp) || mkdir(sysimg_tmp)
+    isdir(sysimg_backup) || mkpath(sysimg_tmp)
+    isdir(sysimg_tmp) || mkpath(sysimg_tmp)
     precompile_file = joinpath(sysimg_tmp, "precompile.jl")
     snoop(
         joinpath(testroot, "runtests.jl"),
