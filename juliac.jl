@@ -137,7 +137,10 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     s_file = "lib" * file_name * ".$(Libdl.dlext)"
     e_file = file_name * (is_windows() ? ".exe" : "")
 
+    # TODO: these should probably be emitted from julia-config also:
     julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
+    shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
+    private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
     if is_windows()
         julia_program = replace(julia_program, "\\", "\\\\")
@@ -146,12 +149,18 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     delete_object = false
     if object || shared || executable
-        command = `"$(Base.julia_cmd())" "--startup-file=no" "--output-o" "$o_file" "-e"
-                   "include(\"$julia_program\"); push!(Base.LOAD_CACHE_PATH, \"$julia_pkglibdir\"); empty!(Base.LOAD_CACHE_PATH)"`
+        command = `$(Base.julia_cmd()) --startup-file=no -e "
+            VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
+            empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
+            push!(Base.LOAD_CACHE_PATH, abspath(\"ji$VERSION\")) #$(repr(julia_pkglibdir))) # enable usage of precompile files
+            include($(repr(julia_program)))
+            empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths
+            "`
         if verbose
             println("Build object file \"$o_file\":\n$command")
         end
-        run(command)
+        run(command) # first populate the .ji cache (when JULIA_HOME is defined)
+        run(`$command --output-o $o_file`) # then output the combined file
         if !object
             delete_object = true
         end
@@ -167,7 +176,9 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     if shared || executable
         command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
-        if is_windows()
+        if is_apple()
+            command = `$command -Wl,-install_name,@rpath/lib$file_name.dylib`
+        elseif is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
         if verbose
@@ -178,7 +189,9 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     if executable
         command = `$cc -m64 -o $e_file $c_program $s_file $cflags $ldflags $ldlibs`
-        if is_unix()
+        if is_apple()
+            command = `$command -Wl,-rpath,@executable_path`
+        elseif is_unix()
             command = `$command -Wl,-rpath,\$ORIGIN`
         end
         if verbose
@@ -198,15 +211,14 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         if verbose
             println("Sync Julia libraries:")
         end
-        if is_windows()
-            dir = JULIA_HOME
-            libfiles = joinpath.(dir, filter(x -> ismatch(r".+\.dll$", x), readdir(dir)))
-        else
-            dir = joinpath(JULIA_HOME, "..", "lib")
-            libfiles1 = joinpath.(dir, filter(x -> ismatch(r"^lib.*\.so(?:$|\.)", x), readdir(dir)))
-            dir = joinpath(JULIA_HOME, "..", "lib", "julia")
-            libfiles2 = joinpath.(dir, filter(x -> ismatch(r"^lib.*\.so(?:$|\.)", x), readdir(dir)))
-            libfiles = vcat(libfiles1, libfiles2)
+        libfiles = String[]
+        dlext = "." * Libdl.dlext
+        for dir in (shlibdir, private_shlibdir)
+            if is_windows() || is_apple()
+                append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
+            else
+                append!(libfiles, joinpath.(dir, filter(x -> ismatch(r"^lib.+\.so(?:\.\d+)*$", x), readdir(dir))))
+            end
         end
         sync = false
         for src in libfiles
@@ -218,11 +230,11 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
                 if verbose
                     println(" $dst")
                 end
-                cp(src, dst, remove_destination=true)
+                cp(src, dst, remove_destination=true, follow_symlinks=false)
                 sync = true
             end
         end
-        if !sync
+        if verbose && !sync
             println(" none")
         end
     end

@@ -8,6 +8,10 @@
 #include "uv.h"
 #include "julia.h"
 
+#ifdef JULIA_DEFINE_FAST_TLS // only available in Julia 0.7+
+JULIA_DEFINE_FAST_TLS()
+#endif
+
 // Declare C prototype of a function defined in Julia
 extern int julia_main(jl_array_t*);
 
@@ -37,8 +41,8 @@ int wmain(int argc, wchar_t *wargv[], wchar_t *envp[])
     // initialization
     libsupport_init();
     // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
-    jl_options.image_file = "libhello.so";
-    julia_init(JL_IMAGE_CWD);
+    jl_options.image_file = "libhello";
+    julia_init(JL_IMAGE_JULIA_HOME);
 
     // build arguments array: `String[ unsafe_string(argv[i]) for i in 1:argc ]`
     jl_array_t *ARGS = jl_alloc_array_1d(jl_apply_array_type(jl_string_type, 1), 0);

@@ -8,6 +8,10 @@
 #include "uv.h"
 #include "julia.h"
 
+#ifdef JULIA_DEFINE_FAST_TLS // only available in Julia 0.7+
+JULIA_DEFINE_FAST_TLS()
+#endif
+
 // Declare C prototype of a function defined in Julia
 extern void julia_main();
 
@@ -19,7 +23,7 @@ int main(int argc, char *argv[])
     uv_setup_args(argc, argv); // no-op on Windows
     libsupport_init();
     jl_options.image_file = "libhello";
-    julia_init(JL_IMAGE_CWD);
+    julia_init(JL_IMAGE_JULIA_HOME);
 
     // Do some work
     julia_main();
