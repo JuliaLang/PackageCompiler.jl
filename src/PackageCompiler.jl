@@ -40,12 +40,15 @@ function snoop(path, compilationfile, csv, reuse)
                 # replace `_` for free parameters, which print out a warning otherwise
                 ln = replace(ln, delims, s"\1XXX\2")
                 # only print out valid lines
-                # TODO figure out why some precompile statements have undefined free variables in there
+                # TODO figure out the actual problems and why snoop compile emits invalid code
                 try
-                    eval(tmp_mod, parse(ln))
-                    println(io, ln)
+                    parse(ln) # parse to make sure expression is parsing without error
+                    # wrap in try catch to catch problematic code emitted by SnoopCompile
+                    # without interupting the whole precompilation
+                    # (usually, SnoopCompile emits 1% erroring statements)
+                    println(io, "try\n    ", ln, "\nend")
                 catch e
-                    warn("Not emitted: ", ln)
+                    warn("Not emitted because code couldn't parse: ", ln)
                 end
             end
         end
@@ -95,8 +98,18 @@ function get_root_dir(path)
     end
 end
 
+function snoop_package(package::String, sysimg_tmp, reuse)
+    precompile_file = joinpath(sysimg_tmp, "precompile.jl")
+    snoop(
+        joinpath(testroot, "runtests.jl"),
+        precompile_file,
+        joinpath(sysimg_tmp, "snooped.csv"),
+        reuse
+    )
+end
 
-function compile_package(package, force = false, reuse = false; debug = false)
+function compile_package(package::String...; force = false, reuse = false, debug = false)
+    
     realpath = if ispath(package)
         normpath(abspath(package))
     else
@@ -107,13 +120,7 @@ function compile_package(package, force = false, reuse = false; debug = false)
     sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
     isdir(sysimg_backup) || mkpath(sysimg_tmp)
     isdir(sysimg_tmp) || mkpath(sysimg_tmp)
-    precompile_file = joinpath(sysimg_tmp, "precompile.jl")
-    snoop(
-        joinpath(testroot, "runtests.jl"),
-        precompile_file,
-        joinpath(sysimg_tmp, "snooped.csv"),
-        reuse
-    )
+
     build_sysimg(joinpath(sysimg_tmp, "sys"), "native", precompile_file)
     if force
         try
