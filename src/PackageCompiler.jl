@@ -149,6 +149,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     if !reuse
         snoop_userimg(userimg, packages...)
     end
+    !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder("sys")
     build_sysimg(image_path, "native", userimg)
     if force
