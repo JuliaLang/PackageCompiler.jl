@@ -9,16 +9,14 @@ const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
 )
 
-function snoop(path, compilationfile, csv, reuse)
+function snoop(path, compilationfile, csv)
     cd(@__DIR__)
     # Snoop compiler can't handle the path as a variable, so we just create a file
-    if !reuse
-        open(joinpath("snoopy.jl"), "w") do io
-            println(io, "include(\"$(escape_string(path))\")")
-        end
-        SnoopCompile.@snoop csv begin
-            include("snoopy.jl")
-        end
+    open(joinpath("snoopy.jl"), "w") do io
+        println(io, "include(\"$(escape_string(path))\")")
+    end
+    SnoopCompile.@snoop csv begin
+        include("snoopy.jl")
     end
     data = SnoopCompile.read(csv)
     pc = SnoopCompile.parcel(reverse!(data[2]))
@@ -98,44 +96,68 @@ function get_root_dir(path)
     end
 end
 
-function snoop_package(package::String, sysimg_tmp, reuse)
+function snoop_package(package::String, rel_snoop_file, sysimg_tmp, reuse)
     precompile_file = joinpath(sysimg_tmp, "precompile.jl")
-    snoop(
-        joinpath(testroot, "runtests.jl"),
-        precompile_file,
-        joinpath(sysimg_tmp, "snooped.csv"),
-        reuse
-    )
+
 end
 
-function compile_package(package::String...; force = false, reuse = false, debug = false)
-    
-    realpath = if ispath(package)
-        normpath(abspath(package))
-    else
-        Pkg.dir(package)
-    end
-    testroot = joinpath(realpath, "test")
-    sysimg_tmp = normpath(joinpath(@__DIR__, "..", "sysimg_tmp", get_root_dir(realpath)))
-    sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
-    isdir(sysimg_backup) || mkpath(sysimg_tmp)
-    isdir(sysimg_tmp) || mkpath(sysimg_tmp)
+sysimg_folder(files...) = normpath(abspath(joinpath(@__DIR__, "..", "sysimg", files...)))
+sysimgbackup_folder(files...) = sysimg_folder("backup", files...)
+package_folder(package...) = normpath(abspath(joinpath(@__DIR__, "..", "packages", package...)))
 
-    build_sysimg(joinpath(sysimg_tmp, "sys"), "native", precompile_file)
+
+function compile_package(packages...; kw_args...)
+    args = map(packages) do package
+        # If no explicit path to a seperate precompile file, use runtests
+        isa(package, String) && return (package, "test/runtests.jl")
+        isa(package, Tuple{String, String}) && return package
+        error("Unrecognized package. Use `packagename::String`, or (packagename::String, rel_path_to_testfile::String). Found: $package")
+    end
+    compile_package(args...; kw_args...)
+end
+
+function snoop_userimg(userimg, packages::Tuple{String, String}...)
+    snooped_precompiles = map(packages) do package_snoopfile
+        package, snoopfile = package_snoopfile
+        abs_package_path = if ispath(package)
+            normpath(abspath(package))
+        else
+            Pkg.dir(package)
+        end
+        file2snoop = normpath(abspath(joinpath(abs_package_path, snoopfile)))
+        package = package_folder(get_root_dir(abs_package_path))
+        isdir(package) || mkpath(package)
+        precompile_file = joinpath(package, "precompile.jl")
+        snoop(
+            file2snoop,
+            precompile_file,
+            joinpath(package, "snooped.csv")
+        )
+        precompile_file
+    end
+    open(userimg, "w") do io
+        for path in snooped_precompiles
+            write(io, open(read, path))
+            println(io)
+        end
+    end
+    userimg
+end
+
+function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
+    userimg = sysimg_folder("precompile.jl")
+    if !reuse
+        snoop_userimg(userimg, packages...)
+    end
+    image_path = sysimg_folder("sys")
+    build_sysimg(image_path, "native", userimg)
     if force
         try
-            syspath = default_sysimg_path(debug)
-            for file in sysimage_binaries
-                # backup
-                bfile = joinpath(sysimg_backup, file)
-                sfile = joinpath(dirname(syspath), file)
-                if !isfile(bfile) # use the one that is already there
-                    mv(sfile, bfile, remove_destination = true)
-                else
-                    mv(sfile, sfile*".old", remove_destination = true) # remove so we don't overwrite (seems to be problematic on windows)
-                end
-                mv(joinpath(sysimg_tmp, file), sfile, remove_destination = false)
-            end
+            replace_jl_sysimg(debug)
+            info(
+                "Replaced system image successfully. Next start of julia will load the newly compiled system image.
+                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
+            )
         catch e
             warn("An error has occured while replacing sysimg files:")
             warn(e)
@@ -145,9 +167,26 @@ function compile_package(package::String...; force = false, reuse = false, debug
     else
         info("""
             Not replacing system image.
-            You can start julia with julia -J $(joinpath(sysimg_tmp, "sys")) to load the compiled files.
+            You can start julia with julia -J $(image_path) to load the compiled files.
         """)
     end
 end
+
+
+function replace_jl_sysimg(debug = false)
+    syspath = default_sysimg_path(debug)
+    for file in sysimage_binaries
+        # backup
+        bfile = sysimgbackup_folder(file)
+        sfile = joinpath(dirname(syspath), file)
+        if !isfile(bfile) # use the one that is already there
+            mv(sfile, bfile, remove_destination = true)
+        else
+            mv(sfile, sfile*".old", remove_destination = true) # remove so we don't overwrite (seems to be problematic on windows)
+        end
+        mv(joinpath(sysimg_tmp, file), sfile, remove_destination = false)
+    end
+end
+
 
 end # module
