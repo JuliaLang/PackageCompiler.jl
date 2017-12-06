@@ -101,9 +101,24 @@ function snoop_package(package::String, rel_snoop_file, sysimg_tmp, reuse)
 
 end
 
-sysimg_folder(files...) = normpath(abspath(joinpath(@__DIR__, "..", "sysimg", files...)))
-sysimgbackup_folder(files...) = sysimg_folder("backup", files...)
-package_folder(package...) = normpath(abspath(joinpath(@__DIR__, "..", "packages", package...)))
+function sysimg_folder(files...)
+    base_path = normpath(abspath(joinpath(@__DIR__, "..", "sysimg")))
+    isdir(base_path) || mkpath(base_path)
+    normpath(abspath(joinpath(base_path, files...)))
+end
+
+function sysimgbackup_folder(files...)
+    backup = sysimg_folder("backup")
+    isdir(backup) || mkpath(backup)
+    sysimg_folder("backup", files...)
+end
+
+
+function package_folder(package...)
+    packages = normpath(abspath(joinpath(@__DIR__, "..", "packages")))
+    isdir(packages) || mkpath(packages)
+    normpath(abspath(joinpath(packages, package...)))
+end
 
 
 function compile_package(packages...; kw_args...)
