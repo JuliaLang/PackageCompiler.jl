@@ -53,12 +53,7 @@ current processor. Include the user image file given by `userimg_path`, which sh
 directives such as `using MyPackage` to include that package in the new system image. New
 system image will not replace an older image unless `force` is set to true.
 """
-function build_sysimg(sysimg_path, cpu_target = "native", userimg_path = nothing; debug=false)
-
-    # Canonicalize userimg_path before we enter the base_dir
-    if userimg_path !== nothing
-        userimg_path = abspath(userimg_path)
-    end
+function build_sysimg(sysimg_path, cpu_target, userimg_path; debug = false)
     # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
@@ -74,15 +69,13 @@ function build_sysimg(sysimg_path, cpu_target = "native", userimg_path = nothing
         end
 
         # Copy in userimg.jl if it exists
-        if userimg_path !== nothing
-            if !isfile(userimg_path)
-                error("$userimg_path is not found, ensure it is an absolute path.")
-            end
-            if isfile("userimg.jl")
-                error("$base_dir/userimg.jl already exists, delete manually to continue.")
-            end
-            cp(userimg_path, "userimg.jl")
+        if !isfile(userimg_path)
+            error("$userimg_path is not found, ensure it is an absolute path.")
         end
+        if isfile("userimg.jl")
+            error("$base_dir/userimg.jl already exists, delete manually to continue.")
+        end
+        cp(userimg_path, "userimg.jl")
         try
             # Start by building inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
@@ -99,7 +92,7 @@ function build_sysimg(sysimg_path, cpu_target = "native", userimg_path = nothing
 
         finally
             # Cleanup userimg.jl
-            if userimg_path !== nothing && isfile("userimg.jl")
+            if isfile("userimg.jl")
                 rm("userimg.jl")
             end
         end
