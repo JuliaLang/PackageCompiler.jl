@@ -6,50 +6,59 @@ using ArgParse
 
 function main(args)
 
-    s = ArgParseSettings("Static AOT Julia compilation.")
+    s = ArgParseSettings("Julia AOT compiler" *
+                         "\n\nhelper script to build libraries and executables from Julia code",
+                         version = "$(basename(@__FILE__)) version 0.6",
+                         add_version = true)
 
     @add_arg_table s begin
         "juliaprog"
-            help = "julia program to compile"
             arg_type = String
             required = true
+            help = "Julia program to compile"
         "cprog"
-            help = "c program to compile (if not provided, a minimal standard program is used)"
             arg_type = String
             default = nothing
+            help = "C program to compile (if not provided, a minimal standard program is used)"
         "builddir"
-            help = "build directory, either absolute or relative to the julia program directory"
             arg_type = String
             default = "builddir"
+            help = "build directory, either absolute or relative to the Julia program directory"
         "--verbose", "-v"
+            action = :store_true
             help = "increase verbosity"
-            action = :store_true
         "--quiet", "-q"
+            action = :store_true
             help = "suppress non-error messages"
-            action = :store_true
-        "--object", "-o"
-            help = "build object file"
-            action = :store_true
-        "--shared", "-s"
-            help = "build shared library"
-            action = :store_true
-        "--executable", "-e"
-            help = "build executable file"
-            action = :store_true
-        "--julialibs", "-j"
-            help = "sync julia libraries to builddir"
-            action = :store_true
         "--clean", "-c"
-            help = "delete builddir"
             action = :store_true
+            help = "delete builddir"
+        "--object", "-o"
+            action = :store_true
+            help = "build object file"
+        "--shared", "-s"
+            action = :store_true
+            help = "build shared library"
+        "--executable", "-e"
+            action = :store_true
+            help = "build executable file"
+        "--julialibs", "-j"
+            action = :store_true
+            help = "sync Julia libraries to builddir"
     end
+
+    s.epilog = """
+        examples:\n
+        \ua0\ua0juliac.jl -ve hello.jl           # verbose, build executable\n
+        \ua0\ua0juliac.jl -ve hello.jl myprog.c  # embed into user defined C program\n
+        \ua0\ua0juliac.jl -qo hello.jl           # quiet, build object file\n
+        \ua0\ua0juliac.jl -vosej hello.jl        # build all and sync Julia libs\n
+        """
 
     parsed_args = parse_args(args, s)
 
-    if !any([parsed_args["object"], parsed_args["shared"], parsed_args["executable"], parsed_args["julialibs"], parsed_args["clean"]])
-        if !parsed_args["quiet"]
-            println("Nothing to do, exiting\nTry \"$(basename(@__FILE__)) -h\" for more information")
-        end
+    if !any([parsed_args["clean"], parsed_args["object"], parsed_args["shared"], parsed_args["executable"], parsed_args["julialibs"]])
+        parsed_args["quiet"] || println("Nothing to do, exiting\nTry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
 
@@ -59,77 +68,51 @@ function main(args)
         parsed_args["builddir"],
         parsed_args["verbose"],
         parsed_args["quiet"],
+        parsed_args["clean"],
         parsed_args["object"],
         parsed_args["shared"],
         parsed_args["executable"],
-        parsed_args["julialibs"],
-        parsed_args["clean"]
+        parsed_args["julialibs"]
     )
 end
 
 function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
-                       object=false, shared=false, executable=true, julialibs=true, clean=false)
+                       clean=false, object=false, shared=false, executable=true, julialibs=true)
 
-    if verbose && quiet
-        verbose = false
-    end
+    verbose && quiet && (verbose = false)
 
     julia_program = abspath(julia_program)
-    if !isfile(julia_program)
-        error("Cannot find file:\n\"$julia_program\"")
-    end
-    if !quiet
-        println("Julia program file:\n\"$julia_program\"")
-    end
+    isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
+    quiet || println("Julia program file:\n  \"$julia_program\"")
 
-    if c_program == nothing
-        c_program = joinpath(@__DIR__, "program.c")
-    else
-        c_program = abspath(c_program)
-    end
-    if !isfile(c_program)
-        error("Cannot find file:\n\"$c_program\"")
-    end
-    if !quiet
-        println("C program file:\n\"$c_program\"")
-    end
+    c_program = c_program == nothing ? joinpath(@__DIR__, "program.c") : abspath(c_program)
+    isfile(c_program) || error("Cannot find file:\n  \"$c_program\"")
+    quiet || println("C program file:\n  \"$c_program\"")
 
     cd(dirname(julia_program))
 
     build_dir = abspath(build_dir)
-    if !quiet
-        println("Build directory:\n\"$build_dir\"")
-    end
+    quiet || println("Build directory:\n  \"$build_dir\"")
 
     if clean
-        if !isdir(build_dir)
-            if verbose
-                println("Build directory does not exist")
-            end
-        else
-            if verbose
-                println("Delete build directory")
-            end
+        if isdir(build_dir)
+            verbose && println("Delete build directory")
             rm(build_dir, recursive=true)
+        else
+            verbose && println("Build directory does not exist, nothing to delete")
         end
-        return
     end
 
     if !isdir(build_dir)
-        if verbose
-            println("Make build directory")
-        end
+        verbose && println("Make build directory")
         mkpath(build_dir)
     end
+
     if pwd() != build_dir
-        if verbose
-            println("Change to build directory")
-        end
+        verbose && println("Change to build directory")
         cd(build_dir)
     else
-        if verbose
-            println("Already in build directory")
-        end
+        verbose && println("Already in build directory")
     end
 
     file_name = splitext(basename(julia_program))[1]
@@ -138,32 +121,26 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     e_file = file_name * (is_windows() ? ".exe" : "")
 
     # TODO: these should probably be emitted from julia-config also:
-    julia_pkglibdir = joinpath(dirname(Pkg.dir()), "lib", basename(Pkg.dir()))
     shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
     private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
-    if is_windows()
-        julia_program = replace(julia_program, "\\", "\\\\")
-        julia_pkglibdir = replace(julia_pkglibdir, "\\", "\\\\")
-    end
-
     delete_object = false
     if object || shared || executable
-        command = `$(Base.julia_cmd()) --startup-file=no -e "
-            VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
-            empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-            push!(Base.LOAD_CACHE_PATH, abspath(\"ji$VERSION\")) #$(repr(julia_pkglibdir))) # enable usage of precompile files
-            include($(repr(julia_program)))
-            empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths
-            "`
-        if verbose
-            println("Build object file \"$o_file\":\n$command")
-        end
-        run(command) # first populate the .ji cache (when JULIA_HOME is defined)
-        run(`$command --output-o $o_file`) # then output the combined file
-        if !object
-            delete_object = true
-        end
+        julia_cmd = `$(Base.julia_cmd()) --startup-file=no`
+        is_windows() && (julia_program = replace(julia_program, "\\", "\\\\"))
+        expr = "
+  VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
+  empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
+  push!(Base.LOAD_CACHE_PATH, abspath(\"cache_ji_v$VERSION\")) # enable usage of precompiled files
+  include($(repr(julia_program))) # include \"julia_program\" file
+  empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+        command = `$julia_cmd -e $expr`
+        verbose && println("Populate \".ji\" local cache:\n  $command")
+        run(command)
+        command = `$julia_cmd --output-o $o_file -e $expr`
+        verbose && println("Build object file \"$o_file\":\n  $command")
+        run(command)
+        object || (delete_object = true)
     end
 
     if shared || executable
@@ -181,9 +158,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         elseif is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
-        if verbose
-            println("Build shared library \"$s_file\":\n$command")
-        end
+        verbose && println("Build shared library \"$s_file\":\n  $command")
         run(command)
     end
 
@@ -194,23 +169,17 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         elseif is_unix()
             command = `$command -Wl,-rpath,\$ORIGIN`
         end
-        if verbose
-            println("Build executable file \"$e_file\":\n$command")
-        end
+        verbose && println("Build executable file \"$e_file\":\n  $command")
         run(command)
     end
 
     if delete_object && isfile(o_file)
-        if verbose
-            println("Delete object file \"$o_file\"")
-        end
+        verbose && println("Delete object file \"$o_file\"")
         rm(o_file)
     end
 
     if julialibs
-        if verbose
-            println("Sync Julia libraries:")
-        end
+        verbose && println("Sync Julia libraries:")
         libfiles = String[]
         dlext = "." * Libdl.dlext
         for dir in (shlibdir, private_shlibdir)
@@ -222,21 +191,15 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         end
         sync = false
         for src in libfiles
-            if ismatch(r"debug", src)
-                continue
-            end
+            ismatch(r"debug", src) && continue
             dst = basename(src)
             if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
-                if verbose
-                    println(" $dst")
-                end
+                verbose && println("  $dst")
                 cp(src, dst, remove_destination=true, follow_symlinks=false)
                 sync = true
             end
         end
-        if verbose && !sync
-            println(" none")
-        end
+        sync || verbose && println("  none")
     end
 end
 

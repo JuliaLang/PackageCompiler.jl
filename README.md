@@ -1,25 +1,47 @@
-## Building a shared library and executable from your julia code
+# Julia AOT compiler
 
-1. Make sure all the packages and modules used by `hello.jl` are precompiled.
-   The `juliac.jl` script uses the `ArgParse` package, make sure it is installed as well.
+Helper script to build libraries and executables from Julia code.
 
-2. Clone this repo and use the `juliac.jl` script. The way to call it is as follows:
+```
+usage: juliac.jl [-v] [-q] [-c] [-o] [-s] [-e] [-j] [--version] [-h]
+                 juliaprog [cprog] [builddir]
 
-   Usage: `juliac.jl [-v] [-q] [-o] [-s] [-e] [-j] [-h] juliaprog [cprog] [builddir]`
+positional arguments:
+  juliaprog         Julia program to compile
+  cprog             C program to compile (if not provided, a minimal
+                    standard program is used)
+  builddir          build directory, either absolute or relative to
+                    the Julia program directory (default: "builddir")
 
-   Examples:
-   ```
-   julia juliac.jl -ve hello.jl                # verbose, create an executable
-   julia juliac.jl -ve hello.jl myprogram.c    # embed into a user defined c program
-   julia juliac.jl --quiet --object hello.jl   # builds just the `hello.o` object file
-   julia juliac.jl -vosej hello.jl buildtest   # build object, shared lib, exec, and sync julia libs
-   julia juliac.jl -h                          # print help message
-   ```
+optional arguments:
+  -v, --verbose     increase verbosity
+  -q, --quiet       suppress non-error messages
+  -c, --clean       delete builddir
+  -o, --object      build object file
+  -s, --shared      build shared library
+  -e, --executable  build executable file
+  -j, --julialibs   sync Julia libraries to builddir
+  --version         show version information and exit
+  -h, --help        show this help message and exit
 
-   Note: `hello.jl` does not need to be in the `static-julia` directory.
+examples:
+  juliac.jl -ve hello.jl           # verbose, build executable
+  juliac.jl -ve hello.jl myprog.c  # embed into user defined C program
+  juliac.jl -qo hello.jl           # quiet, build object file
+  juliac.jl -vosej hello.jl        # build all and sync Julia libs
+```
 
-3. A shared library containing the system image `libhello.so`, and a
+### Notes
+
+1. The `juliac.jl` script uses the `ArgParse` package, make sure it is installed.
+
+3. On Windows install `Cygwin` and the `mingw64-x86_64-gcc-core` package, see:\
+   https://github.com/JuliaLang/julia/blob/master/README.windows.md
+
+2. A shared library containing the system image `libhello.so`, and a
    driver binary `hello` are created in the `builddir` directory.
+   Running `hello` produces the following output:
+
 ```
    $ ./hello
    hello, world
@@ -62,4 +84,3 @@ sections in the Julia manual.
 With Julia 0.7, a single large binary can be created, which does not
 require the driver program to load the shared library. An example of
 that is in `program2.c`, where the image file is the binary itself.
-
