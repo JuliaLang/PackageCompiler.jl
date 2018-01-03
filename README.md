@@ -42,4 +42,4 @@ PackageCompiler.revert()
 - I uncovered one out of bounds issue, that somehow was not coming up without static-compilation
 - I used julia-debug to uncover most bugs, but actually, the last errors I was trying to uncover where due to using julia-debug!
 
-- you’re pretty much on your own and need to use gdb to find the issues and I still don’t know what the underlying julia issues are and when they will get fixed :wink: See: https://github.com/JuliaLang/julia/issues/2453330. Hopefully we look at a better story with Julia 1.0!
+- you’re pretty much on your own and need to use gdb to find the issues and I still don’t know what the underlying julia issues are and when they will get fixed :wink: See: https://github.com/JuliaLang/julia/issues/24533. Hopefully we look at a better story with Julia 1.0!
