@@ -33,7 +33,7 @@ PackageCompiler.revert()
 
 - You might need to tweak your runtest, since SnoopCompile can have problems with some statements. Please open issues about concrete problems! This is also why there is a way to point to a file different from runtests.jl, for the case it becomes impossible to combine testing and snoop compiling (just pass `("package", "snoopfile.jl")`)!
 
-- non const globals are problematic, or globals defined in functions - removing those got me to 95% of making the package save for static compilation
+- non const globals are problematic, or globals defined in functions - removing those got me to 95% of making the package safe for static compilation
 
 - type unstable code had some inference issues (around 2 occurrence, where I’m still not sure what was happening) - both cases happened with dictionaries… Only way to find those was investigating the segfaults with `gdb`, but then it was relatively easy to just juggle around the code, since the stacktraces accurately pointed to the problem. The non const globals might be related since they introduce type instabilities.
 
