@@ -17,10 +17,10 @@ using PackageCompiler
 # force = false to not force overwriting julia's current system image
 PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false, reuse = false) 
 
-# build again, with resuing the snoop file
+# build again, reusing the snoop file
 PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
 
-# You can define a file that will get run for snooping explicitely like this:
+# You can define a file that will get run for snooping explicitly like this:
 # this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
 PackageCompiler.compile_package("Matcha", "relative/path/for_snooping.jl")
 
