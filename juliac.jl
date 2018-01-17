@@ -33,6 +33,48 @@ function main(args)
         "--clean", "-c"
             action = :store_true
             help = "delete builddir"
+        "--cpu-target", "-C"
+            arg_type = String
+            default = nothing
+            metavar = "<target>"
+            help = "limit usage of CPU features up to <target>"
+        "--optimize", "-O"
+            arg_type = Int
+            default = nothing
+            range_tester = (x -> 0 <= x <= 3)
+            metavar = "{0,1,2,3}"
+            help = "set optimization level"
+        "-g"
+            arg_type = Int
+            default = nothing
+            range_tester = (x -> 0 <= x <= 2)
+            dest_name = "debug"
+            metavar = "{0,1,2}"
+            help = "set debugging information level"
+        "--inline"
+            arg_type = String
+            default = nothing
+            range_tester = (x -> x == "yes" || x == "no")
+            metavar = "{yes|no}"
+            help = "control whether inlining is permitted"
+        "--check-bounds"
+            arg_type = String
+            default = nothing
+            range_tester = (x -> x == "yes" || x == "no")
+            metavar = "{yes|no}"
+            help = "emit bounds checks always or never"
+        "--math-mode"
+            arg_type = String
+            default = nothing
+            range_tester = (x -> x == "ieee" || x == "fast")
+            metavar = "{ieee,fast}"
+            help = "set floating point optimizations"
+        "--depwarn"
+            arg_type = String
+            default = nothing
+            range_tester = (x -> x == "yes" || x == "no" || x == "error")
+            metavar = "{yes|no|error}"
+            help = "set syntax and method deprecation warnings"
         "--object", "-o"
             action = :store_true
             help = "build object file"
@@ -69,6 +111,13 @@ function main(args)
         parsed_args["verbose"],
         parsed_args["quiet"],
         parsed_args["clean"],
+        parsed_args["cpu-target"],
+        parsed_args["optimize"],
+        parsed_args["debug"],
+        parsed_args["inline"],
+        parsed_args["check-bounds"],
+        parsed_args["math-mode"],
+        parsed_args["depwarn"],
         parsed_args["object"],
         parsed_args["shared"],
         parsed_args["executable"],
@@ -76,8 +125,9 @@ function main(args)
     )
 end
 
-function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
-                       clean=false, object=false, shared=false, executable=true, julialibs=true)
+function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false, clean=false,
+                       cpu_target=nothing, optimize=nothing, debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
+                       object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
 
@@ -127,6 +177,13 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     delete_object = false
     if object || shared || executable
         julia_cmd = `$(Base.julia_cmd()) --startup-file=no`
+        cpu_target == nothing || splice!(julia_cmd.exec, 2, ["-C$cpu_target"])
+        optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
+        debug == nothing || push!(julia_cmd.exec, "-g$debug")
+        inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
+        check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
+        math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
+        depwarn == nothing || splice!(julia_cmd.exec, 5, ["--depwarn=$depwarn"])
         is_windows() && (julia_program = replace(julia_program, "\\", "\\\\"))
         expr = "
   VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages

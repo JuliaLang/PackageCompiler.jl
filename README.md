@@ -3,26 +3,42 @@
 Helper script to build libraries and executables from Julia code.
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-o] [-s] [-e] [-j] [--version] [-h]
-                 juliaprog [cprog] [builddir]
+usage: juliac.jl [-v] [-q] [-c] [-C <target>] [-O {0,1,2,3}]
+                 [-g {0,1,2}] [--inline {yes|no}]
+                 [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
+                 [--depwarn {yes|no|error}] [-o] [-s] [-e] [-j]
+                 [--version] [-h] juliaprog [cprog] [builddir]
 
 positional arguments:
-  juliaprog         Julia program to compile
-  cprog             C program to compile (if not provided, a minimal
-                    standard program is used)
-  builddir          build directory, either absolute or relative to
-                    the Julia program directory (default: "builddir")
+  juliaprog             Julia program to compile
+  cprog                 C program to compile (if not provided, a
+                        minimal standard program is used)
+  builddir              build directory, either absolute or relative
+                        to the Julia program directory (default:
+                        "builddir")
 
 optional arguments:
-  -v, --verbose     increase verbosity
-  -q, --quiet       suppress non-error messages
-  -c, --clean       delete builddir
-  -o, --object      build object file
-  -s, --shared      build shared library
-  -e, --executable  build executable file
-  -j, --julialibs   sync Julia libraries to builddir
-  --version         show version information and exit
-  -h, --help        show this help message and exit
+  -v, --verbose         increase verbosity
+  -q, --quiet           suppress non-error messages
+  -c, --clean           delete builddir
+  -C, --cpu-target <target>
+                        limit usage of CPU features up to <target>
+  -O, --optimize {0,1,2,3}
+                        set optimization level (type: Int64)
+  -g {0,1,2}            set debugging information level (type: Int64)
+  --inline {yes|no}     control whether inlining is permitted
+  --check-bounds {yes|no}
+                        emit bounds checks always or never
+  --math-mode {ieee,fast}
+                        set floating point optimizations
+  --depwarn {yes|no|error}
+                        set syntax and method deprecation warnings
+  -o, --object          build object file
+  -s, --shared          build shared library
+  -e, --executable      build executable file
+  -j, --julialibs       sync Julia libraries to builddir
+  --version             show version information and exit
+  -h, --help            show this help message and exit
 
 examples:
   juliac.jl -ve hello.jl           # verbose, build executable
