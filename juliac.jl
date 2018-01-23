@@ -19,7 +19,7 @@ function main(args)
         "cprog"
             arg_type = String
             default = nothing
-            help = "C program to compile (if not provided, a minimal standard program is used)"
+            help = "C program to compile (required only when building an executable; if not provided a minimal standard program is used)"
         "builddir"
             arg_type = String
             default = "builddir"
@@ -135,9 +135,11 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
 
-    c_program = c_program == nothing ? joinpath(@__DIR__, "program.c") : abspath(c_program)
-    isfile(c_program) || error("Cannot find file:\n  \"$c_program\"")
-    quiet || println("C program file:\n  \"$c_program\"")
+    if executable
+        c_program = c_program == nothing ? joinpath(@__DIR__, "program.c") : abspath(c_program)
+        isfile(c_program) || error("Cannot find file:\n  \"$c_program\"")
+        quiet || println("C program file:\n  \"$c_program\"")
+    end
 
     cd(dirname(julia_program))
 

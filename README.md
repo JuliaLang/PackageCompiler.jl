@@ -11,7 +11,8 @@ usage: juliac.jl [-v] [-q] [-c] [-C <target>] [-O {0,1,2,3}]
 
 positional arguments:
   juliaprog             Julia program to compile
-  cprog                 C program to compile (if not provided, a
+  cprog                 C program to compile (required only when
+                        building an executable; if not provided a
                         minimal standard program is used)
   builddir              build directory, either absolute or relative
                         to the Julia program directory (default:
