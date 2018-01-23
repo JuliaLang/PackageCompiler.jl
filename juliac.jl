@@ -33,6 +33,11 @@ function main(args)
         "--clean", "-c"
             action = :store_true
             help = "delete builddir"
+        "--sysimage", "-J"
+            arg_type = String
+            default = nothing
+            metavar = "<file>"
+            help = "start up with the given system image file"
         "--cpu-target", "-C"
             arg_type = String
             default = nothing
@@ -111,6 +116,7 @@ function main(args)
         parsed_args["verbose"],
         parsed_args["quiet"],
         parsed_args["clean"],
+        parsed_args["sysimage"],
         parsed_args["cpu-target"],
         parsed_args["optimize"],
         parsed_args["debug"],
@@ -125,8 +131,9 @@ function main(args)
     )
 end
 
-function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false, clean=false,
-                       cpu_target=nothing, optimize=nothing, debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
+function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
+                       clean=false, sysimage = nothing, cpu_target=nothing, optimize=nothing, debug=nothing,
+                       inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
                        object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
@@ -182,6 +189,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
             error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
         end
+        sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
         push!(julia_cmd.exec, "--startup-file=no")
         cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
         optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
@@ -198,7 +206,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
   include($(repr(julia_program))) # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
         command = `$julia_cmd -e $expr`
-        verbose && println("Populate \".ji\" local cache:\n  $command")
+        verbose && println("Build \".ji\" files local cache:\n  $command")
         run(command)
         command = `$julia_cmd --output-o $o_file -e $expr`
         verbose && println("Build object file \"$o_file\":\n  $command")

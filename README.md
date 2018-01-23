@@ -3,8 +3,8 @@
 Helper script to build libraries and executables from Julia code.
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-C <target>] [-O {0,1,2,3}]
-                 [-g {0,1,2}] [--inline {yes|no}]
+usage: juliac.jl [-v] [-q] [-c] [-J <file>] [-C <target>]
+                 [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
                  [--depwarn {yes|no|error}] [-o] [-s] [-e] [-j]
                  [--version] [-h] juliaprog [cprog] [builddir]
@@ -22,6 +22,8 @@ optional arguments:
   -v, --verbose         increase verbosity
   -q, --quiet           suppress non-error messages
   -c, --clean           delete builddir
+  -J, --sysimage <file>
+                        start up with the given system image file
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
   -O, --optimize {0,1,2,3}
