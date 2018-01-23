@@ -178,14 +178,18 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     delete_object = false
     if object || shared || executable
-        julia_cmd = `$(Base.julia_cmd()) --startup-file=no`
-        cpu_target == nothing || splice!(julia_cmd.exec, 2, ["-C$cpu_target"])
+        julia_cmd = `$(Base.julia_cmd())`
+        if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
+            error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
+        end
+        push!(julia_cmd.exec, "--startup-file=no")
+        cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
         optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
         debug == nothing || push!(julia_cmd.exec, "-g$debug")
         inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
         check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
         math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
-        depwarn == nothing || splice!(julia_cmd.exec, 5, ["--depwarn=$depwarn"])
+        depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
         is_windows() && (julia_program = replace(julia_program, "\\", "\\\\"))
         expr = "
   VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
