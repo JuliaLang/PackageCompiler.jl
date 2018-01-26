@@ -19,7 +19,7 @@ function main(args)
         "cprog"
             arg_type = String
             default = nothing
-            help = "C program to compile (if not provided, a minimal standard program is used)"
+            help = "C program to compile (required only when building an executable; if not provided a minimal standard program is used)"
         "builddir"
             arg_type = String
             default = "builddir"
@@ -33,6 +33,11 @@ function main(args)
         "--clean", "-c"
             action = :store_true
             help = "delete builddir"
+        "--sysimage", "-J"
+            arg_type = String
+            default = nothing
+            metavar = "<file>"
+            help = "start up with the given system image file"
         "--cpu-target", "-C"
             arg_type = String
             default = nothing
@@ -111,6 +116,7 @@ function main(args)
         parsed_args["verbose"],
         parsed_args["quiet"],
         parsed_args["clean"],
+        parsed_args["sysimage"],
         parsed_args["cpu-target"],
         parsed_args["optimize"],
         parsed_args["debug"],
@@ -125,8 +131,9 @@ function main(args)
     )
 end
 
-function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false, clean=false,
-                       cpu_target=nothing, optimize=nothing, debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
+function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
+                       clean=false, sysimage = nothing, cpu_target=nothing, optimize=nothing, debug=nothing,
+                       inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
                        object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
@@ -135,9 +142,11 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
 
-    c_program = c_program == nothing ? joinpath(@__DIR__, "program.c") : abspath(c_program)
-    isfile(c_program) || error("Cannot find file:\n  \"$c_program\"")
-    quiet || println("C program file:\n  \"$c_program\"")
+    if executable
+        c_program = c_program == nothing ? joinpath(@__DIR__, "program.c") : abspath(c_program)
+        isfile(c_program) || error("Cannot find file:\n  \"$c_program\"")
+        quiet || println("C program file:\n  \"$c_program\"")
+    end
 
     cd(dirname(julia_program))
 
@@ -176,14 +185,19 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
 
     delete_object = false
     if object || shared || executable
-        julia_cmd = `$(Base.julia_cmd()) --startup-file=no`
-        cpu_target == nothing || splice!(julia_cmd.exec, 2, ["-C$cpu_target"])
+        julia_cmd = `$(Base.julia_cmd())`
+        if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
+            error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
+        end
+        sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
+        push!(julia_cmd.exec, "--startup-file=no")
+        cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
         optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
         debug == nothing || push!(julia_cmd.exec, "-g$debug")
         inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
         check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
         math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
-        depwarn == nothing || splice!(julia_cmd.exec, 5, ["--depwarn=$depwarn"])
+        depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
         is_windows() && (julia_program = replace(julia_program, "\\", "\\\\"))
         expr = "
   VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
@@ -192,7 +206,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
   include($(repr(julia_program))) # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
         command = `$julia_cmd -e $expr`
-        verbose && println("Populate \".ji\" local cache:\n  $command")
+        verbose && println("Build \".ji\" files local cache:\n  $command")
         run(command)
         command = `$julia_cmd --output-o $o_file -e $expr`
         verbose && println("Build object file \"$o_file\":\n  $command")

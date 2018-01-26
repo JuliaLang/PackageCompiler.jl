@@ -3,15 +3,16 @@
 Helper script to build libraries and executables from Julia code.
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-C <target>] [-O {0,1,2,3}]
-                 [-g {0,1,2}] [--inline {yes|no}]
+usage: juliac.jl [-v] [-q] [-c] [-J <file>] [-C <target>]
+                 [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
                  [--depwarn {yes|no|error}] [-o] [-s] [-e] [-j]
                  [--version] [-h] juliaprog [cprog] [builddir]
 
 positional arguments:
   juliaprog             Julia program to compile
-  cprog                 C program to compile (if not provided, a
+  cprog                 C program to compile (required only when
+                        building an executable; if not provided a
                         minimal standard program is used)
   builddir              build directory, either absolute or relative
                         to the Julia program directory (default:
@@ -21,6 +22,8 @@ optional arguments:
   -v, --verbose         increase verbosity
   -q, --quiet           suppress non-error messages
   -c, --clean           delete builddir
+  -J, --sysimage <file>
+                        start up with the given system image file
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
   -O, --optimize {0,1,2,3}
