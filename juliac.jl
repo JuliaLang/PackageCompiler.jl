@@ -86,6 +86,9 @@ function main(args)
             metavar = "{yes|no|error}"
             range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "set syntax and method deprecation warnings"
+        "--auto", "-a"
+            action = :store_true
+            help = "automatically build required dependencies"
         "--object", "-o"
             action = :store_true
             help = "build object file"
@@ -102,9 +105,9 @@ function main(args)
 
     s.epilog = """
         examples:\n
-        \ua0\ua0juliac.jl -ve hello.jl           # verbose, build executable\n
-        \ua0\ua0juliac.jl -ve hello.jl myprog.c  # embed into user defined C program\n
-        \ua0\ua0juliac.jl -qo hello.jl           # quiet, build object file\n
+        \ua0\ua0juliac.jl -vae hello.jl          # verbose, auto, build executable\n
+        \ua0\ua0juliac.jl -vae hello.jl myprog.c # embed into user defined C program\n
+        \ua0\ua0juliac.jl -qo hello.jl           # quiet, build object file only\n
         \ua0\ua0juliac.jl -vosej hello.jl        # build all and sync Julia libs\n
         """
 
@@ -131,6 +134,7 @@ function main(args)
         parsed_args["check-bounds"],
         parsed_args["math-mode"],
         parsed_args["depwarn"],
+        parsed_args["auto"],
         parsed_args["object"],
         parsed_args["shared"],
         parsed_args["executable"],
@@ -141,9 +145,14 @@ end
 function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
                        clean=false, sysimage = nothing, compile=nothing, cpu_target=nothing, optimize=nothing,
                        debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
-                       object=false, shared=false, executable=true, julialibs=true)
+                       auto=false, object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
+
+    if auto
+        executable && (shared = true)
+        shared && (object = true)
+    end
 
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
@@ -191,7 +200,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
     private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
-    if object || shared || executable
+    if object
         julia_cmd = `$(Base.julia_cmd())`
         if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
             error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
@@ -229,7 +238,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
     end
 
-    if shared || executable
+    if shared
         command = `$cc -m64 -shared -o $s_file $(joinpath(tmp_dir, o_file)) $cflags $ldflags $ldlibs`
         if is_apple()
             command = `$command -Wl,-install_name,@rpath/lib$julia_program_basename.dylib`
