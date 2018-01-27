@@ -181,16 +181,16 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         verbose && println("Already in build directory")
     end
 
-    file_name = splitext(basename(julia_program))[1]
-    o_file = file_name * ".o"
-    s_file = "lib" * file_name * ".$(Libdl.dlext)"
-    e_file = file_name * (is_windows() ? ".exe" : "")
+    julia_program_basename = splitext(basename(julia_program))[1]
+    o_file = julia_program_basename * ".o"
+    s_file = "lib" * julia_program_basename * ".$(Libdl.dlext)"
+    e_file = julia_program_basename * (is_windows() ? ".exe" : "")
+    tmp_dir = "tmp_v$VERSION"
 
     # TODO: these should probably be emitted from julia-config also:
     shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
     private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
-    delete_object = false
     if object || shared || executable
         julia_cmd = `$(Base.julia_cmd())`
         if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
@@ -210,16 +210,15 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         expr = "
   VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, abspath(\"cache_ji_v$VERSION\")) # enable usage of precompiled files
+  push!(Base.LOAD_CACHE_PATH, abspath(\"$tmp_dir\")) # enable usage of precompiled files
   include($(repr(julia_program))) # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
         command = `$julia_cmd -e $expr`
-        verbose && println("Build \".ji\" files local cache:\n  $command")
+        verbose && println("Build \".ji\" files:\n  $command")
         run(command)
-        command = `$julia_cmd --output-o $o_file -e $expr`
+        command = `$julia_cmd --output-o $(joinpath(tmp_dir, o_file)) -e $expr`
         verbose && println("Build object file \"$o_file\":\n  $command")
         run(command)
-        object || (delete_object = true)
     end
 
     if shared || executable
@@ -231,9 +230,9 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     end
 
     if shared || executable
-        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
+        command = `$cc -m64 -shared -o $s_file $(joinpath(tmp_dir, o_file)) $cflags $ldflags $ldlibs`
         if is_apple()
-            command = `$command -Wl,-install_name,@rpath/lib$file_name.dylib`
+            command = `$command -Wl,-install_name,@rpath/lib$julia_program_basename.dylib`
         elseif is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
@@ -250,11 +249,6 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         end
         verbose && println("Build executable file \"$e_file\":\n  $command")
         run(command)
-    end
-
-    if delete_object && isfile(o_file)
-        verbose && println("Delete object file \"$o_file\"")
-        rm(o_file)
     end
 
     if julialibs
