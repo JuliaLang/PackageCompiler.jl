@@ -38,6 +38,12 @@ function main(args)
             default = nothing
             metavar = "<file>"
             help = "start up with the given system image file"
+        "--compile"
+            arg_type = String
+            default = nothing
+            metavar = "{yes|no|all|min}"
+            range_tester = (x -> x == "yes" || x == "no" || x == "all" || x == "min")
+            help = "enable or disable JIT compiler, or request exhaustive compilation"
         "--cpu-target", "-C"
             arg_type = String
             default = nothing
@@ -46,39 +52,39 @@ function main(args)
         "--optimize", "-O"
             arg_type = Int
             default = nothing
-            range_tester = (x -> 0 <= x <= 3)
             metavar = "{0,1,2,3}"
+            range_tester = (x -> 0 <= x <= 3)
             help = "set optimization level"
         "-g"
             arg_type = Int
             default = nothing
-            range_tester = (x -> 0 <= x <= 2)
             dest_name = "debug"
             metavar = "{0,1,2}"
+            range_tester = (x -> 0 <= x <= 2)
             help = "set debugging information level"
         "--inline"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no")
             metavar = "{yes|no}"
+            range_tester = (x -> x == "yes" || x == "no")
             help = "control whether inlining is permitted"
         "--check-bounds"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no")
             metavar = "{yes|no}"
+            range_tester = (x -> x == "yes" || x == "no")
             help = "emit bounds checks always or never"
         "--math-mode"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "ieee" || x == "fast")
             metavar = "{ieee,fast}"
+            range_tester = (x -> x == "ieee" || x == "fast")
             help = "set floating point optimizations"
         "--depwarn"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no" || x == "error")
             metavar = "{yes|no|error}"
+            range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "set syntax and method deprecation warnings"
         "--object", "-o"
             action = :store_true
@@ -117,6 +123,7 @@ function main(args)
         parsed_args["quiet"],
         parsed_args["clean"],
         parsed_args["sysimage"],
+        parsed_args["compile"],
         parsed_args["cpu-target"],
         parsed_args["optimize"],
         parsed_args["debug"],
@@ -132,8 +139,8 @@ function main(args)
 end
 
 function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
-                       clean=false, sysimage = nothing, cpu_target=nothing, optimize=nothing, debug=nothing,
-                       inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
+                       clean=false, sysimage = nothing, compile=nothing, cpu_target=nothing, optimize=nothing,
+                       debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
                        object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
@@ -191,6 +198,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         end
         sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
         push!(julia_cmd.exec, "--startup-file=no")
+        compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
         cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
         optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
         debug == nothing || push!(julia_cmd.exec, "-g$debug")

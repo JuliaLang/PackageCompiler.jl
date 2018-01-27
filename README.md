@@ -24,6 +24,9 @@ optional arguments:
   -c, --clean           delete builddir
   -J, --sysimage <file>
                         start up with the given system image file
+  --compile {yes|no|all|min}
+                        enable or disable JIT compiler, or request
+                        exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
   -O, --optimize {0,1,2,3}
@@ -103,3 +106,6 @@ sections in the Julia manual.
 With Julia 0.7, a single large binary can be created, which does not
 require the driver program to load the shared library. An example of
 that is in `program2.c`, where the image file is the binary itself.
+
+For more information on embedding Julia see:\
+https://github.com/JuliaLang/julia/blob/master/doc/src/manual/embedding.md
