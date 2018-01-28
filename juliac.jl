@@ -38,6 +38,12 @@ function main(args)
             default = nothing
             metavar = "<file>"
             help = "start up with the given system image file"
+        "--compile"
+            arg_type = String
+            default = nothing
+            metavar = "{yes|no|all|min}"
+            range_tester = (x -> x == "yes" || x == "no" || x == "all" || x == "min")
+            help = "enable or disable JIT compiler, or request exhaustive compilation"
         "--cpu-target", "-C"
             arg_type = String
             default = nothing
@@ -46,40 +52,43 @@ function main(args)
         "--optimize", "-O"
             arg_type = Int
             default = nothing
-            range_tester = (x -> 0 <= x <= 3)
             metavar = "{0,1,2,3}"
+            range_tester = (x -> 0 <= x <= 3)
             help = "set optimization level"
         "-g"
             arg_type = Int
             default = nothing
-            range_tester = (x -> 0 <= x <= 2)
             dest_name = "debug"
             metavar = "{0,1,2}"
+            range_tester = (x -> 0 <= x <= 2)
             help = "set debugging information level"
         "--inline"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no")
             metavar = "{yes|no}"
+            range_tester = (x -> x == "yes" || x == "no")
             help = "control whether inlining is permitted"
         "--check-bounds"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no")
             metavar = "{yes|no}"
+            range_tester = (x -> x == "yes" || x == "no")
             help = "emit bounds checks always or never"
         "--math-mode"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "ieee" || x == "fast")
             metavar = "{ieee,fast}"
+            range_tester = (x -> x == "ieee" || x == "fast")
             help = "set floating point optimizations"
         "--depwarn"
             arg_type = String
             default = nothing
-            range_tester = (x -> x == "yes" || x == "no" || x == "error")
             metavar = "{yes|no|error}"
+            range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "set syntax and method deprecation warnings"
+        "--auto", "-a"
+            action = :store_true
+            help = "automatically build required dependencies"
         "--object", "-o"
             action = :store_true
             help = "build object file"
@@ -96,9 +105,9 @@ function main(args)
 
     s.epilog = """
         examples:\n
-        \ua0\ua0juliac.jl -ve hello.jl           # verbose, build executable\n
-        \ua0\ua0juliac.jl -ve hello.jl myprog.c  # embed into user defined C program\n
-        \ua0\ua0juliac.jl -qo hello.jl           # quiet, build object file\n
+        \ua0\ua0juliac.jl -vae hello.jl          # verbose, auto, build executable\n
+        \ua0\ua0juliac.jl -vae hello.jl myprog.c # embed into user defined C program\n
+        \ua0\ua0juliac.jl -qo hello.jl           # quiet, build object file only\n
         \ua0\ua0juliac.jl -vosej hello.jl        # build all and sync Julia libs\n
         """
 
@@ -117,6 +126,7 @@ function main(args)
         parsed_args["quiet"],
         parsed_args["clean"],
         parsed_args["sysimage"],
+        parsed_args["compile"],
         parsed_args["cpu-target"],
         parsed_args["optimize"],
         parsed_args["debug"],
@@ -124,6 +134,7 @@ function main(args)
         parsed_args["check-bounds"],
         parsed_args["math-mode"],
         parsed_args["depwarn"],
+        parsed_args["auto"],
         parsed_args["object"],
         parsed_args["shared"],
         parsed_args["executable"],
@@ -132,11 +143,16 @@ function main(args)
 end
 
 function julia_compile(julia_program, c_program=nothing, build_dir="builddir", verbose=false, quiet=false,
-                       clean=false, sysimage = nothing, cpu_target=nothing, optimize=nothing, debug=nothing,
-                       inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
-                       object=false, shared=false, executable=true, julialibs=true)
+                       clean=false, sysimage = nothing, compile=nothing, cpu_target=nothing, optimize=nothing,
+                       debug=nothing, inline=nothing, check_bounds=nothing, math_mode=nothing, depwarn=nothing,
+                       auto=false, object=false, shared=false, executable=true, julialibs=true)
 
     verbose && quiet && (verbose = false)
+
+    if auto
+        executable && (shared = true)
+        shared && (object = true)
+    end
 
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
@@ -174,23 +190,24 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         verbose && println("Already in build directory")
     end
 
-    file_name = splitext(basename(julia_program))[1]
-    o_file = file_name * ".o"
-    s_file = "lib" * file_name * ".$(Libdl.dlext)"
-    e_file = file_name * (is_windows() ? ".exe" : "")
+    julia_program_basename = splitext(basename(julia_program))[1]
+    o_file = julia_program_basename * ".o"
+    s_file = "lib" * julia_program_basename * ".$(Libdl.dlext)"
+    e_file = julia_program_basename * (is_windows() ? ".exe" : "")
+    tmp_dir = "tmp_v$VERSION"
 
     # TODO: these should probably be emitted from julia-config also:
     shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
     private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
 
-    delete_object = false
-    if object || shared || executable
+    if object
         julia_cmd = `$(Base.julia_cmd())`
         if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
             error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
         end
         sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
         push!(julia_cmd.exec, "--startup-file=no")
+        compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
         cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
         optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
         debug == nothing || push!(julia_cmd.exec, "-g$debug")
@@ -202,16 +219,15 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         expr = "
   VERSION >= v\"0.7+\" && Base.init_load_path($(repr(JULIA_HOME))) # initialize location of site-packages
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, abspath(\"cache_ji_v$VERSION\")) # enable usage of precompiled files
+  push!(Base.LOAD_CACHE_PATH, abspath(\"$tmp_dir\")) # enable usage of precompiled files
   include($(repr(julia_program))) # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
         command = `$julia_cmd -e $expr`
-        verbose && println("Build \".ji\" files local cache:\n  $command")
+        verbose && println("Build \".ji\" files:\n  $command")
         run(command)
-        command = `$julia_cmd --output-o $o_file -e $expr`
+        command = `$julia_cmd --output-o $(joinpath(tmp_dir, o_file)) -e $expr`
         verbose && println("Build object file \"$o_file\":\n  $command")
         run(command)
-        object || (delete_object = true)
     end
 
     if shared || executable
@@ -222,10 +238,10 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         cc = is_windows() ? "x86_64-w64-mingw32-gcc" : "gcc"
     end
 
-    if shared || executable
-        command = `$cc -m64 -shared -o $s_file $o_file $cflags $ldflags $ldlibs`
+    if shared
+        command = `$cc -m64 -shared -o $s_file $(joinpath(tmp_dir, o_file)) $cflags $ldflags $ldlibs`
         if is_apple()
-            command = `$command -Wl,-install_name,@rpath/lib$file_name.dylib`
+            command = `$command -Wl,-install_name,@rpath/lib$julia_program_basename.dylib`
         elseif is_windows()
             command = `$command -Wl,--export-all-symbols`
         end
@@ -242,11 +258,6 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
         end
         verbose && println("Build executable file \"$e_file\":\n  $command")
         run(command)
-    end
-
-    if delete_object && isfile(o_file)
-        verbose && println("Delete object file \"$o_file\"")
-        rm(o_file)
     end
 
     if julialibs

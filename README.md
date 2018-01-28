@@ -3,10 +3,11 @@
 Helper script to build libraries and executables from Julia code.
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-J <file>] [-C <target>]
+usage: juliac.jl [-v] [-q] [-c] [-J <file>]
+                 [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [-o] [-s] [-e] [-j]
+                 [--depwarn {yes|no|error}] [-a] [-o] [-s] [-e] [-j]
                  [--version] [-h] juliaprog [cprog] [builddir]
 
 positional arguments:
@@ -24,6 +25,9 @@ optional arguments:
   -c, --clean           delete builddir
   -J, --sysimage <file>
                         start up with the given system image file
+  --compile {yes|no|all|min}
+                        enable or disable JIT compiler, or request
+                        exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
   -O, --optimize {0,1,2,3}
@@ -36,6 +40,7 @@ optional arguments:
                         set floating point optimizations
   --depwarn {yes|no|error}
                         set syntax and method deprecation warnings
+  -a, --auto            automatically build required dependencies
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
@@ -44,9 +49,9 @@ optional arguments:
   -h, --help            show this help message and exit
 
 examples:
-  juliac.jl -ve hello.jl           # verbose, build executable
-  juliac.jl -ve hello.jl myprog.c  # embed into user defined C program
-  juliac.jl -qo hello.jl           # quiet, build object file
+  juliac.jl -vae hello.jl          # verbose, auto, build executable
+  juliac.jl -vae hello.jl myprog.c # embed into user defined C program
+  juliac.jl -qo hello.jl           # quiet, build object file only
   juliac.jl -vosej hello.jl        # build all and sync Julia libs
 ```
 
@@ -103,3 +108,6 @@ sections in the Julia manual.
 With Julia 0.7, a single large binary can be created, which does not
 require the driver program to load the shared library. An example of
 that is in `program2.c`, where the image file is the binary itself.
+
+For more information on embedding Julia see:\
+https://github.com/JuliaLang/julia/blob/master/doc/src/manual/embedding.md
