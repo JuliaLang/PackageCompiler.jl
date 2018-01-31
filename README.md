@@ -97,13 +97,11 @@ script into object code, and then builds it into the system image
 specified by the `-J` switch. This prepares an object file, which is
 then linked into a shared library containing the system image and user
 code. A driver script such as the one in `program.c` can then be used to
-build a binary that runs the julia code. For now, the image file has
-to be changed in `program.c` to match the name of the shared library
-containing the compiled julia program.
+build a binary that runs the julia code.
 
 Instead of a driver script, the generated system image can be embedded
 into a larger program following the embedding examples and relevant
-sections in the Julia manual.
+sections in the Julia manual. Note that the name of the generated system image (`"libhello"` for `hello.jl`) is accessible from C in the preprocessor macro `JULIAC_PROGRAM_LIBNAME`.
 
 With Julia 0.7, a single large binary can be created, which does not
 require the driver program to load the shared library. An example of

@@ -250,6 +250,7 @@ function julia_compile(julia_program, c_program=nothing, build_dir="builddir", v
     end
 
     if executable
+        push!(cflags, "-DJULIAC_PROGRAM_LIBNAME=\"lib$julia_program_basename\"")
         command = `$cc -m64 -o $e_file $c_program $s_file $cflags $ldflags $ldlibs`
         if is_apple()
             command = `$command -Wl,-rpath,@executable_path`

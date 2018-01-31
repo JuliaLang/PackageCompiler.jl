@@ -22,7 +22,8 @@ int main(int argc, char *argv[])
     // Initialize Julia
     uv_setup_args(argc, argv); // no-op on Windows
     libsupport_init();
-    jl_options.image_file = "libhello";
+    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation.
+    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
 
     // Do some work
