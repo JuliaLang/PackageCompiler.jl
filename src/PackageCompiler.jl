@@ -53,37 +53,35 @@ function snoop(path, compilationfile, csv)
     end
 end
 
-function clean_image(debug = false)
-    build_sysimg(default_sysimg_path(debug), force = true)
+function copy_system_image(src, dest, ignore_missing = false)
+    for file in sysimage_binaries
+        # backup
+        srcfile = joinpath(src, file)
+        destfile = joinpath(dest, file)
+        if !isfile(srcfile)
+            ignore_missing && continue
+            error("No file: $srcfile")
+        end
+        info("Copying system image: $srcfile to $destfile")
+        cp(srcfile, destfile, remove_destination = true)
+    end
 end
+
+function build_clean_image(debug = false)
+    backup = sysimgbackup_folder()
+    build_sysimg(backup, "native")
+    copy_system_image(backup, default_sysimg_path(debug))
+end
+
 
 function revert(debug = false)
     syspath = default_sysimg_path(debug)
-    sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup")
+    sysimg_backup = sysimgbackup_folder()
     if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries) # we have a backup
-        for file in sysimage_binaries
-            # backup
-            bfile = joinpath(sysimg_backup, file)
-            if isfile(bfile)
-                sfile = joinpath(dirname(syspath), file)
-                isfile(sfile) && mv(sfile, sfile*".old", remove_destination = true)
-                mv(bfile, sfile, remove_destination = false)
-            else
-                warn("No backup of $file found")
-            end
-        end
+        copy_system_image(sysimg_backup, syspath)
     else
         warn("No backup found but restoring. Need to build a new system image from scratch")
-        sysimg_backup = joinpath(@__DIR__, "..", "sysimg_backup") # build directly into backup
-        isdir(sysimg_backup) || mkpath(sysimg_backup)
-        build_sysimg(joinpath(sysimg_backup, "sys"))
-        # now we should have a backup.
-        # make sure that we have all files to not end up with an endless recursion!
-        if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries)
-            revert(debug)
-        else
-            error("Revert went wrong")
-        end
+        build_clean_image(debug)
     end
 end
 
@@ -96,10 +94,6 @@ function get_root_dir(path)
     end
 end
 
-function snoop_package(package::String, rel_snoop_file, sysimg_tmp, reuse)
-    precompile_file = joinpath(sysimg_tmp, "precompile.jl")
-
-end
 
 function sysimg_folder(files...)
     base_path = normpath(abspath(joinpath(@__DIR__, "..", "sysimg")))
@@ -169,7 +163,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     build_sysimg(image_path, "native", userimg)
     if force
         try
-            replace_jl_sysimg(debug)
+            replace_jl_sysimg(sysimg_folder(), debug)
             info(
                 "Replaced system image successfully. Next start of julia will load the newly compiled system image.
                 If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
@@ -178,7 +172,15 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             warn("An error has occured while replacing sysimg files:")
             warn(e)
             info("Recovering old system image from backup")
-            revert(debug)
+            # if any file is missing in default system image, revert!
+            syspath = default_sysimg_path(debug)
+            for file in sysimage_binaries
+                if !isfile(joinpath(syspath, file))
+                    info("$(joinpath(syspath, file)) missing. Reverting!")
+                    revert(debug)
+                    break
+                end
+            end
         end
     else
         info("""
@@ -189,20 +191,17 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
 end
 
 
-function replace_jl_sysimg(debug = false)
+function replace_jl_sysimg(image_path, debug = false)
     syspath = default_sysimg_path(debug)
-    for file in sysimage_binaries
-        # backup
-        bfile = sysimgbackup_folder(file)
-        sfile = joinpath(dirname(syspath), file)
-        if !isfile(bfile) # use the one that is already there
-            mv(sfile, bfile, remove_destination = true)
-        else
-            mv(sfile, sfile*".old", remove_destination = true) # remove so we don't overwrite (seems to be problematic on windows)
-        end
-        mv(joinpath(sysimg_tmp, file), sfile, remove_destination = false)
-    end
+    backup = sysimgbackup_folder()
+    # create a backup
+    # if syspath has missing files, ignore, since it will get replaced anyways
+    copy_system_image(syspath, backup, true)
+    info("Overwriting system image!")
+    copy_system_image(image_path, syspath)
 end
 
 
 end # module
+
+
