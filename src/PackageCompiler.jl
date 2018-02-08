@@ -67,13 +67,22 @@ function copy_system_image(src, dest, ignore_missing = false)
     end
 end
 
+
+"""
+Builds a clean system image, similar to a fresh Julia install.
+Can also be used to build a native system image for a downloaded cross compiled julia binary.
+"""
 function build_clean_image(debug = false)
     backup = sysimgbackup_folder()
     build_sysimg(backup, "native")
     copy_system_image(backup, default_sysimg_path(debug))
 end
 
-
+"""
+Reverts a forced compilation of the system image.
+This will restore any previously backed up system image files, or
+build a new, clean system image
+"""
 function revert(debug = false)
     syspath = default_sysimg_path(debug)
     sysimg_backup = sysimgbackup_folder()
@@ -114,7 +123,13 @@ function package_folder(package...)
     normpath(abspath(joinpath(packages, package...)))
 end
 
+"""
+    compile_package(packages...; kw_args...)
 
+with packages being either a string naming a package, or a tuple (package_name, precompile_file).
+If no precompile file is given, it will use the packages runtests.jl, which is a good canditate
+for figuring out what functions to compile!
+"""
 function compile_package(packages...; kw_args...)
     args = map(packages) do package
         # If no explicit path to a seperate precompile file, use runtests
@@ -125,6 +140,11 @@ function compile_package(packages...; kw_args...)
     compile_package(args...; kw_args...)
 end
 
+"""
+    snoop_userimg(userimg, packages::Tuple{String, String}...)
+
+    Traces all function calls in packages and writes out `precompile` statements into the file `userimg`
+"""
 function snoop_userimg(userimg, packages::Tuple{String, String}...)
     snooped_precompiles = map(packages) do package_snoopfile
         package, snoopfile = package_snoopfile
@@ -153,6 +173,14 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...)
     userimg
 end
 
+
+"""
+    compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
+
+Compile a list of packages. Each package comes as a tuple of `(package_name, precompile_file)`
+where the precompile file should contain all function calls, that should get compiled into the system image.
+Usually the runtests.jl file is a good candidate, since it should run all important functions of a package.
+"""
 function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
     userimg = sysimg_folder("precompile.jl")
     if !reuse
@@ -190,7 +218,9 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     end
 end
 
-
+"""
+Replaces the julia system image forcefully with a system image located at `image_path`
+"""
 function replace_jl_sysimg(image_path, debug = false)
     syspath = default_sysimg_path(debug)
     backup = sysimgbackup_folder()
@@ -200,6 +230,9 @@ function replace_jl_sysimg(image_path, debug = false)
     info("Overwriting system image!")
     copy_system_image(image_path, syspath)
 end
+
+
+export compile_package, revert, build_clean_image
 
 
 end # module
