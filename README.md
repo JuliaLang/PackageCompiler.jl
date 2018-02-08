@@ -15,17 +15,20 @@ using PackageCompiler
 
 # This command will use the runtest.jl of Matcha + UnicodeFun to find out what functions to precompile!
 # force = false to not force overwriting julia's current system image
-PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false, reuse = false) 
+compile_package("Matcha", "UnicodeFun", force = false, reuse = false) 
 
 # build again, reusing the snoop file
-PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
+compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
 
 # You can define a file that will get run for snooping explicitly like this:
 # this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
-PackageCompiler.compile_package("Matcha", "relative/path/for_snooping.jl")
+compile_package("Matcha", "relative/path/for_snooping.jl")
 
 # if you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
-PackageCompiler.revert() 
+revert()
+
+# Or if you simply want to get a native system image e.g. when you have downloaded the generic Julia install:
+build_clean_image() 
 ```
 
 
