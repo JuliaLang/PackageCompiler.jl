@@ -10,3 +10,4 @@ precompile.jl
 *.dll
 *.dylib
 *.o
+sysimg
