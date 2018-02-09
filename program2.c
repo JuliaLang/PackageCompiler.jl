@@ -8,7 +8,7 @@
 #include "uv.h"
 #include "julia.h"
 
-#ifdef JULIA_DEFINE_FAST_TLS // only available in Julia 0.7+
+#ifdef JULIA_DEFINE_FAST_TLS // only available in Julia v0.7 and above
 JULIA_DEFINE_FAST_TLS()
 #endif
 
@@ -41,7 +41,7 @@ int wmain(int argc, wchar_t *wargv[], wchar_t *envp[])
     // initialization
     libsupport_init();
     // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
-    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation.
+    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
     jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
 

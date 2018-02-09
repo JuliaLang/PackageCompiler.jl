@@ -1,6 +1,8 @@
-# Julia AOT compiler
+# Static Julia Compiler
 
-Helper script to build libraries and executables from Julia code.
+Building shared libraries and executables from Julia code.
+
+Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-c] [-J <file>]
@@ -9,6 +11,8 @@ usage: juliac.jl [-v] [-q] [-c] [-J <file>]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
                  [--depwarn {yes|no|error}] [-a] [-o] [-s] [-e] [-j]
                  [--version] [-h] juliaprog [cprog] [builddir]
+
+Static Julia Compiler
 
 positional arguments:
   juliaprog             Julia program to compile
@@ -40,7 +44,7 @@ optional arguments:
                         set floating point optimizations
   --depwarn {yes|no|error}
                         set syntax and method deprecation warnings
-  -a, --auto            automatically build required dependencies
+  -a, --autodeps        automatically build required dependencies
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
@@ -49,10 +53,10 @@ optional arguments:
   -h, --help            show this help message and exit
 
 examples:
-  juliac.jl -vae hello.jl          # verbose, auto, build executable
-  juliac.jl -vae hello.jl myprog.c # embed into user defined C program
-  juliac.jl -qo hello.jl           # quiet, build object file only
-  juliac.jl -vosej hello.jl        # build all and sync Julia libs
+  juliac.jl -vae hello.jl        # verbose, build executable and deps
+  juliac.jl -vae hello.jl prog.c # embed into user defined C program
+  juliac.jl -qo hello.jl         # quiet, build object file only
+  juliac.jl -vosej hello.jl      # build all and sync Julia libs
 ```
 
 ### Notes
@@ -101,11 +105,16 @@ build a binary that runs the julia code.
 
 Instead of a driver script, the generated system image can be embedded
 into a larger program following the embedding examples and relevant
-sections in the Julia manual. Note that the name of the generated system image (`"libhello"` for `hello.jl`) is accessible from C in the preprocessor macro `JULIAC_PROGRAM_LIBNAME`.
+sections in the Julia manual. Note that the name of the generated system
+image (`"libhello"` for `hello.jl`) is accessible from C in the
+preprocessor macro `JULIAC_PROGRAM_LIBNAME`.
 
 With Julia 0.7, a single large binary can be created, which does not
 require the driver program to load the shared library. An example of
 that is in `program2.c`, where the image file is the binary itself.
+
+For more information on static Julia compilation see:\
+https://juliacomputing.com/blog/2016/02/09/static-julia.html
 
 For more information on embedding Julia see:\
 https://github.com/JuliaLang/julia/blob/master/doc/src/manual/embedding.md
