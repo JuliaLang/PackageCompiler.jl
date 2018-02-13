@@ -5,9 +5,12 @@ deps.jl
 *.csv
 snoopy.jl
 precompile.jl
-*.so
-*.ji
-*.dll
-*.dylib
-*.o
 sysimg
+*.ji
+*.o
+*.so
+*.so.*
+*.dylib
+*.dll
+hello
+hello.exe
