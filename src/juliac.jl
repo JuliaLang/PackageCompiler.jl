@@ -174,9 +174,9 @@ function julia_compile(
             flags = `$cflags $ldflags $ldlibs`
         end
     end
-
+    bitness = Int == Int32 ? "-m32" : "-m64"
     if shared
-        command = `$cc -m64 -shared -o $s_file $(joinpath(tmp_dir, o_file)) $flags`
+        command = `$cc $bitness -shared -o $s_file $(joinpath(tmp_dir, o_file)) $flags`
         if julia_v07
             if Sys.isapple()
                 command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
@@ -195,7 +195,7 @@ function julia_compile(
     end
 
     if executable
-        command = `$cc -m64 -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
+        command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
         if julia_v07
             if Sys.isapple()
                 command = `$command -Wl,-rpath,@executable_path`
