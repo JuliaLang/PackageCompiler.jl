@@ -1,57 +1,24 @@
 __precompile__()
 module PackageCompiler
 
-using SnoopCompile
 
+# TODO: remove once Julia v0.7 is released
+const julia_v07 = VERSION > v"0.7-"
+
+
+using SnoopCompile
+using ArgParse
+julia_v07 && using Libdl
+
+
+include("juliac.jl")
 include("build_sysimg.jl")
+include("snooping.jl")
 
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
 )
 
-function snoop(path, compilationfile, csv)
-    cd(@__DIR__)
-    # Snoop compiler can't handle the path as a variable, so we just create a file
-    open(joinpath("snoopy.jl"), "w") do io
-        println(io, "include(\"$(escape_string(path))\")")
-    end
-    SnoopCompile.@snoop csv begin
-        include("snoopy.jl")
-    end
-    data = SnoopCompile.read(csv)
-    pc = SnoopCompile.parcel(reverse!(data[2]))
-    delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
-    tmp_mod = eval(:(module $(gensym()) end))
-    open(compilationfile, "w") do io
-        for (k, v) in pc
-            k == :unknown && continue
-            try
-                eval(tmp_mod, :(using $k))
-                println(io, "using $k")
-                info("using $k")
-            catch e
-                println("Module not found: $k")
-            end
-        end
-        for (k, v) in pc
-            for ln in v
-                # replace `_` for free parameters, which print out a warning otherwise
-                ln = replace(ln, delims, s"\1XXX\2")
-                # only print out valid lines
-                # TODO figure out the actual problems and why snoop compile emits invalid code
-                try
-                    parse(ln) # parse to make sure expression is parsing without error
-                    # wrap in try catch to catch problematic code emitted by SnoopCompile
-                    # without interupting the whole precompilation
-                    # (usually, SnoopCompile emits 1% erroring statements)
-                    println(io, "try\n    ", ln, "\nend")
-                catch e
-                    warn("Not emitted because code couldn't parse: ", ln)
-                end
-            end
-        end
-    end
-end
 
 function copy_system_image(src, dest, ignore_missing = false)
     for file in sysimage_binaries
@@ -65,6 +32,19 @@ function copy_system_image(src, dest, ignore_missing = false)
         info("Copying system image: $srcfile to $destfile")
         cp(srcfile, destfile, remove_destination = true)
     end
+end
+
+"""
+Replaces the julia system image forcefully with a system image located at `image_path`
+"""
+function replace_jl_sysimg(image_path, debug = false)
+    syspath = default_sysimg_path(debug)
+    backup = sysimgbackup_folder()
+    # create a backup
+    # if syspath has missing files, ignore, since it will get replaced anyways
+    copy_system_image(syspath, backup, true)
+    info("Overwriting system image!")
+    copy_system_image(image_path, syspath)
 end
 
 
@@ -140,38 +120,7 @@ function compile_package(packages...; kw_args...)
     compile_package(args...; kw_args...)
 end
 
-"""
-    snoop_userimg(userimg, packages::Tuple{String, String}...)
 
-    Traces all function calls in packages and writes out `precompile` statements into the file `userimg`
-"""
-function snoop_userimg(userimg, packages::Tuple{String, String}...)
-    snooped_precompiles = map(packages) do package_snoopfile
-        package, snoopfile = package_snoopfile
-        abs_package_path = if ispath(package)
-            normpath(abspath(package))
-        else
-            Pkg.dir(package)
-        end
-        file2snoop = normpath(abspath(joinpath(abs_package_path, snoopfile)))
-        package = package_folder(get_root_dir(abs_package_path))
-        isdir(package) || mkpath(package)
-        precompile_file = joinpath(package, "precompile.jl")
-        snoop(
-            file2snoop,
-            precompile_file,
-            joinpath(package, "snooped.csv")
-        )
-        precompile_file
-    end
-    open(userimg, "w") do io
-        for path in snooped_precompiles
-            write(io, open(read, path))
-            println(io)
-        end
-    end
-    userimg
-end
 
 
 """
@@ -187,11 +136,12 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
         snoop_userimg(userimg, packages...)
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
-    image_path = sysimg_folder("sys")
+    image_path = sysimg_folder()
     build_sysimg(image_path, "native", userimg)
+    imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     if force
         try
-            replace_jl_sysimg(sysimg_folder(), debug)
+            replace_jl_sysimg(image_path, debug)
             info(
                 "Replaced system image successfully. Next start of julia will load the newly compiled system image.
                 If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
@@ -213,28 +163,15 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     else
         info("""
             Not replacing system image.
-            You can start julia with julia -J $(image_path) to load the compiled files.
+            You can start julia with julia -J $(imgfile) to load the compiled files.
         """)
     end
+    imgfile
 end
 
-"""
-Replaces the julia system image forcefully with a system image located at `image_path`
-"""
-function replace_jl_sysimg(image_path, debug = false)
-    syspath = default_sysimg_path(debug)
-    backup = sysimgbackup_folder()
-    # create a backup
-    # if syspath has missing files, ignore, since it will get replaced anyways
-    copy_system_image(syspath, backup, true)
-    info("Overwriting system image!")
-    copy_system_image(image_path, syspath)
-end
 
 
 export compile_package, revert, build_clean_image
 
 
 end # module
-
-
