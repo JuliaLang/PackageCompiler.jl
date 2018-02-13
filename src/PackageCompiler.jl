@@ -4,11 +4,19 @@ module PackageCompiler
 
 # TODO: remove once Julia v0.7 is released
 const julia_v07 = VERSION > v"0.7-"
-
+if julia_v07
+    using Libdl
+    import Sys: iswindows, isunix, isapple
+else
+    const iswindows = is_windows
+    const isunix = is_unix
+    const isapple = is_apple
+end
 
 using SnoopCompile
 using ArgParse
-julia_v07 && using Libdl
+julia_v07 &&
+is_windows() && using WinRPM
 
 
 include("juliac.jl")

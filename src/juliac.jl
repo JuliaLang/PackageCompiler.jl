@@ -16,6 +16,14 @@ end
 
 system_compiler() = gcc
 
+
+function mingw_dir(folders...)
+    joinpath(
+        WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
+        "sys-root", "mingw", folders...
+    )
+end
+
 """
     julia_compile(julia_program::String; kw_args...)
 
@@ -105,19 +113,15 @@ function julia_compile(
 
     o_file = julia_program_basename * ".o"
     s_file = julia_program_basename * ".$(Libdl.dlext)"
-    if julia_v07
-        e_file = julia_program_basename * (Sys.iswindows() ? ".exe" : "")
-    else
-        e_file = julia_program_basename * (is_windows() ? ".exe" : "")
-    end
+    e_file = julia_program_basename * (iswindows() ? ".exe" : "")
     tmp_dir = "tmp_v$VERSION"
 
     # TODO: these should probably be emitted from julia-config also:
     if julia_v07
-        shlibdir = Sys.iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.LIBDIR)
+        shlibdir = iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.LIBDIR)
         private_shlibdir = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
     else
-        shlibdir = is_windows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
+        shlibdir = iswindows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
         private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
     end
 
@@ -137,7 +141,8 @@ function julia_compile(
         math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
         depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
         if julia_v07
-            Sys.iswindows() && (julia_program = replace(julia_program, "\\", "\\\\"))
+
+            iswindows() && (julia_program = replace(julia_program, "\\", "\\\\"))
             expr = "
   Base.init_depot_path() # initialize package depots
   Base.init_load_path() # initialize location of site-packages
@@ -145,14 +150,18 @@ function julia_compile(
   push!(Base.LOAD_CACHE_PATH, abspath(\"$tmp_dir\")) # enable usage of precompiled files
   include(\"$julia_program\") # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+
         else
-            is_windows() && (julia_program = replace(julia_program, "\\", "\\\\"))
+
+            iswindows() && (julia_program = replace(julia_program, "\\", "\\\\"))
             expr = "
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
   push!(Base.LOAD_CACHE_PATH, abspath(\"$tmp_dir\")) # enable usage of precompiled files
   include(\"$julia_program\") # include \"julia_program\" file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+
         end
+
         isdir(tmp_dir) || mkpath(tmp_dir)
         command = `$julia_cmd -e $expr`
         verbose && println("Build module image files \".ji\" in subdirectory \"$tmp_dir\":\n  $command")
@@ -177,18 +186,10 @@ function julia_compile(
     bitness = Int == Int32 ? "-m32" : "-m64"
     if shared
         command = `$cc $bitness -shared -o $s_file $(joinpath(tmp_dir, o_file)) $flags`
-        if julia_v07
-            if Sys.isapple()
-                command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
-            elseif Sys.iswindows()
-                command = `$command -Wl,--export-all-symbols`
-            end
-        else
-            if is_apple()
-                command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
-            elseif is_windows()
-                command = `$command -Wl,--export-all-symbols`
-            end
+        if isapple()
+            command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
+        elseif iswindows()
+            command = `$command -Wl,--export-all-symbols`
         end
         verbose && println("Build shared library \"$s_file\" in build directory:\n  $command")
         run(command)
@@ -196,22 +197,14 @@ function julia_compile(
 
     if executable
         command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
-        if julia_v07
-            if Sys.isapple()
-                command = `$command -Wl,-rpath,@executable_path`
-            elseif Sys.isunix()
-                command = `$command -Wl,-rpath,\$ORIGIN`
-            end
-        else
-            if is_apple()
-                command = `$command -Wl,-rpath,@executable_path`
-            elseif is_unix()
-                command = `$command -Wl,-rpath,\$ORIGIN`
-            end
+        if isapple()
+            command = `$command -Wl,-rpath,@executable_path`
+        elseif isunix()
+            command = `$command -Wl,-rpath,\$ORIGIN`
         end
-        if Sys.is_windows()
-            RPMbindir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","bin")
-            incdir = Pkg.dir("WinRPM","deps","usr","x86_64-w64-mingw32","sys-root","mingw","include")
+        if iswindows()
+            RPMbindir = mingw_dir("bin")
+            incdir = mingw_dir("include")
             push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
             ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
             command = `$command -I$incdir`
@@ -225,18 +218,10 @@ function julia_compile(
         libfiles = String[]
         dlext = "." * Libdl.dlext
         for dir in (shlibdir, private_shlibdir)
-            if julia_v07
-                if Sys.iswindows() || Sys.isapple()
-                    append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
-                else
-                    append!(libfiles, joinpath.(dir, filter(x -> contains(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
-                end
+            if iswindows() || isapple()
+                append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
             else
-                if is_windows() || is_apple()
-                    append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
-                else
-                    append!(libfiles, joinpath.(dir, filter(x -> ismatch(r"^lib.+\.so(?:\.\d+)*$", x), readdir(dir))))
-                end
+                append!(libfiles, joinpath.(dir, filter(x -> contains(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
             end
         end
         sync = false
