@@ -20,7 +20,7 @@ function snoop(path, compilationfile, csv)
                 println(io, "using $k")
                 info("using $k")
             catch e
-                println("Module not found: $k")
+                warn("Module not found: $k")
             end
         end
         for (k, v) in pc
@@ -38,6 +38,26 @@ function snoop(path, compilationfile, csv)
                 catch e
                     warn("Not emitted because code couldn't parse: ", ln)
                 end
+            end
+        end
+    end
+end
+
+function static_library_snoop()
+    for (k, v) in pc
+        for ln in v
+            # replace `_` for free parameters, which print out a warning otherwise
+            ln = replace(ln, delims, s"\1XXX\2")
+            # only print out valid lines
+            # TODO figure out the actual problems and why snoop compile emits invalid code
+            try
+                parse(ln) # parse to make sure expression is parsing without error
+                # wrap in try catch to catch problematic code emitted by SnoopCompile
+                # without interupting the whole precompilation
+                # (usually, SnoopCompile emits 1% erroring statements)
+                println(io, "try\n    ", ln, "\nend")
+            catch e
+                warn("Not emitted because code couldn't parse: ", ln)
             end
         end
     end

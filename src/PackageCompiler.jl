@@ -14,13 +14,12 @@ else
 end
 
 using SnoopCompile
-using ArgParse
-julia_v07 &&
-is_windows() && using WinRPM
+
+iswindows() && using WinRPM
 
 
-include("juliac.jl")
-include("build_sysimg.jl")
+include("static_julia.jl")
+include("api.jl")
 include("snooping.jl")
 
 const sysimage_binaries = (
@@ -62,7 +61,7 @@ Can also be used to build a native system image for a downloaded cross compiled 
 """
 function build_clean_image(debug = false)
     backup = sysimgbackup_folder()
-    build_sysimg(backup, "native")
+    build_sysimg(backup, joinpath(@__DIR__, "empty_userimg.jl"))
     copy_system_image(backup, default_sysimg_path(debug))
 end
 
@@ -145,7 +144,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
-    build_sysimg(image_path, "native", userimg)
+    build_sysimg(image_path, userimg)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     if force
         try
@@ -176,7 +175,6 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     end
     imgfile
 end
-
 
 
 export compile_package, revert, build_clean_image
