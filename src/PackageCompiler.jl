@@ -21,6 +21,7 @@ iswindows() && using WinRPM
 include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
+include("system_image.jl")
 
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
@@ -35,6 +36,12 @@ function copy_system_image(src, dest, ignore_missing = false)
         if !isfile(srcfile)
             ignore_missing && continue
             error("No file: $srcfile")
+        end
+        if isfile(destfile)
+            if isfile(destfile * ".backup")
+                rm(destfile * ".backup", force = true)
+            end
+            mv(destfile, destfile * ".backup", remove_destination = true)
         end
         info("Copying system image: $srcfile to $destfile")
         cp(srcfile, destfile, remove_destination = true)
@@ -55,15 +62,7 @@ function replace_jl_sysimg(image_path, debug = false)
 end
 
 
-"""
-Builds a clean system image, similar to a fresh Julia install.
-Can also be used to build a native system image for a downloaded cross compiled julia binary.
-"""
-function build_clean_image(debug = false)
-    backup = sysimgbackup_folder()
-    build_sysimg(backup, joinpath(@__DIR__, "empty_userimg.jl"))
-    copy_system_image(backup, default_sysimg_path(debug))
-end
+
 
 """
 Reverts a forced compilation of the system image.
@@ -77,7 +76,7 @@ function revert(debug = false)
         copy_system_image(sysimg_backup, syspath)
     else
         warn("No backup found but restoring. Need to build a new system image from scratch")
-        build_clean_image(debug)
+        build_native_image(debug)
     end
 end
 
@@ -177,7 +176,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
 end
 
 
-export compile_package, revert, build_clean_image
+export compile_package, revert, build_native_image
 
 
 end # module

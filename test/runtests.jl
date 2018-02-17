@@ -15,4 +15,10 @@ img_file = PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false
     # Make sure we actually snooped stuff
     @test length(readlines(userimg)) > 700
     @test success(`julia -J $(img_file)`)
+    mktempdir() do dir
+        sysfile = joinpath(dir, "sys")
+        PackageCompiler.compile_system_image(sysfile, "native")
+        @test isfile(sysfile * ".o")
+        @test isfile(sysfile * ".$(Libdl.dlext)")
+    end
 end
