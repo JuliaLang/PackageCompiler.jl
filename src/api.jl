@@ -52,3 +52,14 @@ function build_shared_lib(
         object = true, shared = true, executable = false, julialibs = true,
     )
 end
+
+
+"""
+Builds a clean system image, similar to a fresh Julia install.
+Can also be used to build a native system image for a downloaded cross compiled julia binary.
+"""
+function build_native_image(debug = false)
+    backup = sysimgbackup_folder()
+    compile_system_image(joinpath(backup, "sys"), "native")
+    copy_system_image(backup, default_sysimg_path(debug))
+end
