@@ -21,6 +21,7 @@ iswindows() && using WinRPM
 include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
+include("shared_library.jl")
 
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
