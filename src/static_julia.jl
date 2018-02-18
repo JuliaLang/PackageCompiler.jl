@@ -79,7 +79,6 @@ function julia_compile(
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
-    @show cprog
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
@@ -125,7 +124,7 @@ function julia_compile(
 
     shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose)
 
-    executable && build_executable(s_file, e_file, cprog, verbose)
+    executable && compile_executable(s_file, e_file, cprog, verbose)
 
     julialibs && sync_julia_files(verbose)
 
@@ -152,7 +151,7 @@ function build_shared(s_file, o_file, verbose = false)
     flags = julia_flags()
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
     if isapple()
-        command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
+        command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
@@ -161,7 +160,7 @@ function build_shared(s_file, o_file, verbose = false)
 end
 
 
-function build_executable(s_file, e_file, cprog, verbose = false)
+function compile_executable(s_file, e_file, cprog, verbose = false)
     bitness = bitness_flag()
     cc = system_compiler()
     flags = julia_flags()
