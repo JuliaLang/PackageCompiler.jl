@@ -22,3 +22,19 @@ img_file = PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false
         @test isfile(sysfile * ".$(Libdl.dlext)")
     end
 end
+
+@testset "juliac" begin
+    mktempdir() do build
+        juliac = joinpath(@__DIR__, "..", "juliac.jl")
+        jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
+        cfile = joinpath(@__DIR__, "..", "examples", "program.c")
+        build = mktempdir()
+        julia = Base.julia_cmd()
+        @test success(`$julia $juliac -vosej $jlfile $cfile $build`)
+        @test isfile(joinpath(build, "hello.$(Libdl.dlext)"))
+        @test isfile(joinpath(build, "hello$(executable_ext())"))
+        cd(build) do
+            run(`./$("hello$(executable_ext())")`)
+        end
+    end
+end
