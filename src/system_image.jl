@@ -11,7 +11,9 @@ function compile_system_image(sysimg_path, cpu_target; debug = false)
     # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
-        julia = "julia"
+        # This can probably get merged with build_object.
+        # At some point, I will need to understand build_object a bit better before doing that move, though!
+        julia = Base.julia_cmd().exec[1]
         cc = system_compiler()
         # Ensure we have write-permissions to wherever we're trying to write to
         try
@@ -32,26 +34,6 @@ function compile_system_image(sysimg_path, cpu_target; debug = false)
         info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
         run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
-        link_sysimg(sysimg_path, cc, debug)
+        build_shared("$sysimg_path.$(Libdl.dlext)", "$sysimg_path.o", true)
     end
-end
-
-# Link sys.o into sys.$(dlext)
-function link_sysimg(sysimg_path, cc = system_compiler(), debug = false)
-
-    julia_libdir = dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia"))
-
-    FLAGS = ["-L$julia_libdir"]
-
-    push!(FLAGS, "-shared")
-    push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
-    if is_windows()
-        push!(FLAGS, "-lssp")
-    end
-
-    sysimg_file = "$sysimg_path.$(Libdl.dlext)"
-    info("Linking sys.$(Libdl.dlext)")
-    info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
-    # Windows has difficulties overwriting a file in use so we first link to a temp file
-    run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
 end
