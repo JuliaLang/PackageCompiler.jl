@@ -242,16 +242,12 @@ function sync_julia_files(verbose)
         if iswindows() || isapple()
             append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
         else
-            append!(libfiles, joinpath.(dir, filter(x -> contains(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
     end
     sync = false
     for src in libfiles
-        if julia_v07
-            contains(src, r"debug") && continue
-        else
-            ismatch(r"debug", src) && continue
-        end
+        contains07(src, r"debug") && continue
         dst = basename(src)
         if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
             verbose && println("  $dst")

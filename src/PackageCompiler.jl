@@ -7,10 +7,12 @@ const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
     import Sys: iswindows, isunix, isapple
+    const contains07 = contains
 else
     const iswindows = is_windows
     const isunix = is_unix
     const isapple = is_apple
+    contains07(str, reg) = ismatch(reg, str)
 end
 
 using SnoopCompile
