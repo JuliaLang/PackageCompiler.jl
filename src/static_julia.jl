@@ -16,6 +16,7 @@ end
 
 system_compiler() = gcc
 bitness_flag() = Int == Int32 ? "-m32" : "-m64"
+executable_ext() = (iswindows() ? ".exe" : "")
 
 function mingw_dir(folders...)
     joinpath(
@@ -78,7 +79,6 @@ function julia_compile(
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
-
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
@@ -113,7 +113,7 @@ function julia_compile(
 
     o_file = julia_program_basename * ".o"
     s_file = julia_program_basename * ".$(Libdl.dlext)"
-    e_file = julia_program_basename * (iswindows() ? ".exe" : "")
+    e_file = julia_program_basename * executable_ext()
     tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
@@ -124,7 +124,7 @@ function julia_compile(
 
     shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose)
 
-    executable && build_executable(s_file, e_file, cprog, verbose)
+    executable && compile_executable(s_file, e_file, cprog, verbose)
 
     julialibs && sync_julia_files(verbose)
 
@@ -151,7 +151,7 @@ function build_shared(s_file, o_file, verbose = false)
     flags = julia_flags()
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
     if isapple()
-        command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
+        command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
@@ -160,7 +160,7 @@ function build_shared(s_file, o_file, verbose = false)
 end
 
 
-function build_executable(s_file, e_file, cprog, verbose = false)
+function compile_executable(s_file, e_file, cprog, verbose = false)
     bitness = bitness_flag()
     cc = system_compiler()
     flags = julia_flags()
@@ -241,16 +241,12 @@ function sync_julia_files(verbose)
         if iswindows() || isapple()
             append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
         else
-            append!(libfiles, joinpath.(dir, filter(x -> contains(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
     end
     sync = false
     for src in libfiles
-        if julia_v07
-            contains(src, r"debug") && continue
-        else
-            ismatch(r"debug", src) && continue
-        end
+        contains07(src, r"debug") && continue
         dst = basename(src)
         if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
             verbose && println("  $dst")

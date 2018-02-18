@@ -7,10 +7,12 @@ const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
     import Sys: iswindows, isunix, isapple
+    const contains07 = contains
 else
     const iswindows = is_windows
     const isunix = is_unix
     const isapple = is_apple
+    contains07(str, reg) = ismatch(reg, str)
 end
 
 using SnoopCompile
@@ -176,7 +178,16 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
 end
 
 
-export compile_package, revert, build_native_image
 
+
+function __init__()
+    if Base.julia_cmd().exec[2] != "-Cnative"
+        warn("Your Julia system image is not compiled natively for this CPU architecture.
+        Please run `PackageCompiler.build_native_image()` for optimal Julia performance"
+        )
+    end
+end
+
+export compile_package, revert, build_native_image, executable_ext, build_executable
 
 end # module
