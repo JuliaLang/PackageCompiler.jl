@@ -44,7 +44,6 @@ compiles the julia file at path `julia_program` with keyword arguments:
     quiet                     suppress non-error messages
     clean                     delete builddir
 
-
     sysimage <file>           start up with the given system image file
     compile {yes|no|all|min}  enable or disable JIT compiler, or request exhaustive compilation
     cpu_target <target>       limit usage of CPU features up to <target>
@@ -54,8 +53,6 @@ compiles the julia file at path `julia_program` with keyword arguments:
     check_bounds {yes|no}     emit bounds checks always or never
     math_mode {ieee,fast}     set floating point optimizations
     depwarn {yes|no|error}    set syntax and method deprecation warnings
-
-
 """
 function julia_compile(
         julia_program;
@@ -130,7 +127,6 @@ function julia_compile(
 
 end
 
-
 function julia_flags(optimize, debug)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
@@ -149,7 +145,6 @@ function julia_flags(optimize, debug)
     end
 end
 
-
 function build_shared(s_file, o_file, verbose, optimize, debug)
     cc = system_compiler()
     bitness = bitness_flag()
@@ -163,7 +158,6 @@ function build_shared(s_file, o_file, verbose, optimize, debug)
     verbose && println("Build shared library \"$s_file\" in build directory:\n  $command")
     run(command)
 end
-
 
 function compile_executable(s_file, e_file, cprog, verbose, optimize, debug)
     bitness = bitness_flag()
