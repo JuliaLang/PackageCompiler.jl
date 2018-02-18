@@ -60,9 +60,19 @@ function build_executable(
 
         snoopfile = nothing, builddir = "build",
         verbose = false, quiet = false,
-        cpu_target = "native", optimize = nothing, debug = nothing,
+        cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
+    if snoopfile != nothing
+        precompfile = joinpath(builddir, "precompiled.jl")
+        snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
+        jlmain = joinpath(builddir, "julia_main.jl")
+        open(jlmain, "w") do io
+            println(io, "include(\"$(escape_string(precompfile))\")")
+            println(io, "include(\"$(escape_string(library))\")")
+        end
+        library = jlmain
+    end
     julia_compile(
 
         library, julia_program_basename = library_name,

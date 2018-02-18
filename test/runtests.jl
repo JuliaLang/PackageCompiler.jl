@@ -23,18 +23,42 @@ img_file = PackageCompiler.compile_package("Matcha", "UnicodeFun", force = false
     end
 end
 
+
 @testset "juliac" begin
     mktempdir() do build
         juliac = joinpath(@__DIR__, "..", "juliac.jl")
         jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
-        build = mktempdir()
         julia = Base.julia_cmd()
         @test success(`$julia $juliac -vosej $jlfile $cfile $build`)
         @test isfile(joinpath(build, "hello.$(Libdl.dlext)"))
         @test isfile(joinpath(build, "hello$(executable_ext())"))
         cd(build) do
-            run(`./$("hello$(executable_ext())")`)
+            @test success(`./$("hello$(executable_ext())")`)
         end
+    end
+end
+
+@testset "build_executable" begin
+    build = mktempdir()
+    jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
+    snoopfile = open(joinpath(build, "snoop.jl"), "w") do io
+        write(io, open(read, jlfile))
+        println(io)
+        println(io, "using .Hello; Hello.julia_main(String[])")
+    end
+    build_executable(
+        jlfile,
+        snoopfile = snoopfile, builddir = build,
+        verbose = false, quiet = false,
+    )
+    @test isfile(joinpath(build, "hello.$(Libdl.dlext)"))
+    @test isfile(joinpath(build, "hello$(executable_ext())"))
+    cd(build) do
+        @test success(`./$("hello$(executable_ext())")`)
+    end
+    for i = 1:100
+        try rm(build, recursive = true) end
+        sleep(1/100)
     end
 end
