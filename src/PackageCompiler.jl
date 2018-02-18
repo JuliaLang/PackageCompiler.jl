@@ -179,4 +179,12 @@ end
 export compile_package, revert, build_native_image
 
 
+function __init__()
+    if Base.julia_cmd().exec[2] != "-Cnative"
+        warn("Your Julia system image is not compiled natively for this CPU architecture.
+        Please run `PackageCompiler.build_native_image()` for optimal Julia performance"
+        )
+    end
+end
+
 end # module
