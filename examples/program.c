@@ -16,28 +16,11 @@ JULIA_DEFINE_FAST_TLS()
 extern int julia_main(jl_array_t*);
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
-#ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
     int retcode;
     int i;
     uv_setup_args(argc, argv); // no-op on Windows
-#else
-int wmain(int argc, wchar_t *wargv[], wchar_t *envp[])
-{
-    int retcode;
-    int i;
-    char **argv;
-    for (i = 0; i < argc; i++) { // convert the command line to UTF8
-        wchar_t *warg = argv[i];
-        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
-        if (!len) return 1;
-        char *arg = (char*)alloca(len);
-        if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
-        argv[i] = arg;
-    }
-#endif
-
     // initialization
     libsupport_init();
     // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
