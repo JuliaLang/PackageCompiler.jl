@@ -53,6 +53,22 @@ function build_shared_lib(
     )
 end
 
+"""
+    build_executable(
+        library,
+        library_name = splitext(basename(library))[1],
+        cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
+
+        snoopfile = nothing, builddir = "build",
+        verbose = false, quiet = false,
+        cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing
+    )
+
+    `library` needs to be a julia file containing a julia main, e.g. like examples/hello.jl
+    `snoopfile` is optional and can be julia file that calls functions that you want to make sure to have precompiled
+    `builddir` is where library_name.exe and shared libraries will end up
+"""
 function build_executable(
         library,
         library_name = splitext(basename(library))[1],
