@@ -16,6 +16,7 @@ end
 
 system_compiler() = gcc
 bitness_flag() = Int == Int32 ? "-m32" : "-m64"
+executable_ext() = (iswindows() ? ".exe" : "")
 
 function mingw_dir(folders...)
     joinpath(
@@ -78,7 +79,7 @@ function julia_compile(
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
-
+    @show cprog
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
@@ -113,7 +114,7 @@ function julia_compile(
 
     o_file = julia_program_basename * ".o"
     s_file = julia_program_basename * ".$(Libdl.dlext)"
-    e_file = julia_program_basename * (iswindows() ? ".exe" : "")
+    e_file = julia_program_basename * executable_ext()
     tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
