@@ -35,7 +35,7 @@ end
 function build_shared_lib(
         library, library_name;
         verbose = false, quiet = false,
-        cpu_target = "native", optimize = nothing, debug = nothing,
+        cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
     julia_compile(
@@ -53,13 +53,40 @@ function build_shared_lib(
     )
 end
 
+function build_executable(
+        library,
+        library_name = splitext(basename(library))[1],
+        cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
+
+        snoopfile = nothing, builddir = "build",
+        verbose = false, quiet = false,
+        cpu_target = "native", optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing
+    )
+    julia_compile(
+
+        library, julia_program_basename = library_name,
+
+        cpu_target = cpu_target, optimize = optimize,
+        debug = debug, inline = inline, check_bounds = check_bounds,
+        math_mode = math_mode, verbose = verbose, quiet = quiet,
+
+        cprog = cprogram, builddir = builddir,
+        clean = false, sysimage = nothing,
+        compile = nothing, depwarn = nothing, autodeps = false,
+        object = true, shared = true, executable = true, julialibs = true,
+    )
+end
+
 
 """
+    build_native_image()
 Builds a clean system image, similar to a fresh Julia install.
 Can also be used to build a native system image for a downloaded cross compiled julia binary.
 """
-function build_native_image(debug = false)
+function build_native_image(debug = false) # debug is ignored right now
     backup = sysimgbackup_folder()
+    # Build in backup dir, so we have a clean backup!
     compile_system_image(joinpath(backup, "sys"), "native")
     copy_system_image(backup, default_sysimg_path(debug))
 end
