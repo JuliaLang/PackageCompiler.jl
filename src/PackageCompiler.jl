@@ -176,7 +176,6 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
 end
 
 
-export compile_package, revert, build_native_image
 
 
 function __init__()
@@ -186,5 +185,7 @@ function __init__()
         )
     end
 end
+
+export compile_package, revert, build_native_image, executable_ext, build_executable
 
 end # module
