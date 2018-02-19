@@ -1,4 +1,4 @@
-using PackageCompiler, ArgParse
+using ArgParse, PackageCompiler
 
 Base.@ccallable function julia_main(args::Vector{String})::Cint
 
@@ -103,7 +103,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         \ua0\ua0juliac.jl -vae hello.jl        # verbose, build executable and deps\n
         \ua0\ua0juliac.jl -vae hello.jl prog.c # embed into user defined C program\n
         \ua0\ua0juliac.jl -qo hello.jl         # quiet, build object file only\n
-        \ua0\ua0juliac.jl -vosej hello.jl      # build all and sync Julia libs\n
+        \ua0\ua0juliac.jl -vosej hello.jl      # build all and sync Julia libs
         """
 
     parsed_args = parse_args(args, s)
@@ -114,13 +114,17 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         exit(0)
     end
 
-    kw_args = map(parsed_args) do kv
-        Symbol(replace(kv[1], "-", "_")) => kv[2]
+    juliaprog = pop!(parsed_args, "juliaprog")
+    kwargs = map(parsed_args) do kv
+        if PackageCompiler.julia_v07
+            Symbol(replace(kv[1], "-" => "_")) => kv[2]
+        else
+            Symbol(replace(kv[1], "-", "_")) => kv[2]
+        end
     end
-    kw_args = filter((k, v)-> k != :juliaprog, kw_args)
-    PackageCompiler.julia_compile(
-        parsed_args["juliaprog"];
-        kw_args...
+    PackageCompiler.static_julia(
+        juliaprog;
+        kwargs...
     )
 end
 
