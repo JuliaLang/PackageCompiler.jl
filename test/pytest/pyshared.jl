@@ -1,6 +1,6 @@
-using PyCall
+#using PyCall
 
-Base.@ccallable function helloworld(self::PyObject)::PyObject
-    println(self)
-    return PyObject("test")
+Base.@ccallable function julia_test()::Void
+    println("Jo mah man!!!")
+    return #PyObject("test")
 end

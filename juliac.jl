@@ -1,10 +1,6 @@
-## Assumptions:
-## 1. gcc / x86_64-w64-mingw32-gcc is available and is in path
-## 2. Package ArgParse is installed
-
 using PackageCompiler, ArgParse
 
-function main(args)
+Base.@ccallable function julia_main(args::Vector{String})::Cint
 
     s = ArgParseSettings("Static Julia Compiler",
                          version = "$(basename(@__FILE__)) version 0.7-DEV",
@@ -128,4 +124,6 @@ function main(args)
     )
 end
 
-main(ARGS)
+if get(ENV, "COMPILE_STATIC", "false") == "false"
+    julia_main(ARGS)
+end

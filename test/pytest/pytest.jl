@@ -1,4 +1,16 @@
 using PackageCompiler
+dir(folders...) = Pkg.dir("PackageCompiler", "test", "pytest", folders...)
+PackageCompiler.julia_compile(
+    dir("pyshared.jl");
+    julia_program_basename = "pyshared",
+    verbose = true, quiet = false, object = true,
+    sysimage = nothing, cprog = nothing, builddir = dir(),
+    cpu_target = nothing, optimize = nothing, debug = nothing,
+    inline = nothing, check_bounds = nothing, math_mode = nothing,
+    executable = false, shared = true, julialibs = true
+)
+println(PackageCompiler.julia_flags(nothing, debug))
+using PackageCompiler
 dir(folders...) = abspath(joinpath(homedir(), "UnicodeFun", folders...))
 tmp_dir = dir("build")
 o_file = dir("build", "pymodule.o")

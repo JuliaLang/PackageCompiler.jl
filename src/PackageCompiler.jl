@@ -7,10 +7,12 @@ const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
     import Sys: iswindows, isunix, isapple
+    const contains07 = contains
 else
     const iswindows = is_windows
     const isunix = is_unix
     const isapple = is_apple
+    contains07(str, reg) = ismatch(reg, str)
 end
 
 using SnoopCompile
@@ -22,6 +24,7 @@ include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
 include("shared_library.jl")
+include("system_image.jl")
 
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
@@ -36,6 +39,12 @@ function copy_system_image(src, dest, ignore_missing = false)
         if !isfile(srcfile)
             ignore_missing && continue
             error("No file: $srcfile")
+        end
+        if isfile(destfile)
+            if isfile(destfile * ".backup")
+                rm(destfile * ".backup", force = true)
+            end
+            mv(destfile, destfile * ".backup", remove_destination = true)
         end
         info("Copying system image: $srcfile to $destfile")
         cp(srcfile, destfile, remove_destination = true)
@@ -56,15 +65,7 @@ function replace_jl_sysimg(image_path, debug = false)
 end
 
 
-"""
-Builds a clean system image, similar to a fresh Julia install.
-Can also be used to build a native system image for a downloaded cross compiled julia binary.
-"""
-function build_clean_image(debug = false)
-    backup = sysimgbackup_folder()
-    build_sysimg(backup, joinpath(@__DIR__, "empty_userimg.jl"))
-    copy_system_image(backup, default_sysimg_path(debug))
-end
+
 
 """
 Reverts a forced compilation of the system image.
@@ -78,7 +79,7 @@ function revert(debug = false)
         copy_system_image(sysimg_backup, syspath)
     else
         warn("No backup found but restoring. Need to build a new system image from scratch")
-        build_clean_image(debug)
+        build_native_image(debug)
     end
 end
 
@@ -178,7 +179,16 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
 end
 
 
-export compile_package, revert, build_clean_image
 
+
+function __init__()
+    if Base.julia_cmd().exec[2] != "-Cnative"
+        warn("Your Julia system image is not compiled natively for this CPU architecture.
+        Please run `PackageCompiler.build_native_image()` for optimal Julia performance"
+        )
+    end
+end
+
+export compile_package, revert, build_native_image, executable_ext, build_executable
 
 end # module

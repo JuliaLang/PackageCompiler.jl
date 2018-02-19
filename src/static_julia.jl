@@ -16,6 +16,7 @@ end
 
 system_compiler() = gcc
 bitness_flag() = Int == Int32 ? "-m32" : "-m64"
+executable_ext() = (iswindows() ? ".exe" : "")
 
 function mingw_dir(folders...)
     joinpath(
@@ -43,7 +44,6 @@ compiles the julia file at path `julia_program` with keyword arguments:
     quiet                     suppress non-error messages
     clean                     delete builddir
 
-
     sysimage <file>           start up with the given system image file
     compile {yes|no|all|min}  enable or disable JIT compiler, or request exhaustive compilation
     cpu_target <target>       limit usage of CPU features up to <target>
@@ -53,8 +53,6 @@ compiles the julia file at path `julia_program` with keyword arguments:
     check_bounds {yes|no}     emit bounds checks always or never
     math_mode {ieee,fast}     set floating point optimizations
     depwarn {yes|no|error}    set syntax and method deprecation warnings
-
-
 """
 function julia_compile(
         julia_program;
@@ -78,7 +76,6 @@ function julia_compile(
     julia_program = abspath(julia_program)
     isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
     quiet || println("Julia program file:\n  \"$julia_program\"")
-
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
@@ -113,7 +110,7 @@ function julia_compile(
 
     o_file = julia_program_basename * ".o"
     s_file = julia_program_basename * ".$(Libdl.dlext)"
-    e_file = julia_program_basename * (iswindows() ? ".exe" : "")
+    e_file = julia_program_basename * executable_ext()
     tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
@@ -122,36 +119,39 @@ function julia_compile(
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose)
+    shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose, optimize, debug)
 
-    executable && build_executable(s_file, e_file, cprog, verbose)
+    executable && compile_executable(s_file, e_file, cprog, verbose, optimize, debug)
 
     julialibs && sync_julia_files(verbose)
 
 end
 
-
-function julia_flags()
+function julia_flags(optimize, debug)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
-        return `$(Base.shell_split(read(\`$command --allflags\`, String)))`
+        flags = `$(Base.shell_split(read(\`$command --allflags\`, String)))`
+        optimize == nothing || (flags = `$flags -O$optimize`)
+        debug != 2 || (flags = `$flags -g`)
+        return flags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
         cflags = `$(Base.shell_split(readstring(\`$command --cflags\`)))`
+        optimize == nothing || (cflags = `$cflags -O$optimize`)
+        debug != 2 || (cflags = `$cflags -g`)
         ldflags = `$(Base.shell_split(readstring(\`$command --ldflags\`)))`
         ldlibs = `$(Base.shell_split(readstring(\`$command --ldlibs\`)))`
         return `$cflags $ldflags $ldlibs`
     end
 end
 
-
-function build_shared(s_file, o_file, verbose = false)
+function build_shared(s_file, o_file, verbose, optimize, debug)
     cc = system_compiler()
     bitness = bitness_flag()
-    flags = julia_flags()
+    flags = julia_flags(optimize, debug)
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
     if isapple()
-        command = `$command -Wl,-install_name,@rpath/\"$s_file\"`
+        command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
@@ -159,11 +159,10 @@ function build_shared(s_file, o_file, verbose = false)
     run(command)
 end
 
-
-function build_executable(s_file, e_file, cprog, verbose = false)
+function compile_executable(s_file, e_file, cprog, verbose, optimize, debug)
     bitness = bitness_flag()
     cc = system_compiler()
-    flags = julia_flags()
+    flags = julia_flags(optimize, debug)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
     if iswindows()
         RPMbindir = PackageCompiler.mingw_dir("bin")
@@ -241,16 +240,12 @@ function sync_julia_files(verbose)
         if iswindows() || isapple()
             append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
         else
-            append!(libfiles, joinpath.(dir, filter(x -> contains(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
     end
     sync = false
     for src in libfiles
-        if julia_v07
-            contains(src, r"debug") && continue
-        else
-            ismatch(r"debug", src) && continue
-        end
+        contains07(src, r"debug") && continue
         dst = basename(src)
         if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
             verbose && println("  $dst")

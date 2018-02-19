@@ -1,4 +1,7 @@
 #include <Python.h>
+#include "julia.h"
+
+extern void julia_test(void);
 
 static PyObject* say_hello(PyObject* self, PyObject* args)
 {
@@ -8,7 +11,7 @@ static PyObject* say_hello(PyObject* self, PyObject* args)
         return NULL;
 
     printf("Hello %s!\n", name);
-
+    julia_test();
     Py_RETURN_NONE;
 }
 
@@ -18,5 +21,11 @@ static PyMethodDef helloworld_funcs[] = {
 };
 
 void inithello(void) {
-   Py_InitModule3("hello", helloworld_funcs, "nice stuf");
+    libsupport_init();
+    // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
+    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
+    jl_options.image_file = "/home/s/.julia/v0.6/PackageCompiler/test/pytest/pyshared";
+    julia_init(JL_IMAGE_JULIA_HOME);
+
+    Py_InitModule3("hello", helloworld_funcs, "nice stuf");
 }
