@@ -88,6 +88,11 @@ function static_julia(
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
+    if !any([clean, object, shared, executable, julialibs])
+        quiet || println("Nothing to do")
+        return
+    end
+
     if clean
         if isdir(builddir)
             verbose && println("Delete build directory")
@@ -95,6 +100,11 @@ function static_julia(
         else
             verbose && println("Build directory does not exist, nothing to delete")
         end
+    end
+
+    if !any([object, shared, executable, julialibs])
+        quiet || println("All done")
+        return
     end
 
     if !isdir(builddir)
@@ -126,6 +136,7 @@ function static_julia(
 
     julialibs && sync_julia_files(verbose)
 
+    quiet || println("All done")
 end
 
 # TODO: avoid calling "julia-config.jl" in future
