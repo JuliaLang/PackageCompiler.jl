@@ -17,8 +17,8 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
         debug = nothing, inline = nothing, check_bounds = nothing,
         math_mode = nothing
     )
-    julia_compile(
-        userimg_path, julia_program_basename = "sys",
+    static_julia(
+        userimg_path, juliaprog_basename = "sys",
 
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,
@@ -38,9 +38,9 @@ function build_shared_lib(
         cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
-    julia_compile(
+    static_julia(
 
-        library, julia_program_basename = library_name,
+        library, juliaprog_basename = library_name,
 
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,
@@ -89,9 +89,9 @@ function build_executable(
         end
         library = jlmain
     end
-    julia_compile(
+    static_julia(
 
-        library, julia_program_basename = library_name,
+        library, juliaprog_basename = library_name,
 
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,

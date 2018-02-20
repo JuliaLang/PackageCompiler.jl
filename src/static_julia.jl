@@ -26,13 +26,13 @@ function mingw_dir(folders...)
 end
 
 """
-    julia_compile(julia_program::String; kw_args...)
+    static_julia(juliaprog::String; kwargs...)
 
-compiles the julia file at path `julia_program` with keyword arguments:
+compiles the julia file at path `juliaprog` with keyword arguments:
 
     cprog = nothing           C program to compile (required only when building an executable; if not provided a minimal driver program is used)
     builddir = "builddir"     directory used for building
-    julia_program_basename    basename for the compiled artifacts
+    juliaprog_basename        basename for the compiled artifacts
 
     autodeps                  automatically build required dependencies
     object                    build object file
@@ -54,9 +54,9 @@ compiles the julia file at path `julia_program` with keyword arguments:
     math_mode {ieee,fast}     set floating point optimizations
     depwarn {yes|no|error}    set syntax and method deprecation warnings
 """
-function julia_compile(
-        julia_program;
-        julia_program_basename = splitext(basename(julia_program))[1],
+function static_julia(
+        juliaprog;
+        juliaprog_basename = splitext(basename(juliaprog))[1],
         cprog = nothing, builddir = "builddir",
         verbose = false, quiet = false, clean = false, sysimage = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing,
@@ -73,16 +73,16 @@ function julia_compile(
         shared && (object = true)
     end
 
-    julia_program = abspath(julia_program)
-    isfile(julia_program) || error("Cannot find file:\n  \"$julia_program\"")
-    quiet || println("Julia program file:\n  \"$julia_program\"")
+    juliaprog = abspath(juliaprog)
+    isfile(juliaprog) || error("Cannot find file:\n  \"$juliaprog\"")
+    quiet || println("Julia program file:\n  \"$juliaprog\"")
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
-    cd(dirname(julia_program))
+    cd(dirname(juliaprog))
 
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
@@ -108,25 +108,26 @@ function julia_compile(
         verbose && println("Already in build directory")
     end
 
-    o_file = julia_program_basename * ".o"
-    s_file = julia_program_basename * ".$(Libdl.dlext)"
-    e_file = julia_program_basename * executable_ext()
+    o_file = juliaprog_basename * ".o"
+    s_file = juliaprog_basename * ".$(Libdl.dlext)"
+    e_file = juliaprog_basename * executable_ext()
     tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
-        julia_program, tmp_dir, o_file, verbose,
+        juliaprog, tmp_dir, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
 
     shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose, optimize, debug)
 
-    executable && compile_executable(s_file, e_file, cprog, verbose, optimize, debug)
+    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug)
 
     julialibs && sync_julia_files(verbose)
 
 end
 
+# TODO: avoid calling "julia-config.jl" in future
 function julia_flags(optimize, debug)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
@@ -145,42 +146,8 @@ function julia_flags(optimize, debug)
     end
 end
 
-function build_shared(s_file, o_file, verbose, optimize, debug)
-    cc = system_compiler()
-    bitness = bitness_flag()
-    flags = julia_flags(optimize, debug)
-    command = `$cc $bitness -shared -o $s_file $o_file $flags`
-    if isapple()
-        command = `$command -Wl,-install_name,@rpath/$s_file`
-    elseif iswindows()
-        command = `$command -Wl,--export-all-symbols`
-    end
-    verbose && println("Build shared library \"$s_file\" in build directory:\n  $command")
-    run(command)
-end
-
-function compile_executable(s_file, e_file, cprog, verbose, optimize, debug)
-    bitness = bitness_flag()
-    cc = system_compiler()
-    flags = julia_flags(optimize, debug)
-    command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
-    if iswindows()
-        RPMbindir = PackageCompiler.mingw_dir("bin")
-        incdir = PackageCompiler.mingw_dir("include")
-        push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
-        ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
-        command = `$command -I$incdir`
-    elseif isapple()
-        command = `$command -Wl,-rpath,@executable_path`
-    else
-        command = `$command -Wl,-rpath,\$ORIGIN`
-    end
-    verbose && println("Building executable \"$e_file\" in build directory:\n  $command")
-    run(command)
-end
-
 function build_object(
-        julia_program, builddir, o_file, verbose,
+        juliaprog, builddir, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
@@ -199,27 +166,60 @@ function build_object(
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
     if julia_v07
-        iswindows() && (julia_program = replace(julia_program, "\\", "\\\\"))
+        iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "Base.init_depot_path() # initialize package depots
         Base.init_load_path() # initialize location of site-packages
         empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
         push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
-        include(\"$julia_program\") # include \"julia_program\" file
+        include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     else
-        iswindows() && (julia_program = replace(julia_program, "\\", "\\\\"))
+        iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
         push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
-        include(\"$julia_program\") # include \"julia_program\" file
+        include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
-
     isdir(builddir) || mkpath(builddir)
     command = `$julia_cmd -e $expr`
-    verbose && println("Build module image files \".ji\" in subdirectory \"$builddir\":\n  $command")
+    verbose && println("Build module image files \".ji\" in directory \"$builddir\":\n  $command")
     run(command)
     command = `$julia_cmd --output-o $(joinpath(builddir, o_file)) -e $expr`
-    verbose && println("Build object file \"$o_file\" in subdirectory \"$builddir\":\n  $command")
+    verbose && println("Build object file \"$o_file\" in directory \"$builddir\":\n  $command")
+    run(command)
+end
+
+function build_shared(s_file, o_file, verbose, optimize, debug)
+    cc = system_compiler()
+    bitness = bitness_flag()
+    flags = julia_flags(optimize, debug)
+    command = `$cc $bitness -shared -o $s_file $o_file $flags`
+    if isapple()
+        command = `$command -Wl,-install_name,@rpath/$s_file`
+    elseif iswindows()
+        command = `$command -Wl,--export-all-symbols`
+    end
+    verbose && println("Build shared library \"$s_file\" in build directory:\n  $command")
+    run(command)
+end
+
+function build_executable(s_file, e_file, cprog, verbose, optimize, debug)
+    bitness = bitness_flag()
+    cc = system_compiler()
+    flags = julia_flags(optimize, debug)
+    command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
+    if iswindows()
+        RPMbindir = PackageCompiler.mingw_dir("bin")
+        incdir = PackageCompiler.mingw_dir("include")
+        push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
+        ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
+        command = `$command -I$incdir`
+    elseif isapple()
+        command = `$command -Wl,-rpath,@executable_path`
+    else
+        command = `$command -Wl,-rpath,\$ORIGIN`
+    end
+    verbose && println("Building executable \"$e_file\" in build directory:\n  $command")
     run(command)
 end
 
