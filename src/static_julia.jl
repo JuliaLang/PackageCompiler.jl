@@ -244,13 +244,12 @@ function sync_julia_files(verbose)
         shlibdir = iswindows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
         private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
     end
-
     verbose && println("Sync Julia libraries to build directory:")
     libfiles = String[]
     dlext = "." * Libdl.dlext
     for dir in (shlibdir, private_shlibdir)
         if iswindows() || isapple()
-            append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext) && !startswith(x, "sys"), readdir(dir))))
         else
             append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
