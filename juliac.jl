@@ -18,7 +18,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "builddir"
             arg_type = String
             default = "builddir"
-            help = "build directory, either absolute or relative to the Julia program directory"
+            help = "directory used for building, either absolute or relative to the Julia program directory"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
@@ -27,7 +27,22 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "suppress non-error messages"
         "--clean", "-c"
             action = :store_true
-            help = "delete builddir"
+            help = "delete build directory"
+        "--autodeps", "-a"
+            action = :store_true
+            help = "automatically build required dependencies"
+        "--object", "-o"
+            action = :store_true
+            help = "build object file"
+        "--shared", "-s"
+            action = :store_true
+            help = "build shared library"
+        "--executable", "-e"
+            action = :store_true
+            help = "build executable file"
+        "--julialibs", "-j"
+            action = :store_true
+            help = "sync Julia libraries to builddir"
         "--sysimage", "-J"
             arg_type = String
             default = nothing
@@ -81,21 +96,6 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{yes|no|error}"
             range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "set syntax and method deprecation warnings"
-        "--autodeps", "-a"
-            action = :store_true
-            help = "automatically build required dependencies"
-        "--object", "-o"
-            action = :store_true
-            help = "build object file"
-        "--shared", "-s"
-            action = :store_true
-            help = "build shared library"
-        "--executable", "-e"
-            action = :store_true
-            help = "build executable file"
-        "--julialibs", "-j"
-            action = :store_true
-            help = "sync Julia libraries to builddir"
     end
 
     s.epilog = """
@@ -110,22 +110,19 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
     if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "julialibs"]))
-        parsed_args["quiet"] || println("Nothing to do, exiting\nTry \"$(basename(@__FILE__)) -h\" for more information")
+        parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
 
     juliaprog = pop!(parsed_args, "juliaprog")
-    kwargs = map(parsed_args) do kv
+    kw_args = map(parsed_args) do kv
         if PackageCompiler.julia_v07
             Symbol(replace(kv[1], "-" => "_")) => kv[2]
         else
             Symbol(replace(kv[1], "-", "_")) => kv[2]
         end
     end
-    PackageCompiler.static_julia(
-        juliaprog;
-        kwargs...
-    )
+    PackageCompiler.static_julia(juliaprog; kw_args...)
 end
 
 if get(ENV, "COMPILE_STATIC", "false") == "false"
