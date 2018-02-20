@@ -123,6 +123,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         end
     end
     PackageCompiler.static_julia(juliaprog; kw_args...)
+
+    return 0
 end
 
 if get(ENV, "COMPILE_STATIC", "false") == "false"
