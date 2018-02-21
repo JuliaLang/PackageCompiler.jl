@@ -18,6 +18,13 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
         math_mode = nothing
     )
     # build vanilla backup system image
+    debug = if debug == nothing
+         contains(basename(Base.julia_cmd().exec[1]), "debug")
+    elseif !isa(debug, Bool)
+        error("`debug` needs to be Bool or nothing. Found: $degub")
+    else
+        debug
+     end
     clean_sysimg = get_backup!(debug)
     static_julia(
         userimg_path, juliaprog_basename = "sys",
