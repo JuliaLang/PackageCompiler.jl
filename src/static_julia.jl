@@ -61,10 +61,10 @@ function static_julia(
         cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
-	sysimage = nothing, compile = nothing, cpu_target = nothing,
-	optimize = nothing, debug = nothing, inline = nothing,
-	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-	cc = system_compiler()
+    	sysimage = nothing, compile = nothing, cpu_target = nothing,
+    	optimize = nothing, debug = nothing, inline = nothing,
+    	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+    	cc = system_compiler()
     )
 
     verbose && quiet && (quiet = false)
@@ -122,15 +122,14 @@ function static_julia(
     o_file = juliaprog_basename * ".o"
     s_file = juliaprog_basename * ".$(Libdl.dlext)"
     e_file = juliaprog_basename * executable_ext()
-    tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
-        juliaprog, tmp_dir, o_file, verbose,
+        juliaprog, builddir, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose, optimize, debug)
+    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug)
 
     executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug)
 
@@ -177,18 +176,19 @@ function build_object(
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
+    builddir_esc = escape_string(builddir)
     if julia_v07
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "Base.init_depot_path() # initialize package depots
         Base.init_load_path() # initialize location of site-packages
         empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
+        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
         include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     else
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
+        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
         include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
