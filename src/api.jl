@@ -18,7 +18,7 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
         math_mode = nothing
     )
     # build vanilla backup system image
-    clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"))
+    clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
     static_julia(
         userimg_path, juliaprog_basename = "sys",
 
@@ -108,13 +108,11 @@ end
 
 
 """
-    build_native_image()
+    force_native_image!()
 Builds a clean system image, similar to a fresh Julia install.
 Can also be used to build a native system image for a downloaded cross compiled julia binary.
 """
-function build_native_image(debug = false) # debug is ignored right now
-    backup = sysimgbackup_folder()
-    # Build in backup dir, so we have a clean backup!
-    compile_system_image(joinpath(backup, "sys"), "native")
-    copy_system_image(backup, default_sysimg_path(debug))
+function force_native_image!(debug = false) # debug is ignored right now
+    sysimg = get_backup!(debug, "native")
+    copy_system_image(dirname(sysimg), default_sysimg_path(debug))
 end

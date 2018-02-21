@@ -50,18 +50,12 @@ function copy_system_image(src, dest, ignore_missing = false)
     end
 end
 
-"""
-Returns the system image file stored in the backup folder.
-If there is no backup, this function will automatically generate a system image
-in the backup folder.
-"""
-function get_backup!(debug)
-    sysimg_backup = sysimgbackup_folder()
-    if !all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries) # we have a backup
-        build_native_image(debug)
-    end
-    return joinpath(sysimg_backup, "sys.$(Libdl.dlext)")
+julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
+julia_cpu_target(x::String) = x # TODO match against available targets
+function julia_cpu_target(::Void)
+    replace(Base.julia_cmd().exec[2], "-C", "")
 end
+
 
 """
 Reverts a forced compilation of the system image.
@@ -177,11 +171,11 @@ end
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
         warn("Your Julia system image is not compiled natively for this CPU architecture.
-        Please run `PackageCompiler.build_native_image()` for optimal Julia performance"
+        Please run `PackageCompiler.force_native_image!()` for optimal Julia performance"
         )
     end
 end
 
-export compile_package, revert, build_native_image, executable_ext, build_executable
+export compile_package, revert, force_native_image!, executable_ext, build_executable
 
 end # module

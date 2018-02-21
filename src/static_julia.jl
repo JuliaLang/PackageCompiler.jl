@@ -142,32 +142,31 @@ end
 function julia_flags(optimize, debug)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
-        flags = `$(Base.shell_split(read(\`$command --allflags\`, String)))`
+        flags = Base.shell_split(read(`$command --allflags`, String))
         optimize == nothing || (flags = `$flags -O$optimize`)
         debug != 2 || (flags = `$flags -g`)
         return flags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
-        cflags = `$(Base.shell_split(readstring(\`$command --cflags\`)))`
+        cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
         debug != 2 || (cflags = `$cflags -g`)
-        ldflags = `$(Base.shell_split(readstring(\`$command --ldflags\`)))`
-        ldlibs = `$(Base.shell_split(readstring(\`$command --ldlibs\`)))`
+        ldflags = Base.shell_split(readstring(`$command --ldflags`))
+        ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         return `$cflags $ldflags $ldlibs`
     end
 end
 
-function build_object(
-        juliaprog, builddir, o_file, verbose,
+function build_julia_cmd(
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn
+        math_mode, depwarn, startupfile = false
     )
     julia_cmd = `$(Base.julia_cmd())`
     if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
         error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
     end
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
-    push!(julia_cmd.exec, "--startup-file=no")
+    push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
     cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
     optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
@@ -176,6 +175,18 @@ function build_object(
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
+    julia_cmd
+end
+
+function build_object(
+        juliaprog, builddir, o_file, verbose,
+        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
+        math_mode, depwarn
+    )
+    julia_cmd = build_julia_cmd(
+        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
+        math_mode, depwarn, false
+    )
     builddir_esc = escape_string(builddir)
     if julia_v07
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))

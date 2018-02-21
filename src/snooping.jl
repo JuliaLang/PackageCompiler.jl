@@ -1,13 +1,32 @@
+# Taken from SnoopCompile
+function snoop_vanilla(filename, path)
+    code_object = """
+    while !eof(STDIN)
+        eval(Main, deserialize(STDIN))
+    end
+    """
+    julia_cmd = build_julia_cmd(
+        get_backup!(false, nothing), nothing, nothing, nothing, nothing,
+        nothing, nothing, nothing, nothing, false
+    )
+    @show julia_cmd
+    in, io = open(`$julia_cmd --eval $code_object`, "w", STDOUT)
+    serialize(in, quote
+        import SnoopCompile
+    end)
+    # Now that the new process knows about SnoopCompile, it can
+    # expand the macro in this next expression
+    serialize(in, quote
+          SnoopCompile.@snoop1 $filename include($(escape_string(path)))
+    end)
+    close(in)
+    wait(io)
+    println("done.")
+    nothing
+end
 
 function snoop(path, compilationfile, csv)
-    cd(@__DIR__)
-    # Snoop compiler can't handle the path as a variable, so we just create a file
-    open(joinpath("snoopy.jl"), "w") do io
-        println(io, "include(\"$(escape_string(path))\")")
-    end
-    SnoopCompile.@snoop csv begin
-        include("snoopy.jl")
-    end
+    snoop_vanilla(abspath(csv), abspath(path))
     data = SnoopCompile.read(csv)
     pc = SnoopCompile.parcel(reverse!(data[2]))
     delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"

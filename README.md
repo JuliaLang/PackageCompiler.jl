@@ -27,7 +27,7 @@ compile_package("Matcha", "relative/path/for_snooping.jl")
 revert()
 
 # Or if you simply want to get a native system image e.g. when you have downloaded the generic Julia install:
-build_native_image()
+force_native_image!()
 
 # building an executable
 
