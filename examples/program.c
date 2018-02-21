@@ -31,10 +31,10 @@ int main(int argc, char *argv[])
     // build arguments array: `String[ unsafe_string(argv[i]) for i in 1:argc ]`
     jl_array_t *ARGS = jl_alloc_array_1d(jl_apply_array_type(jl_string_type, 1), 0);
     JL_GC_PUSH1(&ARGS);
-    jl_array_grow_end(ARGS, argc - 1);
-    for (i = 1; i < argc; i++) {
+    jl_array_grow_end(ARGS, argc);
+    for (i = 0; i < argc; i++) {
         jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-        jl_arrayset(ARGS, s, i - 1);
+        jl_arrayset(ARGS, s, i);
     }
     // call the work function, and get back a value
     retcode = julia_main(ARGS);
