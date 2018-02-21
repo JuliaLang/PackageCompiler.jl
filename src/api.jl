@@ -17,6 +17,8 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
         debug = nothing, inline = nothing, check_bounds = nothing,
         math_mode = nothing
     )
+    # build vanilla backup system image
+    clean_sysimg = get_backup!(debug)
     static_julia(
         userimg_path, juliaprog_basename = "sys",
 
@@ -25,7 +27,7 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
         math_mode = math_mode, verbose = verbose, quiet = quiet,
 
         cprog = nothing, builddir = sysimg_path,
-        clean = false, sysimage = nothing,
+        clean = false, sysimage = clean_sysimg,
         compile = nothing, depwarn = nothing, autodeps = false,
         object = true, shared = true, executable = false, julialibs = false,
     )
