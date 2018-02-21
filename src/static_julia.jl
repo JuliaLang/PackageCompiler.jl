@@ -231,6 +231,11 @@ function build_executable(s_file, e_file, cprog, verbose, optimize, debug)
     else
         command = `$command -Wl,-rpath,\$ORIGIN`
     end
+    if Int == Int32
+        # TODO this was added because of an error with julia on win32 that suggested this line.
+        # Seems to work, not sure if it's correct
+        command = `$command -march=pentium4`
+    end
     verbose && println("Building executable \"$e_file\" in build directory:\n  $command")
     run(command)
 end
