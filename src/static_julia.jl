@@ -26,23 +26,23 @@ function mingw_dir(folders...)
 end
 
 """
-    static_julia(juliaprog::String; kwargs...)
+    static_julia(juliaprog::String; kw_args...)
 
-compiles the julia file at path `juliaprog` with keyword arguments:
+compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog = nothing           C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir = "builddir"     directory used for building
-    juliaprog_basename        basename for the compiled artifacts
+    builddir = "builddir"     directory used for building, either absolute or relative to the Julia program directory (default: "builddir")
+    juliaprog_basename        basename for the built artifacts
+
+    verbose                   increase verbosity
+    quiet                     suppress non-error messages
+    clean                     delete build directory
 
     autodeps                  automatically build required dependencies
     object                    build object file
     shared                    build shared library
-    executable                build executable file (Bool)
+    executable                build executable file
     julialibs                 sync Julia libraries to builddir
-
-    verbose                   increase verbosity
-    quiet                     suppress non-error messages
-    clean                     delete builddir
 
     sysimage <file>           start up with the given system image file
     compile {yes|no|all|min}  enable or disable JIT compiler, or request exhaustive compilation
@@ -53,17 +53,18 @@ compiles the julia file at path `juliaprog` with keyword arguments:
     check_bounds {yes|no}     emit bounds checks always or never
     math_mode {ieee,fast}     set floating point optimizations
     depwarn {yes|no|error}    set syntax and method deprecation warnings
+
+    cc                        system C compiler
 """
 function static_julia(
         juliaprog;
-        juliaprog_basename = splitext(basename(juliaprog))[1],
-        cprog = nothing, builddir = "builddir",
-        verbose = false, quiet = false, clean = false, sysimage = nothing,
-        compile = nothing, cpu_target = nothing, optimize = nothing,
-        debug = nothing, inline = nothing, check_bounds = nothing,
-        math_mode = nothing, depwarn = nothing, autodeps = false,
-        object = false, shared = false, executable = true, julialibs = true,
-        cc = system_compiler()
+        cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
+        verbose = false, quiet = false, clean = false,
+        autodeps = false, object = false, shared = false, executable = false, julialibs = false,
+	sysimage = nothing, compile = nothing, cpu_target = nothing,
+	optimize = nothing, debug = nothing, inline = nothing,
+	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+	cc = system_compiler()
     )
 
     verbose && quiet && (quiet = false)
@@ -87,6 +88,11 @@ function static_julia(
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
+    if !any([clean, object, shared, executable, julialibs])
+        quiet || println("Nothing to do")
+        return
+    end
+
     if clean
         if isdir(builddir)
             verbose && println("Delete build directory")
@@ -94,6 +100,11 @@ function static_julia(
         else
             verbose && println("Build directory does not exist, nothing to delete")
         end
+    end
+
+    if !any([object, shared, executable, julialibs])
+        quiet || println("All done")
+        return
     end
 
     if !isdir(builddir)
@@ -125,6 +136,7 @@ function static_julia(
 
     julialibs && sync_julia_files(verbose)
 
+    quiet || println("All done")
 end
 
 # TODO: avoid calling "julia-config.jl" in future
@@ -232,13 +244,12 @@ function sync_julia_files(verbose)
         shlibdir = iswindows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
         private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
     end
-
     verbose && println("Sync Julia libraries to build directory:")
     libfiles = String[]
     dlext = "." * Libdl.dlext
     for dir in (shlibdir, private_shlibdir)
         if iswindows() || isapple()
-            append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext) && !startswith(x, "sys"), readdir(dir))))
         else
             append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
