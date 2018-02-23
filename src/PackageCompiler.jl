@@ -50,20 +50,11 @@ function copy_system_image(src, dest, ignore_missing = false)
     end
 end
 
-"""
-Replaces the julia system image forcefully with a system image located at `image_path`
-"""
-function replace_jl_sysimg(image_path, debug = false)
-    syspath = default_sysimg_path(debug)
-    backup = sysimgbackup_folder()
-    # create a backup
-    # if syspath has missing files, ignore, since it will get replaced anyways
-    copy_system_image(syspath, backup, true)
-    info("Overwriting system image!")
-    copy_system_image(image_path, syspath)
+julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
+julia_cpu_target(x::String) = x # TODO match against available targets
+function julia_cpu_target(::Void)
+    replace(Base.julia_cmd().exec[2], "-C", "")
 end
-
-
 
 
 """
@@ -73,13 +64,8 @@ build a new, clean system image
 """
 function revert(debug = false)
     syspath = default_sysimg_path(debug)
-    sysimg_backup = sysimgbackup_folder()
-    if all(x-> isfile(joinpath(sysimg_backup, x)), sysimage_binaries) # we have a backup
-        copy_system_image(sysimg_backup, syspath)
-    else
-        warn("No backup found but restoring. Need to build a new system image from scratch")
-        build_native_image(debug)
-    end
+    sysimg_backup = dirname(get_backup!(debug))
+    copy_system_image(sysimg_backup, syspath)
 end
 
 function get_root_dir(path)
@@ -147,8 +133,10 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     image_path = sysimg_folder()
     build_sysimg(image_path, userimg)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
+    syspath = default_sysimg_path(debug)
     if force
         try
+            copy_system_image(image_path, syspath)
             replace_jl_sysimg(image_path, debug)
             info(
                 "Replaced system image successfully. Next start of julia will load the newly compiled system image.
@@ -159,7 +147,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             warn(e)
             info("Recovering old system image from backup")
             # if any file is missing in default system image, revert!
-            syspath = default_sysimg_path(debug)
+
             for file in sysimage_binaries
                 if !isfile(joinpath(syspath, file))
                     info("$(joinpath(syspath, file)) missing. Reverting!")
@@ -183,11 +171,11 @@ end
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
         warn("Your Julia system image is not compiled natively for this CPU architecture.
-        Please run `PackageCompiler.build_native_image()` for optimal Julia performance"
+        Please run `PackageCompiler.force_native_image!()` for optimal Julia performance"
         )
     end
 end
 
-export compile_package, revert, build_native_image, executable_ext, build_executable
+export compile_package, revert, force_native_image!, executable_ext, build_executable
 
 end # module

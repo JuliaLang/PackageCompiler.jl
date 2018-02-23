@@ -61,10 +61,10 @@ function static_julia(
         cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
-	sysimage = nothing, compile = nothing, cpu_target = nothing,
-	optimize = nothing, debug = nothing, inline = nothing,
-	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-	cc = system_compiler()
+    	sysimage = nothing, compile = nothing, cpu_target = nothing,
+    	optimize = nothing, debug = nothing, inline = nothing,
+    	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+    	cc = system_compiler()
     )
 
     verbose && quiet && (quiet = false)
@@ -122,15 +122,14 @@ function static_julia(
     o_file = juliaprog_basename * ".o"
     s_file = juliaprog_basename * ".$(Libdl.dlext)"
     e_file = juliaprog_basename * executable_ext()
-    tmp_dir = "tmp_v$VERSION"
 
     object && build_object(
-        juliaprog, tmp_dir, o_file, verbose,
+        juliaprog, builddir, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(tmp_dir, o_file), verbose, optimize, debug)
+    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug)
 
     executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug)
 
@@ -143,32 +142,31 @@ end
 function julia_flags(optimize, debug)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
-        flags = `$(Base.shell_split(read(\`$command --allflags\`, String)))`
+        flags = Base.shell_split(read(`$command --allflags`, String))
         optimize == nothing || (flags = `$flags -O$optimize`)
         debug != 2 || (flags = `$flags -g`)
         return flags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
-        cflags = `$(Base.shell_split(readstring(\`$command --cflags\`)))`
+        cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
         debug != 2 || (cflags = `$cflags -g`)
-        ldflags = `$(Base.shell_split(readstring(\`$command --ldflags\`)))`
-        ldlibs = `$(Base.shell_split(readstring(\`$command --ldlibs\`)))`
+        ldflags = Base.shell_split(readstring(`$command --ldflags`))
+        ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         return `$cflags $ldflags $ldlibs`
     end
 end
 
-function build_object(
-        juliaprog, builddir, o_file, verbose,
+function build_julia_cmd(
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn
+        math_mode, depwarn, startupfile = false
     )
     julia_cmd = `$(Base.julia_cmd())`
     if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
         error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
     end
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
-    push!(julia_cmd.exec, "--startup-file=no")
+    push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
     cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
     optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
@@ -177,18 +175,31 @@ function build_object(
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
+    julia_cmd
+end
+
+function build_object(
+        juliaprog, builddir, o_file, verbose,
+        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
+        math_mode, depwarn
+    )
+    julia_cmd = build_julia_cmd(
+        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
+        math_mode, depwarn, false
+    )
+    builddir_esc = escape_string(builddir)
     if julia_v07
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "Base.init_depot_path() # initialize package depots
         Base.init_load_path() # initialize location of site-packages
         empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
+        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
         include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     else
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir\")) # enable usage of precompiled files
+        push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
         include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
