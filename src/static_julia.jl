@@ -168,7 +168,9 @@ function build_julia_cmd(
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
     push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
-    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
+    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target";
+                              push!(julia_cmd.exec, "--precompiled=no");
+                              push!(julia_cmd.exec, "--compilecache=no"))
     optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
     debug == nothing || push!(julia_cmd.exec, "-g$debug")
     inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
