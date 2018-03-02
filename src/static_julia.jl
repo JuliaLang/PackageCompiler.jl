@@ -64,7 +64,8 @@ function static_julia(
     	sysimage = nothing, compile = nothing, cpu_target = nothing,
     	optimize = nothing, debug = nothing, inline = nothing,
     	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-    	cc = system_compiler()
+    	cc = system_compiler(),
+        ccflags = nothing
     )
 
     verbose && quiet && (quiet = false)
@@ -129,9 +130,9 @@ function static_julia(
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug)
+    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, ccflags)
 
-    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug)
+    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug, ccflags)
 
     julialibs && sync_julia_files(verbose)
 
@@ -214,11 +215,12 @@ function build_object(
     run(command)
 end
 
-function build_shared(s_file, o_file, verbose, optimize, debug)
+function build_shared(s_file, o_file, verbose, optimize, debug, ccflags)
     cc = system_compiler()
     bitness = bitness_flag()
     flags = julia_flags(optimize, debug)
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
+    if ccflags != nothing && !isempty(ccflags) command = `$command $ccflags` end
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
@@ -228,11 +230,12 @@ function build_shared(s_file, o_file, verbose, optimize, debug)
     run(command)
 end
 
-function build_executable(s_file, e_file, cprog, verbose, optimize, debug)
+function build_executable(s_file, e_file, cprog, verbose, optimize, debug, ccflags)
     bitness = bitness_flag()
     cc = system_compiler()
     flags = julia_flags(optimize, debug)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
+    if ccflags != nothing && !isempty(ccflags) command = `$command $ccflags` end
     if iswindows()
         RPMbindir = PackageCompiler.mingw_dir("bin")
         incdir = PackageCompiler.mingw_dir("include")
