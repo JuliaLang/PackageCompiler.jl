@@ -55,6 +55,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     depwarn {yes|no|error}    set syntax and method deprecation warnings
 
     cc                        system C compiler
+    ccflags <flags>           pass custom flags to system compiler when building shared library or executable
 """
 function static_julia(
         juliaprog;
@@ -140,18 +141,20 @@ function static_julia(
 end
 
 # TODO: avoid calling "julia-config.jl" in future
-function julia_flags(optimize, debug)
+function julia_flags(optimize, debug, ccflags)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
         flags = Base.shell_split(read(`$command --allflags`, String))
         optimize == nothing || (flags = `$flags -O$optimize`)
         debug != 2 || (flags = `$flags -g`)
+        ccflags == nothing || isempty(ccflags) || (flags = `$flags $ccflags`)
         return flags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
         cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
         debug != 2 || (cflags = `$cflags -g`)
+        ccflags == nothing || isempty(ccflags) || (cflags = `$cflags $ccflags`)
         ldflags = Base.shell_split(readstring(`$command --ldflags`))
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         return `$cflags $ldflags $ldlibs`
@@ -218,9 +221,8 @@ end
 function build_shared(s_file, o_file, verbose, optimize, debug, ccflags)
     cc = system_compiler()
     bitness = bitness_flag()
-    flags = julia_flags(optimize, debug)
+    flags = julia_flags(optimize, debug, ccflags)
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
-    if ccflags != nothing && !isempty(ccflags) command = `$command $ccflags` end
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
@@ -233,9 +235,8 @@ end
 function build_executable(s_file, e_file, cprog, verbose, optimize, debug, ccflags)
     bitness = bitness_flag()
     cc = system_compiler()
-    flags = julia_flags(optimize, debug)
+    flags = julia_flags(optimize, debug, ccflags)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
-    if ccflags != nothing && !isempty(ccflags) command = `$command $ccflags` end
     if iswindows()
         RPMbindir = PackageCompiler.mingw_dir("bin")
         incdir = PackageCompiler.mingw_dir("include")

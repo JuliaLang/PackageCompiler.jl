@@ -99,8 +99,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--ccflags"
             arg_type = String
             default = nothing
-            # metavar = ""  # TODO(NHDaly): Any suggestions on what to put here?
-            help = "custom flag(s) to pass to compiler when building shared library or executable"
+            metavar = "<flags>"
+            help = "pass custom flags to system compiler when building shared library or executable"
     end
 
     s.epilog = """
