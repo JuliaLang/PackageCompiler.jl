@@ -32,12 +32,14 @@ function snoop(path, compilationfile, csv)
     delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
     tmp_mod = eval(:(module $(gensym()) end))
     open(compilationfile, "w") do io
+		println(io, "Sys.__init__()")
+		println(io, "Base.early_init()")
         for (k, v) in pc
             k == :unknown && continue
             try
-                eval(tmp_mod, :(using $k))
-                println(io, "using $k")
-                info("using $k")
+                eval(tmp_mod, :(import $k))
+                println(io, "import $k")
+                info("import $k")
             catch e
                 warn("Module not found: $k")
             end
