@@ -96,7 +96,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{yes|no|error}"
             range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "set syntax and method deprecation warnings"
-        "--ccflags"
+        "--cc-flags"
             arg_type = String
             default = nothing
             metavar = "<flags>"

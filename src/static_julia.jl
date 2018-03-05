@@ -55,7 +55,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     depwarn {yes|no|error}    set syntax and method deprecation warnings
 
     cc                        system C compiler
-    ccflags <flags>           pass custom flags to system compiler when building shared library or executable
+    cc_flags <flags>           pass custom flags to system compiler when building shared library or executable
 """
 function static_julia(
         juliaprog;
@@ -66,7 +66,7 @@ function static_julia(
     	optimize = nothing, debug = nothing, inline = nothing,
     	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
     	cc = system_compiler(),
-        ccflags = nothing
+        cc_flags = nothing
     )
 
     verbose && quiet && (quiet = false)
@@ -131,9 +131,9 @@ function static_julia(
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, ccflags)
+    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, cc_flags)
 
-    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug, ccflags)
+    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug, cc_flags)
 
     julialibs && sync_julia_files(verbose)
 
@@ -141,20 +141,20 @@ function static_julia(
 end
 
 # TODO: avoid calling "julia-config.jl" in future
-function julia_flags(optimize, debug, ccflags)
+function julia_flags(optimize, debug, cc_flags)
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
         flags = Base.shell_split(read(`$command --allflags`, String))
         optimize == nothing || (flags = `$flags -O$optimize`)
         debug != 2 || (flags = `$flags -g`)
-        ccflags == nothing || isempty(ccflags) || (flags = `$flags $ccflags`)
+        cc_flags == nothing || isempty(cc_flags) || (flags = `$flags $cc_flags`)
         return flags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
         cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
         debug != 2 || (cflags = `$cflags -g`)
-        ccflags == nothing || isempty(ccflags) || (cflags = `$cflags $ccflags`)
+        cc_flags == nothing || isempty(cc_flags) || (cflags = `$cflags $cc_flags`)
         ldflags = Base.shell_split(readstring(`$command --ldflags`))
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
         return `$cflags $ldflags $ldlibs`
@@ -218,10 +218,10 @@ function build_object(
     run(command)
 end
 
-function build_shared(s_file, o_file, verbose, optimize, debug, ccflags)
+function build_shared(s_file, o_file, verbose, optimize, debug, cc_flags)
     cc = system_compiler()
     bitness = bitness_flag()
-    flags = julia_flags(optimize, debug, ccflags)
+    flags = julia_flags(optimize, debug, cc_flags)
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
@@ -232,10 +232,10 @@ function build_shared(s_file, o_file, verbose, optimize, debug, ccflags)
     run(command)
 end
 
-function build_executable(s_file, e_file, cprog, verbose, optimize, debug, ccflags)
+function build_executable(s_file, e_file, cprog, verbose, optimize, debug, cc_flags)
     bitness = bitness_flag()
     cc = system_compiler()
-    flags = julia_flags(optimize, debug, ccflags)
+    flags = julia_flags(optimize, debug, cc_flags)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
     if iswindows()
         RPMbindir = PackageCompiler.mingw_dir("bin")
