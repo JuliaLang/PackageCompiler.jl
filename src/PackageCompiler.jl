@@ -133,11 +133,12 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     image_path = sysimg_folder()
     build_sysimg(image_path, userimg)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
-    syspath = default_sysimg_path(debug)
+    syspath = joinpath(default_sysimg_path(debug), "sys.$(Libdl.dlext)")
     if force
         try
-            copy_system_image(image_path, syspath)
-            replace_jl_sysimg(image_path, debug)
+            backup = syspath * ".packagecompiler_backup"
+            isfile(backup) || mv(syspath, backup)
+            cp(imgfile, syspath)
             info(
                 "Replaced system image successfully. Next start of julia will load the newly compiled system image.
                 If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
@@ -147,13 +148,9 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             warn(e)
             info("Recovering old system image from backup")
             # if any file is missing in default system image, revert!
-
-            for file in sysimage_binaries
-                if !isfile(joinpath(syspath, file))
-                    info("$(joinpath(syspath, file)) missing. Reverting!")
-                    revert(debug)
-                    break
-                end
+            if !isfile(syspath)
+                info("$syspath missing. Reverting!")
+                revert(debug)
             end
         end
     else
