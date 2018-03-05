@@ -35,6 +35,13 @@ end
         cd(build) do
             @test success(`./$("hello$(executable_ext())")`)
         end
+        @testset "--cc-flags" begin
+            # Try passing `--help` to $cc. This should work for any system compiler.
+            # Then grep the output for "-g", which should be present on any system.
+            @test contains(readstring(`$julia $juliac -se --cc-flags='--help' $jlfile $cfile $build`), "-g")
+            # Just as a control, make sure that without passing '--help', we don't see "-g"
+            @test !contains(readstring(`$julia $juliac -se $jlfile $cfile $build`), "-g")
+        end
     end
 end
 
