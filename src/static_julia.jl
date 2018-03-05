@@ -55,7 +55,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     depwarn {yes|no|error}    set syntax and method deprecation warnings
 
     cc                        system C compiler
-    cc_flags <flags>           pass custom flags to system compiler when building shared library or executable
+    cc_flags <flags>          pass custom flags to system compiler when building shared library or executable
 """
 function static_julia(
         juliaprog;
@@ -65,8 +65,7 @@ function static_julia(
     	sysimage = nothing, compile = nothing, cpu_target = nothing,
     	optimize = nothing, debug = nothing, inline = nothing,
     	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-    	cc = system_compiler(),
-        cc_flags = nothing
+    	cc = system_compiler(), cc_flags = nothing
     )
 
     verbose && quiet && (quiet = false)
