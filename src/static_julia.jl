@@ -15,7 +15,7 @@ else
 end
 
 system_compiler() = gcc
-bitness_flag() = Int == Int32 ? "-m32" : "-m64"
+bitness_flag() = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
 executable_ext() = (iswindows() ? ".exe" : "")
 
 function mingw_dir(folders...)
