@@ -15,7 +15,7 @@ else
 end
 
 system_compiler() = gcc
-bitness_flag() = Int == Int32 ? "-m32" : "-m64"
+bitness_flag() = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
 executable_ext() = (iswindows() ? ".exe" : "")
 
 function mingw_dir(folders...)
@@ -171,15 +171,15 @@ function build_julia_cmd(
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
     push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
-    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target";
-                              push!(julia_cmd.exec, "--precompiled=no");
-                              push!(julia_cmd.exec, "--compilecache=no"))
+    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target";)
     optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
     debug == nothing || push!(julia_cmd.exec, "-g$debug")
     inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
+    push!(julia_cmd.exec, "--precompiled=no");
+    push!(julia_cmd.exec, "--compilecache=no")
     julia_cmd
 end
 
