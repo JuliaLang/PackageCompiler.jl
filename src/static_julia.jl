@@ -59,7 +59,8 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 """
 function static_julia(
         juliaprog;
-        cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
+        cprog = nothing, juliaprog_basename = splitext(basename(juliaprog))[1],
+        builddir = "$juliaprog_basename/builddir",
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
     	sysimage = nothing, compile = nothing, cpu_target = nothing,
@@ -84,9 +85,9 @@ function static_julia(
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
+    builddir = abspath(builddir)
     cd(dirname(juliaprog))
 
-    builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
     if !any([clean, object, shared, executable, julialibs])
