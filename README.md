@@ -76,9 +76,7 @@ positional arguments:
   cprog                 C program to compile (required only when
                         building an executable; if not provided a
                         minimal driver program is used)
-  builddir              directory used for building, either absolute
-                        or relative to the Julia program directory
-                        (default: "builddir")
+  builddir              build directory (default: "builddir")
 
 optional arguments:
   -v, --verbose         increase verbosity

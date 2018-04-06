@@ -31,7 +31,7 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog = nothing           C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir = "builddir"     directory used for building, either absolute or relative to the Julia program directory (default: "builddir")
+    builddir = "builddir"     build directory (default: "builddir")
     juliaprog_basename        basename for the built artifacts
 
     verbose                   increase verbosity
@@ -78,16 +78,17 @@ function static_julia(
     juliaprog = abspath(juliaprog)
     isfile(juliaprog) || error("Cannot find file:\n  \"$juliaprog\"")
     quiet || println("Julia program file:\n  \"$juliaprog\"")
+
     if executable
         cprog = cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
-    cd(dirname(juliaprog))
-
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
+
+    cd(dirname(juliaprog))
 
     if !any([clean, object, shared, executable, julialibs])
         quiet || println("Nothing to do")
