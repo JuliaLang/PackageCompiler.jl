@@ -31,7 +31,7 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog = nothing           C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir = "builddir"     directory used for building, either absolute or relative to the Julia program directory (default: "builddir")
+    builddir = "builddir"     directory used for building, either absolute or relative to `cwd` (default: "builddir")
     juliaprog_basename        basename for the built artifacts
 
     verbose                   increase verbosity
@@ -60,7 +60,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 function static_julia(
         juliaprog;
         cprog = nothing, juliaprog_basename = splitext(basename(juliaprog))[1],
-        builddir = "$juliaprog_basename/builddir",
+        builddir = "builddir",
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
     	sysimage = nothing, compile = nothing, cpu_target = nothing,
