@@ -31,7 +31,7 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog = nothing           C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir = "builddir"     building directory (default: "builddir")
+    builddir = "builddir"     build directory (default: "builddir")
     juliaprog_basename        basename for the built artifacts
 
     verbose                   increase verbosity
