@@ -24,6 +24,7 @@ include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
+include("bootstrapping.jl")
 
 const sysimage_binaries = (
     "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
@@ -114,9 +115,6 @@ function compile_package(packages...; kw_args...)
     compile_package(args...; kw_args...)
 end
 
-
-
-
 """
     compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
 
@@ -162,9 +160,6 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     imgfile
 end
 
-
-
-
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
         warn("Your Julia system image is not compiled natively for this CPU architecture.
@@ -174,5 +169,6 @@ function __init__()
 end
 
 export compile_package, revert, force_native_image!, executable_ext, build_executable
+export stop_log_bootstrap, bootstrap, log_bootstrap
 
 end # module

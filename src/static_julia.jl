@@ -173,14 +173,15 @@ function build_julia_cmd(
     push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
     cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target";)
-    optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
+    push!(julia_cmd.exec, "-O3")
     debug == nothing || push!(julia_cmd.exec, "-g$debug")
     inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
-    push!(julia_cmd.exec, "--precompiled=no");
+    push!(julia_cmd.exec, "--precompiled=yes")
     push!(julia_cmd.exec, "--compilecache=no")
+    push!(julia_cmd.exec, "--history-file=no")
     julia_cmd
 end
 
@@ -210,10 +211,7 @@ function build_object(
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
     isdir(builddir) || mkpath(builddir)
-    command = `$julia_cmd -e $expr`
-    verbose && println("Build module image files \".ji\" in directory \"$builddir\":\n  $command")
-    run(command)
-    command = `$julia_cmd --output-o $(joinpath(builddir, o_file)) -e $expr`
+    command = `$julia_cmd  --output-o $(joinpath(builddir, o_file)) -e $expr`
     verbose && println("Build object file \"$o_file\" in directory \"$builddir\":\n  $command")
     run(command)
 end
