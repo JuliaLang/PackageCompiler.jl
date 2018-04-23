@@ -206,6 +206,7 @@ function build_object(
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
         push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
+        Sys.__init__(); Base.early_init(); # JULIA_HOME is not defined, initializing manually
         include(\"$juliaprog\") # include Julia program file
         empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
