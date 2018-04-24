@@ -1,11 +1,12 @@
 # PackageCompiler
-[![Build Status](https://travis-ci.org/SimonDanisch/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/SimonDanisch/PackageCompiler.jl)
+[![Build Status](https://travis-ci.org/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/PackageCompiler.jl)
 
-[![Coverage Status](https://coveralls.io/repos/SimonDanisch/PackageCompiler.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/SimonDanisch/PackageCompiler.jl?branch=master)
+[![Coverage Status](https://coveralls.io/repos/JuliaLang/PackageCompiler.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
-[![codecov.io](http://codecov.io/github/SimonDanisch/PackageCompiler.jl/coverage.svg?branch=master)](http://codecov.io/github/SimonDanisch/PackageCompiler.jl?branch=master)
+[![codecov.io](http://codecov.io/github/JuliaLang/PackageCompiler.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
 Remove jit overhead from your package and compile it into a system image.
+
 
 ## Usage example
 E.g. do:
