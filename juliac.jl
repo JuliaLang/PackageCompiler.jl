@@ -13,12 +13,11 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "Julia program to compile"
         "cprog"
             arg_type = String
-            default = nothing
             help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
         "builddir"
             arg_type = String
             default = "builddir"
-            help = "directory used for building, either absolute or relative to the Julia program directory"
+            help = "build directory"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
@@ -42,65 +41,55 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "build executable file"
         "--julialibs", "-j"
             action = :store_true
-            help = "sync Julia libraries to builddir"
+            help = "copy Julia libraries to build directory"
         "--sysimage", "-J"
             arg_type = String
-            default = nothing
             metavar = "<file>"
             help = "start up with the given system image file"
         "--compile"
             arg_type = String
-            default = nothing
             metavar = "{yes|no|all|min}"
             range_tester = (x -> x == "yes" || x == "no" || x == "all" || x == "min")
             help = "enable or disable JIT compiler, or request exhaustive compilation"
         "--cpu-target", "-C"
             arg_type = String
-            default = nothing
             metavar = "<target>"
-            help = "limit usage of CPU features up to <target>"
+            help = "limit usage of CPU features up to <target> (forces --precompiled=no)"
         "--optimize", "-O"
             arg_type = Int
-            default = nothing
             metavar = "{0,1,2,3}"
             range_tester = (x -> 0 <= x <= 3)
-            help = "set optimization level"
+            help = "set the optimization level"
         "-g"
             arg_type = Int
-            default = nothing
             dest_name = "debug"
             metavar = "{0,1,2}"
             range_tester = (x -> 0 <= x <= 2)
-            help = "set debugging information level"
+            help = "enable / set the level of debug info generation"
         "--inline"
             arg_type = String
-            default = nothing
             metavar = "{yes|no}"
             range_tester = (x -> x == "yes" || x == "no")
             help = "control whether inlining is permitted"
         "--check-bounds"
             arg_type = String
-            default = nothing
             metavar = "{yes|no}"
             range_tester = (x -> x == "yes" || x == "no")
             help = "emit bounds checks always or never"
         "--math-mode"
             arg_type = String
-            default = nothing
             metavar = "{ieee,fast}"
             range_tester = (x -> x == "ieee" || x == "fast")
-            help = "set floating point optimizations"
+            help = "disallow or enable unsafe floating point optimizations"
         "--depwarn"
             arg_type = String
-            default = nothing
             metavar = "{yes|no|error}"
             range_tester = (x -> x == "yes" || x == "no" || x == "error")
-            help = "set syntax and method deprecation warnings"
+            help = "enable or disable syntax and method deprecation warnings"
         "--cc-flags"
             arg_type = String
-            default = nothing
             metavar = "<flags>"
-            help = "pass custom flags to system compiler when building shared library or executable"
+            help = "pass custom flags to the system C compiler when building a shared library or executable"
     end
 
     s.epilog = """

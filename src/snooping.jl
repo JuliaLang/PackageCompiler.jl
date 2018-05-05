@@ -32,8 +32,8 @@ function snoop(path, compilationfile, csv)
     delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
     tmp_mod = eval(:(module $(gensym()) end))
     open(compilationfile, "w") do io
-		println(io, "Sys.__init__()")
-		println(io, "Base.early_init()")
+        println(io, "Sys.__init__()")
+        println(io, "Base.early_init()")
         for (k, v) in pc
             k == :unknown && continue
             try

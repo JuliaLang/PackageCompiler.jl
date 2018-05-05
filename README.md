@@ -58,7 +58,7 @@ build_executable(
 
 # Static Julia Compiler
 
-Building shared libraries and executables from Julia code.
+Build shared libraries and executables from Julia code.
 
 Run `juliac.jl -h` for help:
 
@@ -67,8 +67,8 @@ usage: juliac.jl [-v] [-q] [-c] [-a] [-o] [-s] [-e] [-j] [-J <file>]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [--version] [-h] juliaprog
-                 [cprog] [builddir]
+                 [--depwarn {yes|no|error}] [--cc-flags <flags>]
+                 [--version] [-h] juliaprog [cprog] [builddir]
 
 Static Julia Compiler
 
@@ -87,7 +87,7 @@ optional arguments:
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
-  -j, --julialibs       sync Julia libraries to builddir
+  -j, --julialibs       copy Julia libraries to build directory
   -J, --sysimage <file>
                         start up with the given system image file
   --compile {yes|no|all|min}
@@ -95,16 +95,22 @@ optional arguments:
                         exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
+                        (forces --precompiled=no)
   -O, --optimize {0,1,2,3}
-                        set optimization level (type: Int64)
-  -g {0,1,2}            set debugging information level (type: Int64)
+                        set the optimization level (type: Int64)
+  -g {0,1,2}            enable / set the level of debug info
+                        generation (type: Int64)
   --inline {yes|no}     control whether inlining is permitted
   --check-bounds {yes|no}
                         emit bounds checks always or never
   --math-mode {ieee,fast}
-                        set floating point optimizations
+                        disallow or enable unsafe floating point
+                        optimizations
   --depwarn {yes|no|error}
-                        set syntax and method deprecation warnings
+                        enable or disable syntax and method
+                        deprecation warnings
+  --cc-flags <flags>    pass custom flags to the system C compiler
+                        when building a shared library or executable
   --version             show version information and exit
   -h, --help            show this help message and exit
 
