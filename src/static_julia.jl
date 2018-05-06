@@ -31,7 +31,7 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog                     C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir                  build directory
+    builddir                  build directory (default: \"builddir\")
     juliaprog_basename        basename for the built artifacts
 
     verbose                   increase verbosity
@@ -54,7 +54,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     math_mode {ieee,fast}     disallow or enable unsafe floating point optimizations
     depwarn {yes|no|error}    enable or disable syntax and method deprecation warnings
 
-    cc                        system C compiler
+    cc                        system C compiler (default: \"cc\")
     cc_flags <flags>          pass custom flags to the system C compiler when building a shared library or executable
 """
 function static_julia(
@@ -62,10 +62,10 @@ function static_julia(
         cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
-    	sysimage = nothing, compile = nothing, cpu_target = nothing,
-    	optimize = nothing, debug = nothing, inline = nothing,
-    	check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-    	cc = system_compiler(), cc_flags = nothing
+        sysimage = nothing, compile = nothing, cpu_target = nothing,
+        optimize = nothing, debug = nothing, inline = nothing,
+        check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        cc = system_compiler(), cc_flags = nothing
     )
 
     verbose && quiet && (quiet = false)
@@ -131,9 +131,9 @@ function static_julia(
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, cc_flags)
+    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, cc, cc_flags)
 
-    executable && build_executable(s_file, e_file, cprog, verbose, optimize, debug, cc_flags)
+    executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
 
     julialibs && copy_julia_libs(verbose)
 
@@ -221,8 +221,7 @@ function build_object(
     run(command)
 end
 
-function build_shared(s_file, o_file, verbose, optimize, debug, cc_flags)
-    cc = system_compiler()
+function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
     bitness = bitness_flag()
     flags = julia_flags(optimize, debug, cc_flags)
     command = `$cc $bitness -shared -o $s_file $o_file $flags`
@@ -235,9 +234,8 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc_flags)
     run(command)
 end
 
-function build_executable(s_file, e_file, cprog, verbose, optimize, debug, cc_flags)
+function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
     bitness = bitness_flag()
-    cc = system_compiler()
     flags = julia_flags(optimize, debug, cc_flags)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
     if iswindows()
