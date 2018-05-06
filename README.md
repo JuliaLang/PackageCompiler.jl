@@ -67,8 +67,9 @@ usage: juliac.jl [-v] [-q] [-c] [-a] [-o] [-s] [-e] [-j] [-J <file>]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [--cc-flags <flags>]
-                 [--version] [-h] juliaprog [cprog] [builddir]
+                 [--depwarn {yes|no|error}] [--cc <cc>]
+                 [--cc-flags <flags>] [--version] [-h] juliaprog
+                 [cprog] [builddir]
 
 Static Julia Compiler
 
@@ -109,6 +110,7 @@ optional arguments:
   --depwarn {yes|no|error}
                         enable or disable syntax and method
                         deprecation warnings
+  --cc <cc>             system C compiler (default: "cc")
   --cc-flags <flags>    pass custom flags to the system C compiler
                         when building a shared library or executable
   --version             show version information and exit

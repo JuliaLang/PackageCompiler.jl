@@ -16,8 +16,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
         "builddir"
             arg_type = String
-            default = "builddir"
-            help = "build directory"
+            help = "build directory (default: \"builddir\")"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
@@ -86,6 +85,10 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{yes|no|error}"
             range_tester = (x -> x == "yes" || x == "no" || x == "error")
             help = "enable or disable syntax and method deprecation warnings"
+        "--cc"
+            arg_type = String
+            metavar = "<cc>"
+            help = "system C compiler (default: \"cc\")"
         "--cc-flags"
             arg_type = String
             metavar = "<flags>"
