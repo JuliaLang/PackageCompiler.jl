@@ -16,7 +16,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
         "builddir"
             arg_type = String
-            help = "build directory (default: \"builddir\")"
+            help = "build directory"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
@@ -88,7 +88,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--cc"
             arg_type = String
             metavar = "<cc>"
-            help = "system C compiler (default: \"cc\")"
+            help = "system C compiler"
         "--cc-flags"
             arg_type = String
             metavar = "<flags>"
@@ -112,13 +112,19 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     end
 
     juliaprog = pop!(parsed_args, "juliaprog")
+    if PackageCompiler.julia_v07
+        filter!(kv -> kv.second ∉ (nothing, false), parsed_args)
+    else
+        filter!((k, v) -> v ∉ (nothing, false), parsed_args)
+    end
     kw_args = map(parsed_args) do kv
         if PackageCompiler.julia_v07
-            Symbol(replace(kv[1], "-" => "_")) => kv[2]
+            Symbol(replace(kv.first, "-" => "_")) => kv.second
         else
-            Symbol(replace(kv[1], "-", "_")) => kv[2]
+            Symbol(replace(kv.first, "-", "_")) => kv.second
         end
     end
+
     PackageCompiler.static_julia(juliaprog; kw_args...)
 
     return 0
