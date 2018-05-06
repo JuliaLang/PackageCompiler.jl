@@ -29,7 +29,7 @@ end
         juliac = joinpath(@__DIR__, "..", "juliac.jl")
         jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
-        @test success(`$julia $juliac -vosej $jlfile $cfile $build`)
+        @test success(`$julia $juliac -vosej $jlfile $cfile --builddir $build`)
         @test isfile(joinpath(build, "hello.$(Libdl.dlext)"))
         @test isfile(joinpath(build, "hello$(executable_ext())"))
         cd(build) do
@@ -38,9 +38,9 @@ end
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            @test contains(readstring(`$julia $juliac -se --cc-flags='--help' $jlfile $cfile $build`), "-g")
+            @test contains(readstring(`$julia $juliac -se --cc-flags='--help' $jlfile $cfile --builddir $build`), "-g")
             # Just as a control, make sure that without passing '--help', we don't see "-g"
-            @test !contains(readstring(`$julia $juliac -se $jlfile $cfile $build`), "-g")
+            @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $build`), "-g")
         end
     end
 end

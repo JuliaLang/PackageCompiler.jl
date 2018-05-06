@@ -63,13 +63,13 @@ Build shared libraries and executables from Julia code.
 Run `juliac.jl -h` for help:
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-a] [-o] [-s] [-e] [-j] [-J <file>]
-                 [--compile {yes|no|all|min}] [-C <target>]
-                 [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
-                 [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [--cc <cc>]
-                 [--cc-flags <flags>] [--version] [-h] juliaprog
-                 [cprog] [builddir]
+usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
+                 [-e] [-j] [-J <file>] [--compile {yes|no|all|min}]
+                 [-C <target>] [-O {0,1,2,3}] [-g {0,1,2}]
+                 [--inline {yes|no}] [--check-bounds {yes|no}]
+                 [--math-mode {ieee,fast}] [--depwarn {yes|no|error}]
+                 [--cc <cc>] [--cc-flags <flags>] [--version] [-h]
+                 juliaprog [cprog]
 
 Static Julia Compiler
 
@@ -78,11 +78,12 @@ positional arguments:
   cprog                 C program to compile (required only when
                         building an executable; if not provided a
                         minimal driver program is used)
-  builddir              build directory
 
 optional arguments:
   -v, --verbose         increase verbosity
   -q, --quiet           suppress non-error messages
+  -d, --builddir <dir>  build directory
+  -n, --outname <name>  output files basename
   -c, --clean           delete build directory
   -a, --autodeps        automatically build required dependencies
   -o, --object          build object file

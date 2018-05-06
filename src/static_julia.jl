@@ -31,19 +31,16 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog                     C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir                  build directory
-    juliaprog_basename        basename for the built artifacts
-
     verbose                   increase verbosity
     quiet                     suppress non-error messages
+    builddir                  build directory
+    outname                   output files basename
     clean                     delete build directory
-
     autodeps                  automatically build required dependencies
     object                    build object file
     shared                    build shared library
     executable                build executable file
     julialibs                 copy Julia libraries to build directory
-
     sysimage <file>           start up with the given system image file
     compile {yes|no|all|min}  enable or disable JIT compiler, or request exhaustive compilation
     cpu_target <target>       limit usage of CPU features up to <target> (forces --precompiled=no)
@@ -53,15 +50,13 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     check_bounds {yes|no}     emit bounds checks always or never
     math_mode {ieee,fast}     disallow or enable unsafe floating point optimizations
     depwarn {yes|no|error}    enable or disable syntax and method deprecation warnings
-
     cc                        system C compiler
     cc_flags <flags>          pass custom flags to the system C compiler when building a shared library or executable
 """
 function static_julia(
         juliaprog;
-        cprog = joinpath(@__DIR__, "..", "examples", "program.c"), builddir = "builddir",
-        juliaprog_basename = splitext(basename(juliaprog))[1],
-        verbose = false, quiet = false, clean = false,
+        cprog = joinpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
+        builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
         sysimage = nothing, compile = nothing, cpu_target = nothing,
         optimize = nothing, debug = nothing, inline = nothing,
@@ -88,8 +83,6 @@ function static_julia(
 
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
-
-    cd(dirname(juliaprog))
 
     if !any([clean, object, shared, executable, julialibs])
         quiet || println("Nothing to do")
@@ -122,17 +115,17 @@ function static_julia(
         verbose && println("Already in build directory")
     end
 
-    o_file = juliaprog_basename * ".o"
-    s_file = juliaprog_basename * ".$(Libdl.dlext)"
-    e_file = juliaprog_basename * executable_ext()
+    o_file = outname * ".o"
+    s_file = outname * ".$(Libdl.dlext)"
+    e_file = outname * executable_ext()
 
     object && build_object(
-        juliaprog, builddir, o_file, verbose,
+        juliaprog, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
 
-    shared && build_shared(s_file, joinpath(builddir, o_file), verbose, optimize, debug, cc, cc_flags)
+    shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
 
     executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
 
@@ -186,7 +179,7 @@ function build_julia_cmd(
 end
 
 function build_object(
-        juliaprog, builddir, o_file, verbose,
+        juliaprog, o_file, verbose,
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn
     )
@@ -194,30 +187,28 @@ function build_object(
         sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
         math_mode, depwarn, false
     )
-    builddir_esc = escape_string(builddir)
     if julia_v07
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "
   Base.init_depot_path() # initialize package depots
   Base.init_load_path() # initialize location of site-packages
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
+  push!(Base.LOAD_CACHE_PATH, abspath(\"cache_ji_v$VERSION\")) # enable usage of precompiled files
   include(\"$juliaprog\") # include Julia program file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     else
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
         expr = "
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, abspath(\"$builddir_esc\")) # enable usage of precompiled files
+  push!(Base.LOAD_CACHE_PATH, abspath(\"cache_ji_v$VERSION\")) # enable usage of precompiled files
   Sys.__init__(); Base.early_init(); # JULIA_HOME is not defined, initializing manually
   include(\"$juliaprog\") # include Julia program file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
-    isdir(builddir) || mkpath(builddir)
     command = `$julia_cmd -e $expr`
     verbose && println("Build \".ji\" local cache:\n  $command")
     run(command)
-    command = `$julia_cmd --output-o $(joinpath(builddir, o_file)) -e $expr`
+    command = `$julia_cmd --output-o $o_file -e $expr`
     verbose && println("Build object file \"$o_file\":\n  $command")
     run(command)
 end
