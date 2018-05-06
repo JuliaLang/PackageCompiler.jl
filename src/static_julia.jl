@@ -31,7 +31,7 @@ end
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
     cprog                     C program to compile (required only when building an executable; if not provided a minimal driver program is used)
-    builddir                  build directory (default: \"builddir\")
+    builddir                  build directory
     juliaprog_basename        basename for the built artifacts
 
     verbose                   increase verbosity
@@ -54,12 +54,13 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     math_mode {ieee,fast}     disallow or enable unsafe floating point optimizations
     depwarn {yes|no|error}    enable or disable syntax and method deprecation warnings
 
-    cc                        system C compiler (default: \"cc\")
+    cc                        system C compiler
     cc_flags <flags>          pass custom flags to the system C compiler when building a shared library or executable
 """
 function static_julia(
         juliaprog;
-        cprog = nothing, builddir = "builddir", juliaprog_basename = splitext(basename(juliaprog))[1],
+        cprog = joinpath(@__DIR__, "..", "examples", "program.c"), builddir = "builddir",
+        juliaprog_basename = splitext(basename(juliaprog))[1],
         verbose = false, quiet = false, clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
         sysimage = nothing, compile = nothing, cpu_target = nothing,
@@ -80,7 +81,7 @@ function static_julia(
     quiet || println("Julia program file:\n  \"$juliaprog\"")
 
     if executable
-        cprog = abspath(cprog == nothing ? joinpath(@__DIR__, "..", "examples", "program.c") : cprog)
+        cprog = abspath(cprog)
         isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
         quiet || println("C program file:\n  \"$cprog\"")
     end

@@ -78,7 +78,7 @@ positional arguments:
   cprog                 C program to compile (required only when
                         building an executable; if not provided a
                         minimal driver program is used)
-  builddir              build directory (default: "builddir")
+  builddir              build directory
 
 optional arguments:
   -v, --verbose         increase verbosity
@@ -110,7 +110,7 @@ optional arguments:
   --depwarn {yes|no|error}
                         enable or disable syntax and method
                         deprecation warnings
-  --cc <cc>             system C compiler (default: "cc")
+  --cc <cc>             system C compiler
   --cc-flags <flags>    pass custom flags to the system C compiler
                         when building a shared library or executable
   --version             show version information and exit
