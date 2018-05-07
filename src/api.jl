@@ -1,4 +1,3 @@
-
 """
     build_sysimg(sysimg_path=default_sysimg_path(), cpu_target="native", userimg_path=nothing; force=false)
 
@@ -20,19 +19,16 @@ function build_sysimg(sysimg_path, userimg_path = nothing;
     # build vanilla backup system image
     clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
     static_julia(
-        userimg_path, juliaprog_basename = "sys",
-
+        userimg_path, outname = "sys",
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,
         math_mode = math_mode, verbose = verbose, quiet = quiet,
-
         cprog = nothing, builddir = sysimg_path,
         clean = false, sysimage = clean_sysimg,
         compile = nothing, depwarn = nothing, autodeps = false,
         object = true, shared = true, executable = false, julialibs = false,
     )
 end
-
 
 function build_shared_lib(
         library, library_name;
@@ -41,13 +37,10 @@ function build_shared_lib(
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
     static_julia(
-
-        library, juliaprog_basename = library_name,
-
+        library, outname = library_name,
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,
         math_mode = math_mode, verbose = verbose, quiet = quiet,
-
         cprog = nothing, builddir = sysimg_path,
         clean = false, sysimage = nothing,
         compile = nothing, depwarn = nothing, autodeps = false,
@@ -60,13 +53,11 @@ end
         library,
         library_name = splitext(basename(library))[1],
         cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
-
         snoopfile = nothing, builddir = "build",
         verbose = false, quiet = false,
         cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
-
     `library` needs to be a julia file containing a julia main, e.g. like examples/hello.jl
     `snoopfile` is optional and can be julia file that calls functions that you want to make sure to have precompiled
     `builddir` is where library_name.exe and shared libraries will end up
@@ -75,7 +66,6 @@ function build_executable(
         library,
         library_name = splitext(basename(library))[1],
         cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
-
         snoopfile = nothing, builddir = "build",
         verbose = false, quiet = false,
         cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -92,20 +82,16 @@ function build_executable(
         library = jlmain
     end
     static_julia(
-
-        library, juliaprog_basename = library_name,
-
+        library, outname = library_name,
         cpu_target = cpu_target, optimize = optimize,
         debug = debug, inline = inline, check_bounds = check_bounds,
         math_mode = math_mode, verbose = verbose, quiet = quiet,
-
         cprog = cprogram, builddir = builddir,
         clean = false, sysimage = nothing,
         compile = nothing, depwarn = nothing, autodeps = false,
         object = true, shared = true, executable = true, julialibs = true,
     )
 end
-
 
 """
     force_native_image!()

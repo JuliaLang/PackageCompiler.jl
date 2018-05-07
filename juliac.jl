@@ -14,15 +14,20 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "cprog"
             arg_type = String
             help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
-        "builddir"
-            arg_type = String
-            help = "build directory"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
         "--quiet", "-q"
             action = :store_true
             help = "suppress non-error messages"
+        "--builddir", "-d"
+            arg_type = String
+            metavar = "<dir>"
+            help = "build directory"
+        "--outname", "-n"
+            arg_type = String
+            metavar = "<name>"
+            help = "output files basename"
         "--clean", "-c"
             action = :store_true
             help = "delete build directory"
