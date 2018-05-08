@@ -64,12 +64,15 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
-                 [-e] [-j] [-J <file>] [--compile {yes|no|all|min}]
-                 [-C <target>] [-O {0,1,2,3}] [-g {0,1,2}]
-                 [--inline {yes|no}] [--check-bounds {yes|no}]
-                 [--math-mode {ieee,fast}] [--depwarn {yes|no|error}]
-                 [--cc <cc>] [--cc-flags <flags>] [--version] [-h]
-                 juliaprog [cprog]
+                 [-e] [-j] [-J <file>] [--precompiled {yes|no}]
+                 [--compilecache {yes|no}] [-H <dir>]
+                 [--startup-file {yes|no}] [--handle-signals {yes|no}]
+                 [--compile {yes|no|all|min}] [-C <target>]
+                 [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
+                 [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
+                 [--depwarn {yes|no|error}] [--cc <cc>]
+                 [--cc-flags <flags>] [--version] [-h] juliaprog
+                 [cprog]
 
 Static Julia Compiler
 
@@ -92,15 +95,27 @@ optional arguments:
   -j, --julialibs       copy Julia libraries to build directory
   -J, --sysimage <file>
                         start up with the given system image file
+  --precompiled {yes|no}
+                        use precompiled code from system image if
+                        available
+  --compilecache {yes|no}
+                        enable/disable incremental precompilation of
+                        modules
+  -H, --home <dir>      set location of `julia` executable
+  --startup-file {yes|no}
+                        load ~/.juliarc.jl
+  --handle-signals {yes|no}
+                        enable or disable Julia's default signal
+                        handlers
   --compile {yes|no|all|min}
                         enable or disable JIT compiler, or request
                         exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
-                        (forces --precompiled=no)
+                        (implies default `--precompiled=no`)
   -O, --optimize {0,1,2,3}
                         set the optimization level (type: Int64)
-  -g {0,1,2}            enable / set the level of debug info
+  -g <level>            enable / set the level of debug info
                         generation (type: Int64)
   --inline {yes|no}     control whether inlining is permitted
   --check-bounds {yes|no}

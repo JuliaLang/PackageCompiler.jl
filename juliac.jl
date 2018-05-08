@@ -50,45 +50,69 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             arg_type = String
             metavar = "<file>"
             help = "start up with the given system image file"
+        "--precompiled"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "use precompiled code from system image if available"
+        "--compilecache"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable/disable incremental precompilation of modules"
+        "--home", "-H"
+            arg_type = String
+            metavar = "<dir>"
+            help = "set location of `julia` executable"
+        "--startup-file"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "load ~/.juliarc.jl"
+        "--handle-signals"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable or disable Julia's default signal handlers"
         "--compile"
             arg_type = String
             metavar = "{yes|no|all|min}"
-            range_tester = (x -> x == "yes" || x == "no" || x == "all" || x == "min")
+            range_tester = (x -> x ∈ ("yes", "no", "all", "min"))
             help = "enable or disable JIT compiler, or request exhaustive compilation"
         "--cpu-target", "-C"
             arg_type = String
             metavar = "<target>"
-            help = "limit usage of CPU features up to <target> (forces --precompiled=no)"
+            help = "limit usage of CPU features up to <target> (implies default `--precompiled=no`)"
         "--optimize", "-O"
             arg_type = Int
             metavar = "{0,1,2,3}"
-            range_tester = (x -> 0 <= x <= 3)
+            range_tester = (x -> x ∈ (0, 1, 2, 3))
             help = "set the optimization level"
         "-g"
             arg_type = Int
             dest_name = "debug"
-            metavar = "{0,1,2}"
-            range_tester = (x -> 0 <= x <= 2)
+            metavar = "<level>"
+            range_tester = (x -> x ∈ (0, 1, 2))
             help = "enable / set the level of debug info generation"
         "--inline"
             arg_type = String
             metavar = "{yes|no}"
-            range_tester = (x -> x == "yes" || x == "no")
+            range_tester = (x -> x ∈ ("yes", "no"))
             help = "control whether inlining is permitted"
         "--check-bounds"
             arg_type = String
             metavar = "{yes|no}"
-            range_tester = (x -> x == "yes" || x == "no")
+            range_tester = (x -> x ∈ ("yes", "no"))
             help = "emit bounds checks always or never"
         "--math-mode"
             arg_type = String
             metavar = "{ieee,fast}"
-            range_tester = (x -> x == "ieee" || x == "fast")
+            range_tester = (x -> x ∈ ("ieee", "fast"))
             help = "disallow or enable unsafe floating point optimizations"
         "--depwarn"
             arg_type = String
             metavar = "{yes|no|error}"
-            range_tester = (x -> x == "yes" || x == "no" || x == "error")
+            range_tester = (x -> x ∈ ("yes", "no", "error"))
             help = "enable or disable syntax and method deprecation warnings"
         "--cc"
             arg_type = String
