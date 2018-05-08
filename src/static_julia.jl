@@ -42,10 +42,15 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     executable                build executable file
     julialibs                 copy Julia libraries to build directory
     sysimage <file>           start up with the given system image file
+    precompiled {yes|no}      use precompiled code from system image if available
+    compilecache {yes|no}     enable/disable incremental precompilation of modules
+    home <dir>                set location of `julia` executable
+    startup_file {yes|no}     load ~/.juliarc.jl
+    handle_signals {yes|no}   enable or disable Julia's default signal handlers
     compile {yes|no|all|min}  enable or disable JIT compiler, or request exhaustive compilation
     cpu_target <target>       limit usage of CPU features up to <target> (forces --precompiled=no)
     optimize {0,1,2,3}        set the optimization level
-    debug {0,1,2}             enable / set the level of debug info generation
+    debug <level>             enable / set the level of debug info generation
     inline {yes|no}           control whether inlining is permitted
     check_bounds {yes|no}     emit bounds checks always or never
     math_mode {ieee,fast}     disallow or enable unsafe floating point optimizations
@@ -58,9 +63,10 @@ function static_julia(
         cprog = joinpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
         builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
         autodeps = false, object = false, shared = false, executable = false, julialibs = false,
-        sysimage = nothing, compile = nothing, cpu_target = nothing,
-        optimize = nothing, debug = nothing, inline = nothing,
-        check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        sysimage = nothing, precompiled = nothing, compilecache = nothing,
+        home = nothing, startup_file = nothing, handle_signals = nothing,
+        compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = system_compiler(), cc_flags = nothing
     )
 
@@ -121,8 +127,8 @@ function static_julia(
 
     object && build_object(
         juliaprog, o_file, verbose,
-        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn
+        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
 
     shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
@@ -156,36 +162,43 @@ function julia_flags(optimize, debug, cc_flags)
 end
 
 function build_julia_cmd(
-        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn, startupfile = false
+        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
+    # TODO: `precompiled` and `compilecache` may be removed in future, see: https://github.com/JuliaLang/PackageCompiler.jl/issues/47
+    precompiled == nothing && cpu_target != nothing && (precompiled = "no")
+    compilecache == nothing && (compilecache = "no")
+    # TODO: `startup_file` may be removed in future with `julia-compile`, see: https://github.com/JuliaLang/julia/issues/15864
+    startup_file == nothing && (startup_file = "no")
     julia_cmd = `$(Base.julia_cmd())`
     if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
         error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
     end
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
-    push!(julia_cmd.exec, string("--startup-file=", startupfile ? "yes" : "no"))
+    precompiled == nothing || push!(julia_cmd.exec, "--precompiled=$precompiled")
+    compilecache == nothing || push!(julia_cmd.exec, "--compilecache=$compilecache")
+    home == nothing || push!(julia_cmd.exec, "-H=$home")
+    startup_file == nothing || push!(julia_cmd.exec, "--startup-file=$startup_file")
+    handle_signals == nothing || push!(julia_cmd.exec, "--handle-signals=$handle_signals")
     compile == nothing || (julia_cmd.exec[4] = "--compile=$compile")
-    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target";
-                              push!(julia_cmd.exec, "--precompiled=no"))
+    cpu_target == nothing || (julia_cmd.exec[2] = "-C$cpu_target")
     optimize == nothing || push!(julia_cmd.exec, "-O$optimize")
     debug == nothing || push!(julia_cmd.exec, "-g$debug")
     inline == nothing || push!(julia_cmd.exec, "--inline=$inline")
     check_bounds == nothing || push!(julia_cmd.exec, "--check-bounds=$check_bounds")
     math_mode == nothing || push!(julia_cmd.exec, "--math-mode=$math_mode")
     depwarn == nothing || (julia_cmd.exec[5] = "--depwarn=$depwarn")
-    push!(julia_cmd.exec, "--compilecache=no")
     julia_cmd
 end
 
 function build_object(
         juliaprog, o_file, verbose,
-        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn
+        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
     julia_cmd = build_julia_cmd(
-        sysimage, compile, cpu_target, optimize, debug, inline, check_bounds,
-        math_mode, depwarn, false
+        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
     if julia_v07
         iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
@@ -205,9 +218,11 @@ function build_object(
   include(\"$juliaprog\") # include Julia program file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
-    command = `$julia_cmd -e $expr`
-    verbose && println("Build \".ji\" local cache:\n  $command")
-    run(command)
+    if compilecache == "yes"
+        command = `$julia_cmd -e $expr`
+        verbose && println("Build \".ji\" local cache:\n  $command")
+        run(command)
+    end
     command = `$julia_cmd --output-o $o_file -e $expr`
     verbose && println("Build object file \"$o_file\":\n  $command")
     run(command)
@@ -279,5 +294,5 @@ function copy_julia_libs(verbose)
             copy = true
         end
     end
-    copy || verbose && println("  none")
+    verbose && !copy && println("  none")
 end
