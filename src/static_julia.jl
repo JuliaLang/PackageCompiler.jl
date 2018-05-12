@@ -35,11 +35,12 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     quiet                     suppress non-error messages
     builddir                  build directory
     outname                   output files basename
-    clean                     delete build directory
+    clean                     remove build directory
     autodeps                  automatically build required dependencies
     object                    build object file
     shared                    build shared library
     executable                build executable file
+    rmtemp                    remove temporary build files
     julialibs                 copy Julia libraries to build directory
     sysimage <file>           start up with the given system image file
     precompiled {yes|no}      use precompiled code from system image if available
@@ -62,7 +63,7 @@ function static_julia(
         juliaprog;
         cprog = joinpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
         builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
-        autodeps = false, object = false, shared = false, executable = false, julialibs = false,
+        autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -90,21 +91,21 @@ function static_julia(
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
-    if !any([clean, object, shared, executable, julialibs])
+    if !any([clean, object, shared, executable, rmtemp, julialibs])
         quiet || println("Nothing to do")
         return
     end
 
     if clean
         if isdir(builddir)
-            verbose && println("Delete build directory")
+            verbose && println("Remove build directory")
             rm(builddir, recursive=true)
         else
-            verbose && println("Build directory does not exist, nothing to delete")
+            verbose && println("Build directory does not exist")
         end
     end
 
-    if !any([object, shared, executable, julialibs])
+    if !any([object, shared, executable, rmtemp, julialibs])
         quiet || println("All done")
         return
     end
@@ -134,6 +135,13 @@ function static_julia(
     shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
 
     executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
+
+    if rmtemp
+        verbose && println("Remove temporary build files")
+        for temp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir("."))
+            rm(temp, recursive=true)
+        end
+    end
 
     julialibs && copy_julia_libs(verbose)
 
