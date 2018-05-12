@@ -64,7 +64,7 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
-                 [-e] [-j] [-J <file>] [--precompiled {yes|no}]
+                 [-e] [-r] [-j] [-J <file>] [--precompiled {yes|no}]
                  [--compilecache {yes|no}] [-H <dir>]
                  [--startup-file {yes|no}] [--handle-signals {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
@@ -87,11 +87,12 @@ optional arguments:
   -q, --quiet           suppress non-error messages
   -d, --builddir <dir>  build directory
   -n, --outname <name>  output files basename
-  -c, --clean           delete build directory
+  -c, --clean           remove build directory
   -a, --autodeps        automatically build required dependencies
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
+  -r, --rmtemp          remove temporary build files
   -j, --julialibs       copy Julia libraries to build directory
   -J, --sysimage <file>
                         start up with the given system image file

@@ -30,7 +30,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "output files basename"
         "--clean", "-c"
             action = :store_true
-            help = "delete build directory"
+            help = "remove build directory"
         "--autodeps", "-a"
             action = :store_true
             help = "automatically build required dependencies"
@@ -43,6 +43,9 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--executable", "-e"
             action = :store_true
             help = "build executable file"
+        "--rmtemp", "-r"
+            action = :store_true
+            help = "remove temporary build files"
         "--julialibs", "-j"
             action = :store_true
             help = "copy Julia libraries to build directory"
@@ -135,7 +138,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args = parse_args(args, s)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "julialibs"]))
+    if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "rmtemp", "julialibs"]))
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
