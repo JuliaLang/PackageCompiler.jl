@@ -23,7 +23,7 @@ function build_sysimg(
     static_julia(
         userimg_path, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = "sys",
-        object = true, shared = true,
+        autodeps = true, shared = true,
         sysimage = clean_sysimg, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -42,7 +42,7 @@ function build_shared_lib(
     static_julia(
         library, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = library_name,
-        object = true, shared = true, julialibs = true,
+        autodeps = true, shared = true, julialibs = true,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -87,7 +87,7 @@ function build_executable(
     static_julia(
         library, cprog = cprog, verbose = verbose, quiet = quiet,
         builddir = builddir, outname = library_name,
-        object = true, shared = true, executable = true, julialibs = true,
+        autodeps = true, executable = true, julialibs = true,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
