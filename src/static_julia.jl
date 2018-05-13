@@ -254,8 +254,8 @@ function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, c
     flags = julia_flags(optimize, debug, cc_flags)
     command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
     if iswindows()
-        RPMbindir = PackageCompiler.mingw_dir("bin")
-        incdir = PackageCompiler.mingw_dir("include")
+        RPMbindir = mingw_dir("bin")
+        incdir = mingw_dir("include")
         push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
         ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
         command = `$command -I$incdir`
