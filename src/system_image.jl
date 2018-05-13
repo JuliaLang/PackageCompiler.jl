@@ -20,7 +20,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         else
             cpu_target
         end
-        cc = system_compiler()
+        cc = system_compiler
         # Ensure we have write-permissions to wherever we're trying to write to
         try
             touch("$sysimg_path.ji")

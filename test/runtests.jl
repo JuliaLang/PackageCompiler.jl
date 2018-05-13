@@ -14,7 +14,7 @@ julia = Base.julia_cmd().exec[1]
     @test isfile(userimg)
     # Make sure we actually snooped stuff
     @test length(readlines(userimg)) > 700
-    @test success(`$julia -J $(img_file)`)
+    @test success(`$julia -J $img_file`)
     mktempdir() do dir
         sysfile = joinpath(dir, "sys")
         PackageCompiler.compile_system_image(sysfile, "native")
@@ -30,14 +30,14 @@ end
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
         @test success(`$julia $juliac -vosej $jlfile $cfile --builddir $builddir`)
         @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
-        @test isfile(joinpath(builddir, "hello$(executable_ext())"))
+        @test isfile(joinpath(builddir, "hello$executable_ext"))
         cd(builddir) do
-            @test success(`./$("hello$(executable_ext())")`)
+            @test success(`./hello$executable_ext`)
         end
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            @test contains(readstring(`$julia $juliac -se --cc-flags='--help' $jlfile $cfile --builddir $builddir`), "-g")
+            @test contains(readstring(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`), "-g")
             # Just as a control, make sure that without passing '--help', we don't see "-g"
             @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
         end
@@ -56,9 +56,9 @@ end
         jlfile, snoopfile = snoopfile, builddir = builddir
     )
     @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
-    @test isfile(joinpath(builddir, "hello$(executable_ext())"))
+    @test isfile(joinpath(builddir, "hello$executable_ext"))
     cd(builddir) do
-        @test success(`./$("hello$(executable_ext())")`)
+        @test success(`./hello$executable_ext`)
     end
     for i = 1:100
         try rm(builddir, recursive = true) end
