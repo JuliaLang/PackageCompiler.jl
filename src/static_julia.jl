@@ -14,9 +14,8 @@ else
     error("Package wasn't build correctly. Please run Pkg.build(\"PackageCompiler\")")
 end
 
-system_compiler() = gcc
-bitness_flag() = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
-executable_ext() = (iswindows() ? ".exe" : "")
+system_compiler = gcc
+executable_ext = iswindows() ? ".exe" : ""
 
 function mingw_dir(folders...)
     joinpath(
@@ -68,7 +67,7 @@ function static_julia(
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-        cc = system_compiler(), cc_flags = nothing
+        cc = system_compiler, cc_flags = nothing
     )
 
     verbose && quiet && (quiet = false)
@@ -124,7 +123,7 @@ function static_julia(
 
     o_file = outname * ".o"
     s_file = outname * ".$(Libdl.dlext)"
-    e_file = outname * executable_ext()
+    e_file = outname * executable_ext
 
     object && build_object(
         juliaprog, o_file, verbose,
@@ -150,22 +149,24 @@ end
 
 # TODO: avoid calling "julia-config.jl" in future
 function julia_flags(optimize, debug, cc_flags)
+    bitness_flag = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
     if julia_v07
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
-        flags = Base.shell_split(read(`$command --allflags`, String))
-        optimize == nothing || (flags = `$flags -O$optimize`)
-        debug != 2 || (flags = `$flags -g`)
-        cc_flags == nothing || isempty(cc_flags) || (flags = `$flags $cc_flags`)
-        return flags
+        allflags = Base.shell_split(read(`$command --allflags`, String))
+        allflags = `$allflags $bitness_flag`
+        optimize == nothing || (allflags = `$allflags -O$optimize`)
+        debug == 2 && (allflags = `$allflags -g`)
+        cc_flags == nothing || isempty(cc_flags) || (allflags = `$allflags $cc_flags`)
+        return allflags
     else
         command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
         cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
-        debug != 2 || (cflags = `$cflags -g`)
+        debug == 2 && (cflags = `$cflags -g`)
         cc_flags == nothing || isempty(cc_flags) || (cflags = `$cflags $cc_flags`)
         ldflags = Base.shell_split(readstring(`$command --ldflags`))
         ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
-        return `$cflags $ldflags $ldlibs`
+        return `$bitness_flag $cflags $ldflags $ldlibs`
     end
 end
 
@@ -237,9 +238,7 @@ function build_object(
 end
 
 function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
-    bitness = bitness_flag()
-    flags = julia_flags(optimize, debug, cc_flags)
-    command = `$cc $bitness -shared -o $s_file $o_file $flags`
+    command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
@@ -250,9 +249,7 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
 end
 
 function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
-    bitness = bitness_flag()
-    flags = julia_flags(optimize, debug, cc_flags)
-    command = `$cc $bitness -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $flags`
+    command = `$cc -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
     if iswindows()
         RPMbindir = mingw_dir("bin")
         incdir = mingw_dir("include")
