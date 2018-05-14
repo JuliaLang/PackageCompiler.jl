@@ -6,7 +6,9 @@ module PackageCompiler
 const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
-    import Sys: iswindows, isunix, isapple
+    const iswindows = Sys.iswindows
+    const isunix = Sys.isunix
+    const isapple = Sys.isapple
     const contains07 = contains
 else
     const iswindows = is_windows
@@ -52,10 +54,15 @@ end
 
 julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
 julia_cpu_target(x::String) = x # TODO match against available targets
-function julia_cpu_target(::Void)
-    replace(Base.julia_cmd().exec[2], "-C", "")
+if julia_v07
+    function julia_cpu_target(::Nothing)
+        replace(Base.julia_cmd().exec[2], "-C", "")
+    end
+else
+    function julia_cpu_target(::Void)
+        replace(Base.julia_cmd().exec[2], "-C", "")
+    end
 end
-
 
 """
 Reverts a forced compilation of the system image.
