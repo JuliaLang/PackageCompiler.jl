@@ -6,12 +6,14 @@ module PackageCompiler
 const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
-    import Sys: iswindows, isunix, isapple
+    import Base.Sys: iswindows, isunix, isapple
     const contains07 = contains
+    const JULIA_BINDIR = Sys.BINDIR
 else
     const iswindows = is_windows
     const isunix = is_unix
     const isapple = is_apple
+    const JULIA_BINDIR = JULIA_HOME
     contains07(str, reg) = ismatch(reg, str)
 end
 
@@ -25,9 +27,7 @@ include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
 
-const sysimage_binaries = (
-    "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
-)
+const sysimage_binaries = ("sys.$(Libdl.dlext)",)
 
 
 function copy_system_image(src, dest, ignore_missing = false)

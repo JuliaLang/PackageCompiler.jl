@@ -1,4 +1,4 @@
 julia 0.6
 SnoopCompile
-@windows WinRPM
+@windows WinRPM 0.3.2
 ArgParse
