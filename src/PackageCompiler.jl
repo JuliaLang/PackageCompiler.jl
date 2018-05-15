@@ -6,13 +6,9 @@ module PackageCompiler
 const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
-<<<<<<< HEAD
-    import Base.Sys: iswindows, isunix, isapple
-=======
     const iswindows = Sys.iswindows
     const isunix = Sys.isunix
     const isapple = Sys.isapple
->>>>>>> master
     const contains07 = contains
     const JULIA_BINDIR = Sys.BINDIR
 else
