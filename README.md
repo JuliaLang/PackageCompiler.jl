@@ -1,11 +1,12 @@
 # PackageCompiler
-[![Build Status](https://travis-ci.org/SimonDanisch/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/SimonDanisch/PackageCompiler.jl)
+[![Build Status](https://travis-ci.org/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/PackageCompiler.jl)
 
-[![Coverage Status](https://coveralls.io/repos/SimonDanisch/PackageCompiler.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/SimonDanisch/PackageCompiler.jl?branch=master)
+[![Coverage Status](https://coveralls.io/repos/JuliaLang/PackageCompiler.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
-[![codecov.io](http://codecov.io/github/SimonDanisch/PackageCompiler.jl/coverage.svg?branch=master)](http://codecov.io/github/SimonDanisch/PackageCompiler.jl?branch=master)
+[![codecov.io](http://codecov.io/github/JuliaLang/PackageCompiler.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
 Remove jit overhead from your package and compile it into a system image.
+
 
 ## Usage example
 E.g. do:
@@ -57,17 +58,21 @@ build_executable(
 
 # Static Julia Compiler
 
-Building shared libraries and executables from Julia code.
+Build shared libraries and executables from Julia code.
 
 Run `juliac.jl -h` for help:
 
 ```
-usage: juliac.jl [-v] [-q] [-c] [-a] [-o] [-s] [-e] [-j] [-J <file>]
+usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
+                 [-e] [-r] [-j] [-J <file>] [--precompiled {yes|no}]
+                 [--compilecache {yes|no}] [-H <dir>]
+                 [--startup-file {yes|no}] [--handle-signals {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
-                 [-O {0,1,2,3}] [-g {0,1,2}] [--inline {yes|no}]
+                 [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [--version] [-h] juliaprog
-                 [cprog] [builddir]
+                 [--depwarn {yes|no|error}] [--cc <cc>]
+                 [--cc-flags <flags>] [--version] [-h] juliaprog
+                 [cprog]
 
 Static Julia Compiler
 
@@ -76,36 +81,55 @@ positional arguments:
   cprog                 C program to compile (required only when
                         building an executable; if not provided a
                         minimal driver program is used)
-  builddir              directory used for building, either absolute
-                        or relative to the Julia program directory
-                        (default: "builddir")
 
 optional arguments:
   -v, --verbose         increase verbosity
   -q, --quiet           suppress non-error messages
-  -c, --clean           delete build directory
+  -d, --builddir <dir>  build directory
+  -n, --outname <name>  output files basename
+  -c, --clean           remove build directory
   -a, --autodeps        automatically build required dependencies
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
-  -j, --julialibs       sync Julia libraries to builddir
+  -r, --rmtemp          remove temporary build files
+  -j, --julialibs       copy Julia libraries to build directory
   -J, --sysimage <file>
                         start up with the given system image file
+  --precompiled {yes|no}
+                        use precompiled code from system image if
+                        available
+  --compilecache {yes|no}
+                        enable/disable incremental precompilation of
+                        modules
+  -H, --home <dir>      set location of `julia` executable
+  --startup-file {yes|no}
+                        load ~/.juliarc.jl
+  --handle-signals {yes|no}
+                        enable or disable Julia's default signal
+                        handlers
   --compile {yes|no|all|min}
                         enable or disable JIT compiler, or request
                         exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
+                        (implies default `--precompiled=no`)
   -O, --optimize {0,1,2,3}
-                        set optimization level (type: Int64)
-  -g {0,1,2}            set debugging information level (type: Int64)
+                        set the optimization level (type: Int64)
+  -g <level>            enable / set the level of debug info
+                        generation (type: Int64)
   --inline {yes|no}     control whether inlining is permitted
   --check-bounds {yes|no}
                         emit bounds checks always or never
   --math-mode {ieee,fast}
-                        set floating point optimizations
+                        disallow or enable unsafe floating point
+                        optimizations
   --depwarn {yes|no|error}
-                        set syntax and method deprecation warnings
+                        enable or disable syntax and method
+                        deprecation warnings
+  --cc <cc>             system C compiler
+  --cc-flags <flags>    pass custom flags to the system C compiler
+                        when building a shared library or executable
   --version             show version information and exit
   -h, --help            show this help message and exit
 

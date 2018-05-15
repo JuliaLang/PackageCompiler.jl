@@ -6,8 +6,8 @@ function snoop_vanilla(filename, path)
     end
     """
     julia_cmd = build_julia_cmd(
-        get_backup!(false, nothing), nothing, nothing, nothing, nothing,
-        nothing, nothing, nothing, nothing, false
+        get_backup!(false, nothing), nothing, nothing, nothing, nothing, nothing,
+        nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing
     )
     @show julia_cmd
     in, io = open(`$julia_cmd --eval $code_object`, "w", STDOUT)
@@ -32,8 +32,8 @@ function snoop(path, compilationfile, csv)
     delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
     tmp_mod = eval(:(module $(gensym()) end))
     open(compilationfile, "w") do io
-		println(io, "Sys.__init__()")
-		println(io, "Base.early_init()")
+        println(io, "Sys.__init__()")
+        println(io, "Base.early_init()")
         for (k, v) in pc
             k == :unknown && continue
             try

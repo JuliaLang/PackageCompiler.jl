@@ -20,7 +20,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         else
             cpu_target
         end
-        cc = system_compiler()
+        cc = system_compiler
         # Ensure we have write-permissions to wherever we're trying to write to
         try
             touch("$sysimg_path.ji")
@@ -48,7 +48,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
 
         build_shared(
             "$sysimg_path.$(Libdl.dlext)", "$sysimg_path.o",
-            true, nothing, debug ? 2 : nothing, nothing
+            true, nothing, debug ? 2 : nothing, cc, nothing
         )
     end
 end
@@ -67,5 +67,3 @@ function get_backup!(debug, cpu_target = nothing)
     end
     return joinpath(sysimg_backup, "sys.$(Libdl.dlext)")
 end
-
-|

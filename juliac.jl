@@ -13,21 +13,24 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "Julia program to compile"
         "cprog"
             arg_type = String
-            default = nothing
             help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
-        "builddir"
-            arg_type = String
-            default = "builddir"
-            help = "directory used for building, either absolute or relative to the Julia program directory"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
         "--quiet", "-q"
             action = :store_true
             help = "suppress non-error messages"
+        "--builddir", "-d"
+            arg_type = String
+            metavar = "<dir>"
+            help = "build directory"
+        "--outname", "-n"
+            arg_type = String
+            metavar = "<name>"
+            help = "output files basename"
         "--clean", "-c"
             action = :store_true
-            help = "delete build directory"
+            help = "remove build directory"
         "--autodeps", "-a"
             action = :store_true
             help = "automatically build required dependencies"
@@ -40,67 +43,88 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--executable", "-e"
             action = :store_true
             help = "build executable file"
+        "--rmtemp", "-r"
+            action = :store_true
+            help = "remove temporary build files"
         "--julialibs", "-j"
             action = :store_true
-            help = "sync Julia libraries to builddir"
+            help = "copy Julia libraries to build directory"
         "--sysimage", "-J"
             arg_type = String
-            default = nothing
             metavar = "<file>"
             help = "start up with the given system image file"
+        "--precompiled"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "use precompiled code from system image if available"
+        "--compilecache"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable/disable incremental precompilation of modules"
+        "--home", "-H"
+            arg_type = String
+            metavar = "<dir>"
+            help = "set location of `julia` executable"
+        "--startup-file"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "load ~/.juliarc.jl"
+        "--handle-signals"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable or disable Julia's default signal handlers"
         "--compile"
             arg_type = String
-            default = nothing
             metavar = "{yes|no|all|min}"
-            range_tester = (x -> x == "yes" || x == "no" || x == "all" || x == "min")
+            range_tester = (x -> x ∈ ("yes", "no", "all", "min"))
             help = "enable or disable JIT compiler, or request exhaustive compilation"
         "--cpu-target", "-C"
             arg_type = String
-            default = nothing
             metavar = "<target>"
-            help = "limit usage of CPU features up to <target>"
+            help = "limit usage of CPU features up to <target> (implies default `--precompiled=no`)"
         "--optimize", "-O"
             arg_type = Int
-            default = nothing
             metavar = "{0,1,2,3}"
-            range_tester = (x -> 0 <= x <= 3)
-            help = "set optimization level"
+            range_tester = (x -> x ∈ (0, 1, 2, 3))
+            help = "set the optimization level"
         "-g"
             arg_type = Int
-            default = nothing
             dest_name = "debug"
-            metavar = "{0,1,2}"
-            range_tester = (x -> 0 <= x <= 2)
-            help = "set debugging information level"
+            metavar = "<level>"
+            range_tester = (x -> x ∈ (0, 1, 2))
+            help = "enable / set the level of debug info generation"
         "--inline"
             arg_type = String
-            default = nothing
             metavar = "{yes|no}"
-            range_tester = (x -> x == "yes" || x == "no")
+            range_tester = (x -> x ∈ ("yes", "no"))
             help = "control whether inlining is permitted"
         "--check-bounds"
             arg_type = String
-            default = nothing
             metavar = "{yes|no}"
-            range_tester = (x -> x == "yes" || x == "no")
+            range_tester = (x -> x ∈ ("yes", "no"))
             help = "emit bounds checks always or never"
         "--math-mode"
             arg_type = String
-            default = nothing
             metavar = "{ieee,fast}"
-            range_tester = (x -> x == "ieee" || x == "fast")
-            help = "set floating point optimizations"
+            range_tester = (x -> x ∈ ("ieee", "fast"))
+            help = "disallow or enable unsafe floating point optimizations"
         "--depwarn"
             arg_type = String
-            default = nothing
             metavar = "{yes|no|error}"
-            range_tester = (x -> x == "yes" || x == "no" || x == "error")
-            help = "set syntax and method deprecation warnings"
+            range_tester = (x -> x ∈ ("yes", "no", "error"))
+            help = "enable or disable syntax and method deprecation warnings"
+        "--cc"
+            arg_type = String
+            metavar = "<cc>"
+            help = "system C compiler"
         "--cc-flags"
             arg_type = String
-            default = nothing
             metavar = "<flags>"
-            help = "pass custom flags to system compiler when building shared library or executable"
+            help = "pass custom flags to the system C compiler when building a shared library or executable"
     end
 
     s.epilog = """
@@ -114,20 +138,26 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args = parse_args(args, s)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "julialibs"]))
+    if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "rmtemp", "julialibs"]))
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
 
     juliaprog = pop!(parsed_args, "juliaprog")
+    if PackageCompiler.julia_v07
+        filter!(kv -> kv.second ∉ (nothing, false), parsed_args)
+    else
+        filter!((k, v) -> v ∉ (nothing, false), parsed_args)
+    end
     kw_args = map(parsed_args) do kv
         if PackageCompiler.julia_v07
-            Symbol(replace(kv[1], "-" => "_")) => kv[2]
+            Symbol(replace(kv.first, "-" => "_")) => kv.second
         else
-            Symbol(replace(kv[1], "-", "_")) => kv[2]
+            Symbol(replace(kv.first, "-", "_")) => kv.second
         end
     end
-    PackageCompiler.static_julia(juliaprog; kw_args...)
+
+    static_julia(juliaprog; kw_args...)
 
     return 0
 end

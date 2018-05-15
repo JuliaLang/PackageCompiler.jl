@@ -1,4 +1,3 @@
-
 """
     build_sysimg(sysimg_path=default_sysimg_path(), cpu_target="native", userimg_path=nothing; force=false)
 
@@ -11,47 +10,43 @@ current processor. Include the user image file given by `userimg_path`, which sh
 directives such as `using MyPackage` to include that package in the new system image. New
 system image will not replace an older image unless `force` is set to true.
 """
-function build_sysimg(sysimg_path, userimg_path = nothing;
+function build_sysimg(
+        sysimg_path, userimg_path = nothing;
         verbose = false, quiet = false,
-        cpu_target = nothing, optimize = nothing,
-        debug = nothing, inline = nothing, check_bounds = nothing,
-        math_mode = nothing
+        precompiled = nothing, compilecache = nothing,
+        home = nothing, startup_file = nothing, handle_signals = nothing,
+        compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
     )
     # build vanilla backup system image
     clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
     static_julia(
-        userimg_path, juliaprog_basename = "sys",
-
-        cpu_target = cpu_target, optimize = optimize,
-        debug = debug, inline = inline, check_bounds = check_bounds,
-        math_mode = math_mode, verbose = verbose, quiet = quiet,
-
-        cprog = nothing, builddir = sysimg_path,
-        clean = false, sysimage = clean_sysimg,
-        compile = nothing, depwarn = nothing, autodeps = false,
-        object = true, shared = true, executable = false, julialibs = false,
+        userimg_path, verbose = verbose, quiet = quiet,
+        builddir = sysimg_path, outname = "sys",
+        autodeps = true, shared = true,
+        sysimage = clean_sysimg, precompiled = precompiled, compilecache = compilecache,
+        home = home, startup_file = startup_file, handle_signals = handle_signals,
+        compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
     )
 end
-
 
 function build_shared_lib(
         library, library_name;
         verbose = false, quiet = false,
-        cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing
+        sysimage = nothing, precompiled = nothing, compilecache = nothing,
+        home = nothing, startup_file = nothing, handle_signals = nothing,
+        compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
     )
     static_julia(
-
-        library, juliaprog_basename = library_name,
-
-        cpu_target = cpu_target, optimize = optimize,
-        debug = debug, inline = inline, check_bounds = check_bounds,
-        math_mode = math_mode, verbose = verbose, quiet = quiet,
-
-        cprog = nothing, builddir = sysimg_path,
-        clean = false, sysimage = nothing,
-        compile = nothing, depwarn = nothing, autodeps = false,
-        object = true, shared = true, executable = false, julialibs = true,
+        library, verbose = verbose, quiet = quiet,
+        builddir = sysimg_path, outname = library_name,
+        autodeps = true, shared = true, julialibs = true,
+        sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
+        home = home, startup_file = startup_file, handle_signals = handle_signals,
+        compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
     )
 end
 
@@ -59,27 +54,25 @@ end
     build_executable(
         library,
         library_name = splitext(basename(library))[1],
-        cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
-
-        snoopfile = nothing, builddir = "build",
+        cprog = joinpath(@__DIR__, "..", "examples", "program.c");
+        snoopfile = nothing, builddir = "builddir",
         verbose = false, quiet = false,
         cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing
     )
-
     `library` needs to be a julia file containing a julia main, e.g. like examples/hello.jl
     `snoopfile` is optional and can be julia file that calls functions that you want to make sure to have precompiled
     `builddir` is where library_name.exe and shared libraries will end up
 """
 function build_executable(
-        library,
-        library_name = splitext(basename(library))[1],
-        cprogram = joinpath(@__DIR__, "..", "examples", "program.c");
-
-        snoopfile = nothing, builddir = "build",
+        library, library_name = splitext(basename(library))[1],
+        cprog = joinpath(@__DIR__, "..", "examples", "program.c");
+        snoopfile = nothing, builddir = "builddir",
         verbose = false, quiet = false,
-        cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing
+        sysimage = nothing, precompiled = nothing, compilecache = nothing,
+        home = nothing, startup_file = nothing, handle_signals = nothing,
+        compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
     )
     if snoopfile != nothing
         precompfile = joinpath(builddir, "precompiled.jl")
@@ -92,20 +85,15 @@ function build_executable(
         library = jlmain
     end
     static_julia(
-
-        library, juliaprog_basename = library_name,
-
-        cpu_target = cpu_target, optimize = optimize,
-        debug = debug, inline = inline, check_bounds = check_bounds,
-        math_mode = math_mode, verbose = verbose, quiet = quiet,
-
-        cprog = cprogram, builddir = builddir,
-        clean = false, sysimage = nothing,
-        compile = nothing, depwarn = nothing, autodeps = false,
-        object = true, shared = true, executable = true, julialibs = true,
+        library, cprog = cprog, verbose = verbose, quiet = quiet,
+        builddir = builddir, outname = library_name,
+        autodeps = true, executable = true, julialibs = true,
+        sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
+        home = home, startup_file = startup_file, handle_signals = handle_signals,
+        compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
     )
 end
-
 
 """
     force_native_image!()
