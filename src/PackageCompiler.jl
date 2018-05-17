@@ -10,10 +10,12 @@ if julia_v07
     const isunix = Sys.isunix
     const isapple = Sys.isapple
     const contains07 = contains
+    const JULIA_BINDIR = Sys.BINDIR
 else
     const iswindows = is_windows
     const isunix = is_unix
     const isapple = is_apple
+    const JULIA_BINDIR = JULIA_HOME
     contains07(str, reg) = ismatch(reg, str)
 end
 
@@ -27,9 +29,7 @@ include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
 
-const sysimage_binaries = (
-    "sys.o", "sys.$(Libdl.dlext)", "sys.ji", "inference.o", "inference.ji"
-)
+const sysimage_binaries = ("sys.$(Libdl.dlext)",)
 
 
 function copy_system_image(src, dest, ignore_missing = false)

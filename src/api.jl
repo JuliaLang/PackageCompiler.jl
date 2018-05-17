@@ -102,5 +102,6 @@ Can also be used to build a native system image for a downloaded cross compiled 
 """
 function force_native_image!(debug = false) # debug is ignored right now
     sysimg = get_backup!(debug, "native")
+
     copy_system_image(dirname(sysimg), default_sysimg_path(debug))
 end
