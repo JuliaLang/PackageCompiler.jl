@@ -23,6 +23,28 @@ julia = Base.julia_cmd().exec[1]
     end
 end
 
+@testset "build_executable" begin
+    builddir = mktempdir()
+    jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
+    snoopfile = open(joinpath(builddir, "snoop.jl"), "w") do io
+        write(io, open(read, jlfile))
+        println(io)
+        println(io, "using .Hello; Hello.julia_main(String[])")
+    end
+    build_executable(
+        jlfile, snoopfile = snoopfile, builddir = builddir, verbose = true
+    )
+    @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
+    @test isfile(joinpath(builddir, "hello$executable_ext"))
+    cd(builddir) do
+        @test success(`./hello$executable_ext`)
+    end
+    for i = 1:100
+        try rm(builddir, recursive = true) end
+        sleep(1/100)
+    end
+end
+
 @testset "juliac" begin
     mktempdir() do builddir
         juliac = joinpath(@__DIR__, "..", "juliac.jl")
@@ -41,27 +63,5 @@ end
             # Just as a control, make sure that without passing '--help', we don't see "-g"
             @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
         end
-    end
-end
-
-@testset "build_executable" begin
-    builddir = mktempdir()
-    jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
-    snoopfile = open(joinpath(builddir, "snoop.jl"), "w") do io
-        write(io, open(read, jlfile))
-        println(io)
-        println(io, "using .Hello; Hello.julia_main(String[])")
-    end
-    build_executable(
-        jlfile, snoopfile = snoopfile, builddir = builddir
-    )
-    @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
-    @test isfile(joinpath(builddir, "hello$executable_ext"))
-    cd(builddir) do
-        @test success(`./hello$executable_ext`)
-    end
-    for i = 1:100
-        try rm(builddir, recursive = true) end
-        sleep(1/100)
     end
 end
