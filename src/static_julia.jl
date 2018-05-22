@@ -233,7 +233,7 @@ end
 function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
     command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
-        command = `$command -Wl,-install_name,@rpath/$s_file`
+        command = `$command -Wl,-install_name,@rpath/$(basename(s_file))`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
