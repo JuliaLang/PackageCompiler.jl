@@ -36,9 +36,7 @@ end
     )
     @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
     @test isfile(joinpath(builddir, "hello$executable_ext"))
-    cd(builddir) do
-        @test success(`./hello$executable_ext`)
-    end
+    @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
     for i = 1:100
         try rm(builddir, recursive = true) end
         sleep(1/100)
@@ -53,9 +51,7 @@ end
         @test success(`$julia $juliac -vosej $jlfile $cfile --builddir $builddir`)
         @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
         @test isfile(joinpath(builddir, "hello$executable_ext"))
-        cd(builddir) do
-            @test success(`./hello$executable_ext`)
-        end
+        @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
