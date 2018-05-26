@@ -1,4 +1,4 @@
-const depsfile = joinpath(@__DIR__, "..", "deps", "deps.jl")
+const depsfile = normpath(@__DIR__, "..", "deps", "deps.jl")
 
 if isfile(depsfile)
     include(depsfile)
@@ -60,7 +60,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 """
 function static_julia(
         juliaprog;
-        cprog = joinpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
+        cprog = normpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
         builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
         autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
@@ -144,7 +144,7 @@ end
 function julia_flags(optimize, debug, cc_flags)
     bitness_flag = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
     if julia_v07
-        command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(Sys.BINDIR), "share", "julia", "julia-config.jl"))`
+        command = `$(Base.julia_cmd()) --startup-file=no $(normpath(Sys.BINDIR, "..", "share", "julia", "julia-config.jl"))`
         allflags = Base.shell_split(read(`$command --allflags`, String))
         allflags = `$allflags $bitness_flag`
         optimize == nothing || (allflags = `$allflags -O$optimize`)
@@ -152,7 +152,7 @@ function julia_flags(optimize, debug, cc_flags)
         cc_flags == nothing || isempty(cc_flags) || (allflags = `$allflags $cc_flags`)
         return allflags
     else
-        command = `$(Base.julia_cmd()) --startup-file=no $(joinpath(dirname(JULIA_HOME), "share", "julia", "julia-config.jl"))`
+        command = `$(Base.julia_cmd()) --startup-file=no $(normpath(JULIA_HOME, "..", "share", "julia", "julia-config.jl"))`
         cflags = Base.shell_split(readstring(`$command --cflags`))
         optimize == nothing || (cflags = `$cflags -O$optimize`)
         debug == 2 && (cflags = `$cflags -g`)
@@ -266,11 +266,11 @@ end
 function copy_julia_libs(builddir, verbose)
     # TODO: these should probably be emitted from julia-config also:
     if julia_v07
-        shlibdir = iswindows() ? Sys.BINDIR : abspath(Sys.BINDIR, Base.LIBDIR)
-        private_shlibdir = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+        shlibdir = iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
+        private_shlibdir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
     else
-        shlibdir = iswindows() ? JULIA_HOME : abspath(JULIA_HOME, Base.LIBDIR)
-        private_shlibdir = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+        shlibdir = iswindows() ? JULIA_HOME : joinpath(JULIA_HOME, Base.LIBDIR)
+        private_shlibdir = joinpath(JULIA_HOME, Base.PRIVATE_LIBDIR)
     end
     verbose && println("Copy Julia libraries to build directory:")
     libfiles = String[]

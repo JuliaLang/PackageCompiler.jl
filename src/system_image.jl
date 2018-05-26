@@ -1,9 +1,9 @@
 function default_sysimg_path(debug = false)
     ext = debug ? "sys-debug" : "sys"
     if is_unix()
-        dirname(splitext(Libdl.dlpath(ext))[1])
+        dirname(Libdl.dlpath(ext))
     else
-        joinpath(dirname(JULIA_BINDIR), "lib", "julia")
+        normpath(JULIA_BINDIR, "..", "lib", "julia")
     end
 end
 
