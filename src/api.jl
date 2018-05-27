@@ -79,8 +79,8 @@ function build_executable(
         snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
         jlmain = joinpath(builddir, "julia_main.jl")
         open(jlmain, "w") do io
-            println(io, "include(\"$(escape_string(precompfile))\")")
-            println(io, "include(\"$(escape_string(library))\")")
+            println(io, "include(\"$(escape_string(relpath(precompfile, builddir)))\")")
+            println(io, "include(\"$(escape_string(relpath(library, builddir)))\")")
         end
         library = jlmain
     end
