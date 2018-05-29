@@ -24,21 +24,27 @@ julia = Base.julia_cmd().exec[1]
 end
 
 @testset "build_executable" begin
-    builddir = mktempdir()
     jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
-    snoopfile = open(joinpath(builddir, "snoop.jl"), "w") do io
-        write(io, open(read, jlfile))
-        println(io)
-        println(io, "using .Hello; Hello.julia_main(String[])")
+    basedir = mktempdir()
+    relativebuilddir = "build"
+    cd(basedir) do
+        mkdir(relativebuilddir)
+        snoopfile = "snoop.jl"
+        open(snoopfile, "w") do io
+            write(io, open(read, jlfile))
+            println(io)
+            println(io, "using .Hello; Hello.julia_main(String[])")
+        end
+        build_executable(
+            jlfile, snoopfile = snoopfile, builddir = relativebuilddir, verbose = true
+        )
     end
-    build_executable(
-        jlfile, snoopfile = snoopfile, builddir = builddir, verbose = true
-    )
+    builddir = joinpath(basedir, relativebuilddir)
     @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
     @test isfile(joinpath(builddir, "hello$executable_ext"))
     @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
     for i = 1:100
-        try rm(builddir, recursive = true) end
+        try rm(basedir, recursive = true) end
         sleep(1/100)
     end
 end
