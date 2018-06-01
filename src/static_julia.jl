@@ -128,12 +128,7 @@ function static_julia(
 
     executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
 
-    if rmtemp
-        verbose && println("Remove temporary build files")
-        for temp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir(builddir))
-            rm(joinpath(builddir, temp), recursive=true)
-        end
-    end
+    rmtemp && remove_temporary_files(builddir, verbose)
 
     julialibs && copy_julia_libs(builddir, verbose)
 
@@ -261,6 +256,13 @@ function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, c
     end
     verbose && println("Build executable \"$e_file\":\n  $command")
     run(command)
+end
+
+function remove_temporary_files(builddir, verbose)
+    verbose && println("Remove temporary files")
+    for temp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir(builddir))
+        rm(joinpath(builddir, temp), recursive=true)
+    end
 end
 
 function copy_julia_libs(builddir, verbose)
