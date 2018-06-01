@@ -259,10 +259,14 @@ function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, c
 end
 
 function remove_temporary_files(builddir, verbose)
-    verbose && println("Remove temporary files")
-    for temp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir(builddir))
-        rm(joinpath(builddir, temp), recursive=true)
+    verbose && println("Remove temporary files:")
+    remove = false
+    for tmp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir(builddir))
+        verbose && println("  $tmp")
+        rm(joinpath(builddir, tmp), recursive=true)
+        remove = true
     end
+    verbose && !remove && println("  none")
 end
 
 function copy_julia_libs(builddir, verbose)
