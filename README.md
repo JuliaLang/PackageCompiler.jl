@@ -33,7 +33,7 @@ force_native_image!()
 # building an executable
 
 build_executable(
-    "hello.jl", # julia file containing a julia main, e.g. like examples/hello.jl
+    "hello.jl", # julia file containing `julia_main`, e.g. like examples/hello.jl
     snoopfile = "call_functions.jl", # julia file that calls functions that you want to make sure to have precompiled [optional]
     builddir = "folder/you/want/the/build/artifacts" # that's where hello.exe will end up
 )
@@ -140,6 +140,48 @@ examples:
   juliac.jl -vosej hello.jl      # build all and sync Julia libs
 ```
 
+## Building a shared library
+`PackageCompiler` can compile a julia library into a linkable shared library,
+built for a specific architecture, with a `C`-compatible ABI which be linked
+against from another program. This can be done either from the julia api,
+`build_shared_lib("src/HelloLib.jl", "hello")`, or on the command line, `$
+juliac.jl -vas src/HelloLib.jl`. This will generate a shared library called
+`builddir/libhello.{so,dylib,dll}` depending on your system.
+
+The provided julia file, `src/HelloLib.jl`, is PackageCompiler's entry point
+into the library, so it should be the "top level" library file. Any julia code
+that it `include`s or `import`s will be compiled into the shared library.
+
+Note that for a julia function to be callable from `C`, it must be defined with
+`Base.@ccallable`, e.g. `Base.@ccallable foo()::Cint = 3`.
+
+## Building an executable
+To compile a julia program into an executable, you can use either the julia
+api, `build_executable("hello.jl", "hello")`, or on the command line, `$
+juliac.jl -vae hello.jl`.
+
+The provided julia file, `hello.jl`, is PackageCompiler's entry point into the
+program, and should be the program's "main" file. Any julia code that it
+`include`s or `import`s will be compiled into the shared library. It will be
+linked against the provided `C` program to create an executable at
+`builddir/hello`.
+
+If you choose to use the default `C` program, your julia code _must_ define
+`julia_main` as its entry point. The resultant executable will start by calling
+that function, so all of your program's logic should proceed from that
+function. For example:
+
+```
+Base.@ccallable function julia_main(ARGS::Vector{String})::Cint
+    hello_main(ARGS)  # call your program's logic.
+    return 0
+end
+```
+
+Please see
+[examples/hello.jl](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/hello.jl)
+for an example julia program.
+
 ### Notes
 
 1. The `juliac.jl` script is located in the `PackageCompiler` root
@@ -171,6 +213,13 @@ examples:
       └─────────────────────────────────────────────────┘
       0                                               100
 ```
+
+3. Currently, before another program can call any of the functions defined in
+   the created shared library, that program must first initialize the julia
+   runtime. (See
+   [#53](https://github.com/JuliaLang/PackageCompiler.jl/issues/53) for
+   details.)
+
 
 ## Under the hood
 
