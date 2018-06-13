@@ -142,13 +142,13 @@ examples:
 
 ## Building a shared library
 `PackageCompiler` can compile a julia library into a linkable shared library,
-built for a specific architecture, with a `C`-compatible ABI which be linked
-against from another program. This can be done either from the julia api,
-`build_shared_lib("src/HelloLib.jl", "hello")`, or on the command line, `$
-juliac.jl -vas src/HelloLib.jl`. This will generate a shared library called
+built for a specific architecture, with a `C`-compatible ABI which can be
+linked against from another program. This can be done either from the julia
+api, `build_shared_lib("src/HelloLib.jl", "hello")`, or on the command line,
+`$ juliac.jl -vas src/HelloLib.jl`. This will generate a shared library called
 `builddir/libhello.{so,dylib,dll}` depending on your system.
 
-The provided julia file, `src/HelloLib.jl`, is PackageCompiler's entry point
+The provided julia file, `src/HelloLib.jl`, is `PackageCompiler`'s entry point
 into the library, so it should be the "top level" library file. Any julia code
 that it `include`s or `import`s will be compiled into the shared library.
 
@@ -157,12 +157,12 @@ Note that for a julia function to be callable from `C`, it must be defined with
 
 ## Building an executable
 To compile a julia program into an executable, you can use either the julia
-api, `build_executable("hello.jl", "hello")`, or on the command line, `$
+api, `build_executable("hello.jl", "hello")`, or the command line, `$
 juliac.jl -vae hello.jl`.
 
-The provided julia file, `hello.jl`, is PackageCompiler's entry point into the
+The provided julia file, `hello.jl`, is `PackageCompiler`'s entry point into the
 program, and should be the program's "main" file. Any julia code that it
-`include`s or `import`s will be compiled into the shared library. It will be
+`include`s or `import`s will be compiled into the shared library, which will be
 linked against the provided `C` program to create an executable at
 `builddir/hello`.
 
