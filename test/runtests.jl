@@ -35,7 +35,7 @@ end
             println(io)
             println(io, "using .Hello; Hello.julia_main(String[])")
         end
-        build_executable(
+        @test build_executable(
             jlfile, snoopfile = snoopfile, builddir = relativebuilddir, verbose = true
         )
     end

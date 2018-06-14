@@ -68,7 +68,7 @@ function static_julia(
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = system_compiler, cc_flags = nothing
-    )
+    )::Bool
 
     verbose && quiet && (quiet = false)
 
@@ -106,7 +106,7 @@ function static_julia(
 
     if !any([object, shared, executable, rmtemp, julialibs])
         quiet || println("All done")
-        return
+        return true
     end
 
     if !isdir(builddir)
@@ -133,6 +133,8 @@ function static_julia(
     julialibs && copy_julia_libs(builddir, verbose)
 
     quiet || println("All done")
+
+    return true
 end
 
 # TODO: avoid calling "julia-config.jl" in future
