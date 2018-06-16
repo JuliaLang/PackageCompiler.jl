@@ -20,7 +20,7 @@ function build_sysimg(
     )
     # build vanilla backup system image
     clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
-    static_julia(
+    return static_julia(
         userimg_path, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = "sys",
         autodeps = true, shared = true,
@@ -39,7 +39,7 @@ function build_shared_lib(
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
     )
-    static_julia(
+    return static_julia(
         library, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = library_name,
         autodeps = true, shared = true, julialibs = true,
@@ -84,7 +84,7 @@ function build_executable(
         end
         library = jlmain
     end
-    static_julia(
+    return static_julia(
         library, cprog = cprog, verbose = verbose, quiet = quiet,
         builddir = builddir, outname = library_name,
         autodeps = true, executable = true, julialibs = true,
