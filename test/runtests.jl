@@ -49,6 +49,45 @@ end
     end
 end
 
+@testset "program.c" begin
+    @testset "args" begin
+        basedir = mktempdir();
+        argsjlfile = mktemp(basedir)[1];
+        write(argsjlfile, raw"""
+            Base.@ccallable function julia_main(argv::Vector{String})::Cint
+                println("@__FILE__: $(@__FILE__)")
+                println("PROGRAM_FILE: $(PROGRAM_FILE)")
+                println("argv: $(argv)")
+                # Sometimes code accesses ARGS directly, as a global
+                println("ARGS: $ARGS")
+                println("Base.ARGS: $(Base.ARGS)")
+                println("Core.ARGS: $(Core.ARGS)")
+                return 0
+            end
+        """)
+        builddir = joinpath(basedir, "builddir")
+        outname = "args"
+        build_executable(
+            argsjlfile, outname; builddir = builddir
+        )
+        # Check that the output from the program is as expected:
+        exe = joinpath(builddir, outname*executable_ext)
+        output = readstring(`$exe a b c`)
+        println(output)
+        @test all(s->contains(output, s), [
+                "@__FILE__: " * argsjlfile
+                "PROGRAM_FILE: " * exe
+                """argv: String["a", "b", "c"]"""
+                """ARGS: String["a", "b", "c"]"""
+                """Base.ARGS: String["a", "b", "c"]"""
+                # This one is a regex because it's difficult to correctly match
+                # both the unix and windows outputs.
+                r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
+            ]
+        )
+    end
+end
+
 @testset "juliac" begin
     mktempdir() do builddir
         juliac = joinpath(@__DIR__, "..", "juliac.jl")
