@@ -203,10 +203,10 @@ function build_object(
         expr = "
   Base.init_depot_path() # initialize package depots
   Base.init_load_path() # initialize location of site-packages
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, \"$cache_dir\") # enable usage of precompiled files
+  empty!(Base.DEPOT_PATH) # reset / remove any builtin paths
+  push!(Base.DEPOT_PATH, \"$cache_dir\") # enable usage of precompiled files
   include(\"$juliaprog\") # include Julia program file
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+  empty!(Base.DEPOT_PATH) # reset / remove build-system-relative paths"
     else
         expr = "
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
