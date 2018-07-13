@@ -60,7 +60,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 """
 function static_julia(
         juliaprog;
-        cprog = normpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
+        cprog = normpath(@__DIR__, "..", "examples", julia_v07 ? "program_v07.c" : "program.c"), verbose = false, quiet = false,
         builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
         autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
@@ -114,7 +114,11 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = joinpath(builddir, outname * ".o")
+    # Note that in julia v0.7, julia emits a `.a` statical library instead of a
+    # single object file, so the `object` and `shared` flags are the same.
+    if (julia_v07 && shared) object = true end
+
+    o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
 
@@ -124,9 +128,14 @@ function static_julia(
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
 
-    shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
+    if julia_v07
+        # The object file is already a static library. Can be used directly.
+        executable && build_executable(e_file, cprog, o_file, verbose, optimize, debug, cc, cc_flags)
+    else
+        shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
 
-    executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
+        executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
+    end
 
     rmtemp && remove_temporary_files(builddir, verbose)
 
@@ -237,7 +246,8 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
 end
 
 function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
-    command = `$cc -DJULIAC_PROGRAM_LIBNAME=\"$(basename(s_file))\" -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
+    sysimg_location = julia_v07 ? "" : "-DJULIAC_PROGRAM_LIBNAME=\"$(basename(s_file))\""
+    command = `$cc $sysimg_location -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
     if iswindows()
         RPMbindir = mingw_dir("bin")
         incdir = mingw_dir("include")
