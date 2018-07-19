@@ -44,7 +44,7 @@ end
     @test isfile(joinpath(builddir, "hello$executable_ext"))
     @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
     for i = 1:100
-        try rm(basedir, recursive = true) end
+        try rm(basedir, recursive = true) catch end
         sleep(1/100)
     end
 end
