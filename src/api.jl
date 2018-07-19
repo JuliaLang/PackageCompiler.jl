@@ -66,7 +66,7 @@ end
 """
 function build_executable(
         library, library_name = splitext(basename(library))[1],
-        cprog = nothing;
+        cprog = joinpath(@__DIR__, "..", "examples", "program.c");
         snoopfile = nothing, builddir = "builddir",
         verbose = false, quiet = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,

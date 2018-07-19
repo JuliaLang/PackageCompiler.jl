@@ -60,7 +60,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 """
 function static_julia(
         juliaprog;
-        cprog = nothing, verbose = false, quiet = false,
+        cprog = normpath(@__DIR__, "..", "examples", julia_v07 ? "program_v07.c" : "program.c"), verbose = false, quiet = false,
         builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
         autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
@@ -69,10 +69,6 @@ function static_julia(
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = system_compiler, cc_flags = nothing
     )
-
-    if cprog == nothing
-        cprog = normpath(@__DIR__, "..", "examples", julia_v07 ? "program_v07.c" : "program.c")
-    end
 
     verbose && quiet && (quiet = false)
 
