@@ -114,7 +114,7 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = joinpath(builddir, outname * ".o")
+    o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
 
@@ -203,10 +203,10 @@ function build_object(
         expr = "
   Base.init_depot_path() # initialize package depots
   Base.init_load_path() # initialize location of site-packages
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, \"$cache_dir\") # enable usage of precompiled files
+  empty!(Base.DEPOT_PATH) # reset / remove any builtin paths
+  push!(Base.DEPOT_PATH, \"$cache_dir\") # enable usage of precompiled files
   include(\"$juliaprog\") # include Julia program file
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+  empty!(Base.DEPOT_PATH) # reset / remove build-system-relative paths"
     else
         expr = "
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
@@ -232,6 +232,8 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
+    # Prevent compiler from stripping all symbols from the shared lib.
+    julia_v07 && (command = `$command -Wl,-all_load`)
     verbose && println("Build shared library \"$s_file\":\n  $command")
     run(command)
 end
