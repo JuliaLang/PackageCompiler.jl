@@ -114,7 +114,7 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = joinpath(builddir, outname * ".o")
+    o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
 
@@ -232,6 +232,8 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
+    # Prevent compiler from stripping all symbols from the shared lib.
+    julia_v07 && (command = `$command -Wl,-all_load`)
     verbose && println("Build shared library \"$s_file\":\n  $command")
     run(command)
 end
