@@ -138,7 +138,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args = parse_args(args, s)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if !any(getindex.(parsed_args, ["clean", "object", "shared", "executable", "rmtemp", "julialibs"]))
+    if !any(getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "julialibs"]))
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
@@ -149,10 +149,10 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     else
         filter!((k, v) -> v ∉ (nothing, false), parsed_args)
     end
-    kw_args = map(parsed_args) do kv
-        if PackageCompiler.julia_v07
-            Symbol(replace(kv.first, "-" => "_")) => kv.second
-        else
+    if PackageCompiler.julia_v07
+        kw_args = [Symbol(replace(kv.first, "-" => "_")) => kv.second for kv in parsed_args]
+    else
+        kw_args = map(parsed_args) do kv
             Symbol(replace(kv.first, "-", "_")) => kv.second
         end
     end
