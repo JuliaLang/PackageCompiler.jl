@@ -232,7 +232,7 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
         command = `$command -Wl,--export-all-symbols`
     end
     # Prevent compiler from stripping all symbols from the shared lib.
-    julia_v07 && (command = `$command -Wl,-all_load`)
+    julia_v07 && (command = `$command -Wl,-$(isapple() ? "all_load" : "whole-archive")`)
     verbose && println("Build shared library \"$s_file\":\n  $command")
     run(command)
 end
