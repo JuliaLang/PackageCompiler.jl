@@ -72,13 +72,13 @@ end
         )
         # Check that the output from the program is as expected:
         exe = joinpath(builddir, outname*executable_ext)
-        if julia_v07
+        if PackageCompiler.julia_v07
             output = read(`$exe a b c`, String)
         else
             output = readstring(`$exe a b c`)
         end
         println(output)
-        if julia_v07
+        if PackageCompiler.julia_v07
             @test all(s->occursin(s, output), [
                     "@__FILE__: " * argsjlfile
                     "PROGRAM_FILE: " * exe
@@ -118,13 +118,13 @@ end
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            if julia_v07
+            if PackageCompiler.julia_v07
                 @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
             else
                 @test contains(readstring(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`), "-g")
             end
             # Just as a control, make sure that without passing '--help', we don't see "-g"
-            if julia_v07
+            if PackageCompiler.julia_v07
                 @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
             else
                 @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
