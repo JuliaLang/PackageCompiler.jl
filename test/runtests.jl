@@ -72,19 +72,37 @@ end
         )
         # Check that the output from the program is as expected:
         exe = joinpath(builddir, outname*executable_ext)
-        output = read(`$exe a b c`, String)
+        if julia_v07
+            output = read(`$exe a b c`, String)
+        else
+            output = readstring(`$exe a b c`)
+        end
         println(output)
-        @test all(s->occursin(s, output), [
-                "@__FILE__: " * argsjlfile
-                "PROGRAM_FILE: " * exe
-                # These are regexes b/c output is different on v0.6 and v0.7.
-                # All we really want to test is that it has the right args.
-                r"argv: .*[\"a\", \"b\", \"c\"]"
-                r"ARGS: .*[\"a\", \"b\", \"c\"]"
-                r"Base.ARGS: .*[\"a\", \"b\", \"c\"]"
-                r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
-            ]
-        )
+        if julia_v07
+            @test all(s->occursin(s, output), [
+                    "@__FILE__: " * argsjlfile
+                    "PROGRAM_FILE: " * exe
+                    # These are regexes b/c output is different on v0.6 and v0.7.
+                    # All we really want to test is that it has the right args.
+                    r"argv: .*[\"a\", \"b\", \"c\"]"
+                    r"ARGS: .*[\"a\", \"b\", \"c\"]"
+                    r"Base.ARGS: .*[\"a\", \"b\", \"c\"]"
+                    r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
+                ]
+            )
+        else
+            @test all(s->contains(output, s), [
+                    "@__FILE__: " * argsjlfile
+                    "PROGRAM_FILE: " * exe
+                    """argv: String["a", "b", "c"]"""
+                    """ARGS: String["a", "b", "c"]"""
+                    """Base.ARGS: String["a", "b", "c"]"""
+                    # This one is a regex because it's difficult to correctly match
+                    # both the unix and windows outputs.
+                    r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
+                ]
+            )
+        end
     end
 end
 
@@ -100,9 +118,17 @@ end
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
+            if julia_v07
+                @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
+            else
+                @test contains(readstring(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`), "-g")
+            end
             # Just as a control, make sure that without passing '--help', we don't see "-g"
-            @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
+            if julia_v07
+                @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
+            else
+                @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
+            end
         end
     end
 end
