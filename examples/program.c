@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
     jl_set_global(jl_base_module,
         jl_symbol("PROGRAM_FILE"), (jl_value_t*)jl_cstr_to_string(argv[0]));
 
-    // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i in 1:argc ]`
+    // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
     jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
     jl_array_grow_end(ARGS, argc - 1);
     for (i = 1; i < argc; i++) {
