@@ -114,7 +114,7 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = joinpath(builddir, outname * ".o")
+    o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
 
@@ -203,10 +203,9 @@ function build_object(
         expr = "
   Base.init_depot_path() # initialize package depots
   Base.init_load_path() # initialize location of site-packages
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, \"$cache_dir\") # enable usage of precompiled files
-  include(\"$juliaprog\") # include Julia program file
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
+  Sys.__init__();  # Needed to find built-in Modules.
+  Base.__init__();
+  include(\"$juliaprog\") # include Julia program file"
     else
         expr = "
   empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
@@ -226,6 +225,14 @@ function build_object(
 end
 
 function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
+    # Prevent compiler from stripping all symbols from the shared lib.
+    if julia_v07
+        if isapple()
+            o_file = `-Wl,-all_load $o_file`
+        else
+            o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
+        end
+    end
     command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$(basename(s_file))`
