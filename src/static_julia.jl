@@ -225,14 +225,20 @@ function build_object(
 end
 
 function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
+    # Prevent compiler from stripping all symbols from the shared lib.
+    if julia_v07
+        if isapple()
+            o_file = `-Wl,-all_load $o_file`
+        else
+            o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
+        end
+    end
     command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$(basename(s_file))`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
-    # Prevent compiler from stripping all symbols from the shared lib.
-    julia_v07 && (command = `$command -Wl,-$(isapple() ? "all_load" : "whole-archive")`)
     verbose && println("Build shared library \"$s_file\":\n  $command")
     run(command)
 end
