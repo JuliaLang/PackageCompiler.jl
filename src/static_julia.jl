@@ -201,10 +201,8 @@ function build_object(
     iswindows() && ((juliaprog, cache_dir) = replace.((juliaprog, cache_dir), "\\", "\\\\"))
     if julia_v07
         expr = "
-  Base.init_depot_path() # initialize package depots
-  Base.init_load_path() # initialize location of site-packages
-  Sys.__init__();  # Needed to find built-in Modules.
-  Base.__init__();
+  Base.__init__(); Sys.__init__() # initialize \"Base\" and \"Sys\" modules
+  pushfirst!(Base.DEPOT_PATH, \"$cache_dir\") # save precompiled modules locally
   include(\"$juliaprog\") # include Julia program file"
     else
         expr = "
@@ -214,13 +212,17 @@ function build_object(
   include(\"$juliaprog\") # include Julia program file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
-    if compilecache == "yes"
+    if !julia_v07 && compilecache == "yes"
         command = `$julia_cmd -e $expr`
         verbose && println("Build \".ji\" local cache:\n  $command")
         run(command)
     end
     command = `$julia_cmd --output-o $o_file -e $expr`
-    verbose && println("Build object file \"$o_file\":\n  $command")
+    if julia_v07
+        verbose && println("Build static library \"$o_file\":\n  $command")
+    else
+        verbose && println("Build object file \"$o_file\":\n  $command")
+    end
     run(command)
 end
 
@@ -268,7 +270,7 @@ end
 function remove_temporary_files(builddir, verbose)
     verbose && println("Remove temporary files:")
     remove = false
-    for tmp in filter(x -> endswith(x, ".o") || startswith(x, "cache_ji_v"), readdir(builddir))
+    for tmp in filter(x -> endswith(x, ".o") || endswith(x, ".a") || startswith(x, "cache_ji_v"), readdir(builddir))
         verbose && println("  $tmp")
         rm(joinpath(builddir, tmp), recursive=true)
         remove = true
