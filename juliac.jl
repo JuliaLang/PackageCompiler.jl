@@ -91,9 +91,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{0,1,2,3}"
             range_tester = (x -> x ∈ (0, 1, 2, 3))
             help = "set the optimization level"
-        "-g"
+        "--debug", "-g"
             arg_type = Int
-            dest_name = "debug"
             metavar = "<level>"
             range_tester = (x -> x ∈ (0, 1, 2))
             help = "enable / set the level of debug info generation"
@@ -145,9 +144,9 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
 
     juliaprog = pop!(parsed_args, "juliaprog")
     if PackageCompiler.julia_v07
-        filter!(kv -> kv.second ∉ (nothing, false), parsed_args)
+        filter!(kv -> kv.second !== nothing && kv.second !== false, parsed_args)
     else
-        filter!((k, v) -> v ∉ (nothing, false), parsed_args)
+        filter!((k, v) -> v !== nothing && v !== false, parsed_args)
     end
     if PackageCompiler.julia_v07
         kw_args = [Symbol(replace(kv.first, "-" => "_")) => kv.second for kv in parsed_args]
