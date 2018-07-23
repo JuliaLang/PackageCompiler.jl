@@ -79,29 +79,21 @@ end
         end
         println(output)
         if PackageCompiler.julia_v07
-            @test all(s->occursin(s, output), [
-                    "@__FILE__: " * argsjlfile
-                    "PROGRAM_FILE: " * exe
-                    # These are regexes b/c output is different on v0.6 and v0.7.
-                    # All we really want to test is that it has the right args.
-                    r"argv: .*[\"a\", \"b\", \"c\"]"
-                    r"ARGS: .*[\"a\", \"b\", \"c\"]"
-                    r"Base.ARGS: .*[\"a\", \"b\", \"c\"]"
-                    r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
-                ]
-            )
+            @test output ==
+                "@__FILE__: $argsjlfile\n" *
+                "PROGRAM_FILE: $exe\n" *
+                "argv: [\"a\", \"b\", \"c\"]\n" *
+                "ARGS: [\"a\", \"b\", \"c\"]\n" *
+                "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
+                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
         else
-            @test all(s->contains(output, s), [
-                    "@__FILE__: " * argsjlfile
-                    "PROGRAM_FILE: " * exe
-                    """argv: String["a", "b", "c"]"""
-                    """ARGS: String["a", "b", "c"]"""
-                    """Base.ARGS: String["a", "b", "c"]"""
-                    # This one is a regex because it's difficult to correctly match
-                    # both the unix and windows outputs.
-                    r"Core.ARGS: .*[\".*builddir.*outname.*\", \"a\", \"b\", \"c\"]"
-                ]
-            )
+            @test output ==
+                "@__FILE__: $argsjlfile\n" *
+                "PROGRAM_FILE: $exe\n" *
+                "argv: String[\"a\", \"b\", \"c\"]\n" *
+                "ARGS: String[\"a\", \"b\", \"c\"]\n" *
+                "Base.ARGS: String[\"a\", \"b\", \"c\"]\n" *
+                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
         end
     end
 end
