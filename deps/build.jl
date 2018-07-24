@@ -5,7 +5,17 @@ function verify_gcc(gcc)
     return false
 end
 
-if is_windows()
+# TODO: remove once Julia v0.7 is released
+const julia_v07 = VERSION > v"0.7-"
+if julia_v07
+    const isunix = Sys.isunix
+    const iswindows = Sys.iswindows
+else
+    const isunix = is_unix
+    const iswindows = is_windows
+end
+
+if iswindows()
     using WinRPM
 end
 
@@ -34,7 +44,7 @@ function build()
     if verify_gcc("cc")
         gccpath = "cc"
         info("using cc as a compiler")
-    elseif is_windows()
+    elseif iswindows()
         gccpath = joinpath(
             WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
             "sys-root", "mingw", "bin", "gcc.exe"
@@ -46,7 +56,7 @@ function build()
             error("Couldn't install gcc via winrpm")
         end
         info("using gcc from WinRPM as a compiler")
-    elseif is_unix() && verify_gcc("gcc")
+    elseif isunix() && verify_gcc("gcc")
         gccpath = "gcc"
         info("using gcc as a compiler")
     end
