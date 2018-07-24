@@ -1,3 +1,5 @@
+# This code is derived from `build_sysimg.jl` (part of Julia) and should be kept aligned with it.
+
 function default_sysimg_path(debug = false)
     ext = debug ? "sys-debug" : "sys"
     if isunix()

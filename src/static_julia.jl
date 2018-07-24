@@ -135,27 +135,14 @@ function static_julia(
     quiet || println("All done")
 end
 
-# TODO: avoid calling "julia-config.jl" in future
 function julia_flags(optimize, debug, cc_flags)
+    allflags = Base.shell_split(PackageCompiler.allflags())
     bitness_flag = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
-    if julia_v07
-        command = `$(Base.julia_cmd()) --startup-file=no $(normpath(Sys.BINDIR, "..", "share", "julia", "julia-config.jl"))`
-        allflags = Base.shell_split(read(`$command --allflags`, String))
-        allflags = `$allflags $bitness_flag`
-        optimize == nothing || (allflags = `$allflags -O$optimize`)
-        debug == 2 && (allflags = `$allflags -g`)
-        cc_flags == nothing || isempty(cc_flags) || (allflags = `$allflags $cc_flags`)
-        return allflags
-    else
-        command = `$(Base.julia_cmd()) --startup-file=no $(normpath(JULIA_HOME, "..", "share", "julia", "julia-config.jl"))`
-        cflags = Base.shell_split(readstring(`$command --cflags`))
-        optimize == nothing || (cflags = `$cflags -O$optimize`)
-        debug == 2 && (cflags = `$cflags -g`)
-        cc_flags == nothing || isempty(cc_flags) || (cflags = `$cflags $cc_flags`)
-        ldflags = Base.shell_split(readstring(`$command --ldflags`))
-        ldlibs = Base.shell_split(readstring(`$command --ldlibs`))
-        return `$bitness_flag $cflags $ldflags $ldlibs`
-    end
+    allflags = `$allflags $bitness_flag`
+    optimize == nothing || (allflags = `$allflags -O$optimize`)
+    debug == 2 && (allflags = `$allflags -g`)
+    cc_flags == nothing || isempty(cc_flags) || (allflags = `$allflags $cc_flags`)
+    allflags
 end
 
 function build_julia_cmd(
@@ -279,7 +266,7 @@ function remove_temporary_files(builddir, verbose)
 end
 
 function copy_julia_libs(builddir, verbose)
-    # TODO: these should probably be emitted from julia-config also:
+    # TODO: these flags should probably be emitted from `julia-config.jl` / `compiler_flags.jl` also:
     if julia_v07
         shlibdir = iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
         private_shlibdir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
