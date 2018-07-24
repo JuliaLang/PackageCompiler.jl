@@ -6,15 +6,17 @@ module PackageCompiler
 const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
-    const iswindows = Sys.iswindows
     const isunix = Sys.isunix
+    const islinux = Sys.linux
     const isapple = Sys.isapple
-    const contains07 = contains
+    const iswindows = Sys.iswindows
     const JULIA_BINDIR = Sys.BINDIR
+    const contains07 = contains
 else
-    const iswindows = is_windows
     const isunix = is_unix
+    const islinux = is_linux
     const isapple = is_apple
+    const iswindows = is_windows
     const JULIA_BINDIR = JULIA_HOME
     contains07(str, reg) = ismatch(reg, str)
 end
