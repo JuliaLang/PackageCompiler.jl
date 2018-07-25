@@ -67,7 +67,7 @@ function static_julia(
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-        cc = system_compiler, cc_flags = nothing
+        cc = nothing, cc_flags = nothing
     )
 
     verbose && quiet && (quiet = false)
@@ -117,6 +117,8 @@ function static_julia(
     o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
+
+    cc == nothing && (cc = system_compiler)
 
     object && build_object(
         juliaprog, o_file, verbose,

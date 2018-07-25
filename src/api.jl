@@ -37,7 +37,8 @@ function build_shared_lib(
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        cc = nothing, cc_flags = nothing
     )
     static_julia(
         library, verbose = verbose, quiet = quiet,
@@ -46,7 +47,8 @@ function build_shared_lib(
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
-        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn,
+        cc = cc, cc_flags = cc_flags
     )
 end
 
@@ -58,7 +60,8 @@ end
         snoopfile = nothing, builddir = "builddir",
         verbose = false, quiet = false,
         cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing
+        inline = nothing, check_bounds = nothing, math_mode = nothing,
+        cc = system_compiler, cc_flags = nothing
     )
     `library` needs to be a julia file containing a julia main, e.g. like examples/hello.jl
     `snoopfile` is optional and can be julia file that calls functions that you want to make sure to have precompiled
@@ -72,7 +75,8 @@ function build_executable(
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        cc = nothing, cc_flags = nothing
     )
     if snoopfile != nothing
         precompfile = joinpath(builddir, "precompiled.jl")
@@ -91,7 +95,8 @@ function build_executable(
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
-        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn,
+        cc = cc, cc_flags = cc_flags
     )
 end
 
