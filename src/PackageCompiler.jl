@@ -1,13 +1,12 @@
 __precompile__()
 module PackageCompiler
 
-
 # TODO: remove once Julia v0.7 is released
 const julia_v07 = VERSION > v"0.7-"
 if julia_v07
     using Libdl
     const isunix = Sys.isunix
-    const islinux = Sys.linux
+    const islinux = Sys.islinux
     const isapple = Sys.isapple
     const iswindows = Sys.iswindows
     const JULIA_BINDIR = Sys.BINDIR
@@ -25,14 +24,13 @@ using SnoopCompile
 
 iswindows() && using WinRPM
 
-
+include("compiler_flags.jl")
 include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
 
 const sysimage_binaries = ("sys.$(Libdl.dlext)",)
-
 
 function copy_system_image(src, dest, ignore_missing = false)
     for file in sysimage_binaries
@@ -86,7 +84,6 @@ function get_root_dir(path)
     end
 end
 
-
 function sysimg_folder(files...)
     base_path = normpath(abspath(joinpath(@__DIR__, "..", "sysimg")))
     isdir(base_path) || mkpath(base_path)
@@ -98,7 +95,6 @@ function sysimgbackup_folder(files...)
     isdir(backup) || mkpath(backup)
     sysimg_folder("backup", files...)
 end
-
 
 function package_folder(package...)
     packages = normpath(abspath(joinpath(@__DIR__, "..", "packages")))
@@ -122,9 +118,6 @@ function compile_package(packages...; kw_args...)
     end
     compile_package(args...; kw_args...)
 end
-
-
-
 
 """
     compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
@@ -170,9 +163,6 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     end
     imgfile
 end
-
-
-
 
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
