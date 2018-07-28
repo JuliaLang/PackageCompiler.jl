@@ -60,8 +60,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 """
 function static_julia(
         juliaprog;
-        cprog = normpath(@__DIR__, "..", "examples", "program.c"), verbose = false, quiet = false,
-        builddir = "builddir", outname = splitext(basename(juliaprog))[1], clean = false,
+        cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, clean = false,
         autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
@@ -69,6 +68,11 @@ function static_julia(
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = nothing, cc_flags = nothing
     )
+
+    cprog == nothing && (cprog = normpath(@__DIR__, "..", "examples", "program.c"))
+    builddir == nothing && (builddir = "builddir")
+    outname == nothing && (outname = splitext(basename(juliaprog))[1])
+    cc == nothing && (cc = system_compiler)
 
     verbose && quiet && (quiet = false)
 
@@ -117,8 +121,6 @@ function static_julia(
     o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
-
-    cc == nothing && (cc = system_compiler)
 
     object && build_object(
         juliaprog, o_file, verbose,
