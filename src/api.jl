@@ -12,7 +12,7 @@ system image will not replace an older image unless `force` is set to true.
 """
 function build_sysimg(
         sysimg_path, userimg_path = nothing;
-        verbose = false, quiet = false,
+        verbose = false, quiet = false, release = false,
         precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -24,7 +24,7 @@ function build_sysimg(
     static_julia(
         userimg_path, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = "sys",
-        autodeps = true, shared = true,
+        autodeps = true, shared = true, release = release,
         sysimage = clean_sysimg, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -35,7 +35,7 @@ end
 
 function build_shared_lib(
         library, library_name;
-        verbose = false, quiet = false,
+        verbose = false, quiet = false, release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -45,7 +45,7 @@ function build_shared_lib(
     static_julia(
         library, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = library_name,
-        autodeps = true, shared = true, julialibs = true,
+        autodeps = true, shared = true, julialibs = true, release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -72,7 +72,7 @@ end
 function build_executable(
         library, library_name = nothing, cprog = nothing;
         snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false,
+        verbose = false, quiet = false, release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -82,7 +82,7 @@ function build_executable(
     static_julia(
         library, cprog = cprog, verbose = verbose, quiet = quiet,
         builddir = builddir, outname = library_name, snoopfile = snoopfile,
-        autodeps = true, executable = true, julialibs = true,
+        autodeps = true, executable = true, julialibs = true, release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,

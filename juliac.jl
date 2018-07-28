@@ -47,12 +47,15 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--executable", "-e"
             action = :store_true
             help = "build executable file"
-        "--rmtemp", "-r"
+        "--rmtemp", "-t"
             action = :store_true
             help = "remove temporary build files"
         "--julialibs", "-j"
             action = :store_true
             help = "copy Julia libraries to build directory"
+        "--release", "-r"
+            action = :store_true
+            help = "build in release mode, with `-O3 -g0`"
         "--sysimage", "-J"
             arg_type = String
             metavar = "<file>"
@@ -135,7 +138,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         \ua0\ua0juliac.jl -vae hello.jl        # verbose, build executable and deps\n
         \ua0\ua0juliac.jl -vae hello.jl prog.c # embed into user defined C program\n
         \ua0\ua0juliac.jl -qo hello.jl         # quiet, build object file only\n
-        \ua0\ua0juliac.jl -vosej hello.jl      # build all and sync Julia libs
+        \ua0\ua0juliac.jl -vosej hello.jl      # build all and copy Julia libs
         """
 
     parsed_args = parse_args(args, s)
