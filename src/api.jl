@@ -16,7 +16,8 @@ function build_sysimg(
         precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
-        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        cc = nothing, cc_flags = nothing
     )
     # build vanilla backup system image
     clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
@@ -27,7 +28,8 @@ function build_sysimg(
         sysimage = clean_sysimg, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
-        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn
+        inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn,
+        cc = cc, cc_flags = cc_flags
     )
 end
 
@@ -68,9 +70,8 @@ end
     `builddir` is where library_name.exe and shared libraries will end up
 """
 function build_executable(
-        library, library_name = splitext(basename(library))[1],
-        cprog = joinpath(@__DIR__, "..", "examples", "program.c");
-        snoopfile = nothing, builddir = "builddir",
+        library, library_name = nothing, cprog = nothing;
+        snoopfile = nothing, builddir = nothing,
         verbose = false, quiet = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
@@ -79,6 +80,7 @@ function build_executable(
         cc = nothing, cc_flags = nothing
     )
     if snoopfile != nothing
+        builddir == nothing && (builddir = "builddir")
         precompfile = joinpath(builddir, "precompiled.jl")
         snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
         jlmain = joinpath(builddir, "julia_main.jl")
@@ -86,6 +88,7 @@ function build_executable(
             println(io, "include(\"$(escape_string(relpath(precompfile, builddir)))\")")
             println(io, "include(\"$(escape_string(relpath(library, builddir)))\")")
         end
+        library_name == nothing && (library_name = splitext(basename(library))[1])
         library = jlmain
     end
     static_julia(
@@ -107,6 +110,5 @@ Can also be used to build a native system image for a downloaded cross compiled 
 """
 function force_native_image!(debug = false) # debug is ignored right now
     sysimg = get_backup!(debug, "native")
-
     copy_system_image(dirname(sysimg), default_sysimg_path(debug))
 end
