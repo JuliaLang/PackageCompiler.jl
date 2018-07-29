@@ -64,10 +64,10 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
-                 [-a] [-o] [-s] [-e] [-t] [-j] [-r] [-J <file>]
-                 [--precompiled {yes|no}] [--compilecache {yes|no}]
-                 [-H <dir>] [--startup-file {yes|no}]
-                 [--handle-signals {yes|no}]
+                 [-a] [-o] [-s] [-e] [-t] [-j] [-f <filelist>] [-r]
+                 [-J <file>] [--precompiled {yes|no}]
+                 [--compilecache {yes|no}] [-H <dir>]
+                 [--startup-file {yes|no}] [--handle-signals {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
@@ -96,8 +96,11 @@ optional arguments:
   -s, --shared          build shared library
   -e, --executable      build executable file
   -t, --rmtemp          remove temporary build files
-  -j, --julialibs       copy Julia libraries to build directory
-  -r, --release         build in release mode (sets `-g0 -O3`)
+  -j, --copy-julialibs  copy Julia libraries to build directory
+  -f, --copy-files <filelist>
+                        copy semicolon-delimited list of files to
+                        build directory
+  -r, --release         build in release mode, with `-O3 -g0`
   -J, --sysimage <file>
                         start up with the given system image file
   --precompiled {yes|no}

@@ -33,9 +33,27 @@ function build_sysimg(
     )
 end
 
+"""
+    build_shared_lib(
+        julia_program, output_name = nothing;
+        snoopfile = nothing, builddir = nothing,
+        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
+        release = false,
+        sysimage = nothing, precompiled = nothing, compilecache = nothing,
+        home = nothing, startup_file = nothing, handle_signals = nothing,
+        compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
+        inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
+        cc = nothing, cc_flags = nothing
+    )
+    `julia_program` needs to be a Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
+    `snoopfile` is optional and can be a Julia script which calls functions that you want to make sure to have precompiled
+    `builddir` is where the compiled artifacts will end up
+"""
 function build_shared_lib(
-        library, library_name;
-        verbose = false, quiet = false, release = false,
+        julia_program, output_name = nothing;
+        snoopfile = nothing, builddir = nothing,
+        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
+        release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -43,9 +61,10 @@ function build_shared_lib(
         cc = nothing, cc_flags = nothing
     )
     static_julia(
-        library, verbose = verbose, quiet = quiet,
-        builddir = sysimg_path, outname = library_name,
-        autodeps = true, shared = true, julialibs = true, release = release,
+        julia_program, verbose = verbose, quiet = quiet,
+        builddir = builddir, outname = output_name, snoopfile = snoopfile,
+        autodeps = true, shared = true, copy_julialibs = copy_julialibs, copy_files = copy_files,
+        release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -56,23 +75,25 @@ end
 
 """
     build_executable(
-        library, library_name = nothing, cprog = nothing;
+        julia_program, output_name = nothing, c_program = nothing;
         snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false,
+        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
+        release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = nothing, cc_flags = nothing
     )
-    `library` needs to be a Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
+    `julia_program` needs to be a Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
     `snoopfile` is optional and can be a Julia script which calls functions that you want to make sure to have precompiled
     `builddir` is where the compiled artifacts will end up
 """
 function build_executable(
-        library, library_name = nothing, cprog = nothing;
+        julia_program, output_name = nothing, c_program = nothing;
         snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false, release = false,
+        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
+        release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -80,9 +101,10 @@ function build_executable(
         cc = nothing, cc_flags = nothing
     )
     static_julia(
-        library, cprog = cprog, verbose = verbose, quiet = quiet,
-        builddir = builddir, outname = library_name, snoopfile = snoopfile,
-        autodeps = true, executable = true, julialibs = true, release = release,
+        julia_program, cprog = c_program, verbose = verbose, quiet = quiet,
+        builddir = builddir, outname = output_name, snoopfile = snoopfile,
+        autodeps = true, executable = true, copy_julialibs = copy_julialibs, copy_files = copy_files,
+        release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
