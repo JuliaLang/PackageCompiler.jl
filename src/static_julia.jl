@@ -11,7 +11,7 @@ if isfile(depsfile)
         error("GCC wasn't found. Please make sure that gcc is on the path and run Pkg.build(\"PackageCompiler\")")
     end
 else
-    error("Package wasn't build correctly. Please run Pkg.build(\"PackageCompiler\")")
+    error("Package wasn't built correctly. Please run Pkg.build(\"PackageCompiler\")")
 end
 
 system_compiler = gcc
@@ -41,7 +41,9 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     shared                    build shared library
     executable                build executable file
     rmtemp                    remove temporary build files
-    julialibs                 copy Julia libraries to build directory
+    copy_julialibs            copy Julia libraries to build directory
+    copy_files                copy semicolon-delimited list of files to build directory
+    release                   build in release mode, with `-O3 -g0`
     sysimage <file>           start up with the given system image file
     precompiled {yes|no}      use precompiled code from system image if available
     compilecache {yes|no}     enable/disable incremental precompilation of modules
@@ -63,7 +65,7 @@ function static_julia(
         juliaprog;
         cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, snoopfile = nothing,
         clean = false, autodeps = false, object = false, shared = false, executable = false, rmtemp = false,
-        julialibs = false, release = false,
+        copy_julialibs = false, copy_files = nothing, release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -89,19 +91,19 @@ function static_julia(
     end
 
     juliaprog = abspath(juliaprog)
-    isfile(juliaprog) || error("Cannot find file:\n  \"$juliaprog\"")
+    isfile(juliaprog) || error("Cannot find file: \"$juliaprog\"")
     quiet || println("Julia program file:\n  \"$juliaprog\"")
 
     if executable
         cprog = abspath(cprog)
-        isfile(cprog) || error("Cannot find file:\n  \"$cprog\"")
+        isfile(cprog) || error("Cannot find file: \"$cprog\"")
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
     builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
-    if !any([clean, object, shared, executable, rmtemp, julialibs])
+    if [clean, object, shared, executable, rmtemp, copy_julialibs, copy_files] == [false, false, false, false, false, false, nothing]
         quiet || println("Nothing to do")
         return
     end
@@ -115,8 +117,8 @@ function static_julia(
         end
     end
 
-    if !any([object, shared, executable, rmtemp, julialibs])
-        quiet || println("All done")
+    if [object, shared, executable, rmtemp, copy_julialibs, copy_files] == [false, false, false, false, false, nothing]
+        quiet || println("Clean completed")
         return
     end
 
@@ -154,7 +156,9 @@ function static_julia(
 
     rmtemp && remove_temporary_files(builddir, verbose)
 
-    julialibs && copy_julia_libs(builddir, verbose)
+    copy_julialibs && copy_julia_libraries(builddir, verbose)
+
+    copy_files != nothing && copy_files_userlist(copy_files, builddir, verbose)
 
     quiet || println("All done")
 end
@@ -289,7 +293,20 @@ function remove_temporary_files(builddir, verbose)
     verbose && !remove && println("  none")
 end
 
-function copy_julia_libs(builddir, verbose)
+function copy_files(files, builddir, verbose)
+    copy = false
+    for src in files
+        dst = joinpath(builddir, basename(src))
+        if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
+            verbose && println("  $(basename(src))")
+            cp(src, dst, remove_destination=true, follow_symlinks=false)
+            copy = true
+        end
+    end
+    verbose && !copy && println("  none")
+end
+
+function copy_julia_libraries(builddir, verbose)
     # TODO: these flags should probably be emitted from `julia-config.jl` / `compiler_flags.jl` also:
     if julia_v07
         shlibdir = iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
@@ -298,7 +315,6 @@ function copy_julia_libs(builddir, verbose)
         shlibdir = iswindows() ? JULIA_HOME : joinpath(JULIA_HOME, Base.LIBDIR)
         private_shlibdir = joinpath(JULIA_HOME, Base.PRIVATE_LIBDIR)
     end
-    verbose && println("Copy Julia libraries to build directory:")
     libfiles = String[]
     dlext = "." * Libdl.dlext
     for dir in (shlibdir, private_shlibdir)
@@ -308,15 +324,17 @@ function copy_julia_libs(builddir, verbose)
             append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
         end
     end
-    copy = false
-    for src in libfiles
-        contains07(src, r"debug") && continue
-        dst = joinpath(builddir, basename(src))
-        if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
-            verbose && println("  $(basename(src))")
-            cp(src, dst, remove_destination=true, follow_symlinks=false)
-            copy = true
-        end
+    filter!(v -> !contains07(v, r"debug"), libfiles)
+    verbose && println("Copy Julia libraries to build directory:")
+    copy_files(libfiles, builddir, verbose)
+end
+
+function copy_files_userlist(files_userlist, builddir, verbose)
+    files = strip.(split(files_userlist, ";"))
+    filter!(v -> !isempty(v), files)
+    for f in files
+        isfile(f) || error("Cannot find file: \"$f\"")
     end
-    verbose && !copy && println("  none")
+    verbose && println("Copy user supplied list of files to build directory:")
+    copy_files(files, builddir, verbose)
 end

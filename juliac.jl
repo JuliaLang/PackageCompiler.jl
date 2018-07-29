@@ -50,9 +50,13 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--rmtemp", "-t"
             action = :store_true
             help = "remove temporary build files"
-        "--julialibs", "-j"
+        "--copy-julialibs", "-j"
             action = :store_true
             help = "copy Julia libraries to build directory"
+        "--copy-files", "-f"
+            arg_type = String
+            metavar = "<filelist>"
+            help = "copy semicolon-delimited list of files to build directory"
         "--release", "-r"
             action = :store_true
             help = "build in release mode, with `-O3 -g0`"
@@ -144,7 +148,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args = parse_args(args, s)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if !any(getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "julialibs"]))
+    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files"]) == [false, false, false, false, false, false, nothing]
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end

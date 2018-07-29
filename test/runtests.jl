@@ -103,7 +103,7 @@ end
         juliac = joinpath(@__DIR__, "..", "juliac.jl")
         jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
-        @test success(`$julia $juliac -vosej $jlfile $cfile --builddir $builddir`)
+        @test success(`$julia $juliac -vaej $jlfile $cfile --builddir $builddir`)
         @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
         @test isfile(joinpath(builddir, "hello$executable_ext"))
         @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
