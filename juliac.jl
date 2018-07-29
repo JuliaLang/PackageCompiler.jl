@@ -28,6 +28,10 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             arg_type = String
             metavar = "<name>"
             help = "output files basename"
+        "--snoopfile", "-p"
+            arg_type = String
+            metavar = "<file>"
+            help = "specify script calling functions to precompile"
         "--clean", "-c"
             action = :store_true
             help = "remove build directory"
@@ -49,10 +53,6 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--julialibs", "-j"
             action = :store_true
             help = "copy Julia libraries to build directory"
-        "--snoopfile", "-p"
-            arg_type = String
-            metavar = "<file>"
-            help = "specify Julia script which calls functions that should be precompiled"
         "--sysimage", "-J"
             arg_type = String
             metavar = "<file>"

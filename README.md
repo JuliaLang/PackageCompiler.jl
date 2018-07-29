@@ -33,9 +33,9 @@ force_native_image!()
 # building an executable
 
 build_executable(
-    "hello.jl", # julia file containing `julia_main`, e.g. like examples/hello.jl
-    snoopfile = "call_functions.jl", # julia file that calls functions that you want to make sure to have precompiled [optional]
-    builddir = "folder/you/want/the/build/artifacts" # that's where hello.exe will end up
+    "hello.jl", # Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
+    snoopfile = "call_functions.jl", # Julia script which calls functions that you want to make sure to have precompiled [optional]
+    builddir = "path/to/builddir" # that's where the compiled artifacts will end up [optional]
 )
 ```
 
@@ -63,8 +63,8 @@ Build shared libraries and executables from Julia code.
 Run `juliac.jl -h` for help:
 
 ```
-usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
-                 [-e] [-r] [-j] [-p <file>] [-J <file>]
+usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
+                 [-a] [-o] [-s] [-e] [-r] [-j] [-J <file>]
                  [--precompiled {yes|no}] [--compilecache {yes|no}]
                  [-H <dir>] [--startup-file {yes|no}]
                  [--handle-signals {yes|no}]
@@ -88,6 +88,8 @@ optional arguments:
   -q, --quiet           suppress non-error messages
   -d, --builddir <dir>  build directory
   -n, --outname <name>  output files basename
+  -p, --snoopfile <file>
+                        specify script calling functions to precompile
   -c, --clean           remove build directory
   -a, --autodeps        automatically build required dependencies
   -o, --object          build object file
@@ -95,9 +97,6 @@ optional arguments:
   -e, --executable      build executable file
   -r, --rmtemp          remove temporary build files
   -j, --julialibs       copy Julia libraries to build directory
-  -p, --snoopfile <file>
-                        specify Julia script which calls functions
-                        that should be precompiled
   -J, --sysimage <file>
                         start up with the given system image file
   --precompiled {yes|no}
@@ -142,6 +141,7 @@ examples:
   juliac.jl -vae hello.jl prog.c # embed into user defined C program
   juliac.jl -qo hello.jl         # quiet, build object file only
   juliac.jl -vosej hello.jl      # build all and sync Julia libs
+
 ```
 
 ## Building a shared library
