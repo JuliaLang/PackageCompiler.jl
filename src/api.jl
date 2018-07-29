@@ -65,9 +65,9 @@ end
         inline = nothing, check_bounds = nothing, math_mode = nothing,
         cc = system_compiler, cc_flags = nothing
     )
-    `library` needs to be a julia file containing a julia main, e.g. like examples/hello.jl
-    `snoopfile` is optional and can be julia file that calls functions that you want to make sure to have precompiled
-    `builddir` is where library_name.exe and shared libraries will end up
+    `library` needs to be a Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
+    `snoopfile` is optional and can be a Julia script which calls functions that you want to make sure to have precompiled
+    `builddir` is where the executable file and shared libraries will end up
 """
 function build_executable(
         library, library_name = nothing, cprog = nothing;
@@ -79,22 +79,10 @@ function build_executable(
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
         cc = nothing, cc_flags = nothing
     )
-    if snoopfile != nothing
-        builddir == nothing && (builddir = "builddir")
-        precompfile = joinpath(builddir, "precompiled.jl")
-        snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
-        jlmain = joinpath(builddir, "julia_main.jl")
-        open(jlmain, "w") do io
-            println(io, "include(\"$(escape_string(relpath(precompfile, builddir)))\")")
-            println(io, "include(\"$(escape_string(relpath(library, builddir)))\")")
-        end
-        library_name == nothing && (library_name = splitext(basename(library))[1])
-        library = jlmain
-    end
     static_julia(
         library, cprog = cprog, verbose = verbose, quiet = quiet,
         builddir = builddir, outname = library_name,
-        autodeps = true, executable = true, julialibs = true,
+        autodeps = true, executable = true, julialibs = true, snoopfile = snoopfile,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,

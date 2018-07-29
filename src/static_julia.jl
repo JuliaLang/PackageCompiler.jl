@@ -41,6 +41,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     executable                build executable file
     rmtemp                    remove temporary build files
     julialibs                 copy Julia libraries to build directory
+    snoopfile                 specify Julia script which calls functions that should be precompiled
     sysimage <file>           start up with the given system image file
     precompiled {yes|no}      use precompiled code from system image if available
     compilecache {yes|no}     enable/disable incremental precompilation of modules
@@ -61,7 +62,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 function static_julia(
         juliaprog;
         cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, clean = false,
-        autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
+        autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false, snoopfile = nothing,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -121,6 +122,18 @@ function static_julia(
     o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
     s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
     e_file = joinpath(builddir, outname * executable_ext)
+
+    if snoopfile != nothing
+        snoopfile = abspath(snoopfile)
+        precompfile = joinpath(builddir, "precompiled.jl")
+        snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
+        jlmain = joinpath(builddir, "julia_main.jl")
+        open(jlmain, "w") do io
+            println(io, "include(\"$(escape_string(relpath(precompfile, builddir)))\")")
+            println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
+        end
+        juliaprog = jlmain
+    end
 
     object && build_object(
         juliaprog, o_file, verbose,

@@ -64,9 +64,10 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-c] [-a] [-o] [-s]
-                 [-e] [-r] [-j] [-J <file>] [--precompiled {yes|no}]
-                 [--compilecache {yes|no}] [-H <dir>]
-                 [--startup-file {yes|no}] [--handle-signals {yes|no}]
+                 [-e] [-r] [-j] [-p <file>] [-J <file>]
+                 [--precompiled {yes|no}] [--compilecache {yes|no}]
+                 [-H <dir>] [--startup-file {yes|no}]
+                 [--handle-signals {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
@@ -94,6 +95,9 @@ optional arguments:
   -e, --executable      build executable file
   -r, --rmtemp          remove temporary build files
   -j, --julialibs       copy Julia libraries to build directory
+  -p, --snoopfile <file>
+                        specify Julia script which calls functions
+                        that should be precompiled
   -J, --sysimage <file>
                         start up with the given system image file
   --precompiled {yes|no}
@@ -116,7 +120,7 @@ optional arguments:
                         (implies default `--precompiled=no`)
   -O, --optimize {0,1,2,3}
                         set the optimization level (type: Int64)
-  -g <level>            enable / set the level of debug info
+  -g, --debug <level>   enable / set the level of debug info
                         generation (type: Int64)
   --inline {yes|no}     control whether inlining is permitted
   --check-bounds {yes|no}
