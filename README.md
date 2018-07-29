@@ -64,7 +64,7 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
-                 [-a] [-o] [-s] [-e] [-r] [-j] [-J <file>]
+                 [-a] [-o] [-s] [-e] [-t] [-j] [-r] [-J <file>]
                  [--precompiled {yes|no}] [--compilecache {yes|no}]
                  [-H <dir>] [--startup-file {yes|no}]
                  [--handle-signals {yes|no}]
@@ -95,8 +95,9 @@ optional arguments:
   -o, --object          build object file
   -s, --shared          build shared library
   -e, --executable      build executable file
-  -r, --rmtemp          remove temporary build files
+  -t, --rmtemp          remove temporary build files
   -j, --julialibs       copy Julia libraries to build directory
+  -r, --release         build in release mode (sets `-g0 -O3`)
   -J, --sysimage <file>
                         start up with the given system image file
   --precompiled {yes|no}
@@ -140,8 +141,7 @@ examples:
   juliac.jl -vae hello.jl        # verbose, build executable and deps
   juliac.jl -vae hello.jl prog.c # embed into user defined C program
   juliac.jl -qo hello.jl         # quiet, build object file only
-  juliac.jl -vosej hello.jl      # build all and sync Julia libs
-
+  juliac.jl -vosej hello.jl      # build all and copy Julia libs
 ```
 
 ## Building a shared library

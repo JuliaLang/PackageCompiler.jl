@@ -62,7 +62,8 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 function static_julia(
         juliaprog;
         cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, snoopfile = nothing,
-        clean = false, autodeps = false, object = false, shared = false, executable = false, rmtemp = false, julialibs = false,
+        clean = false, autodeps = false, object = false, shared = false, executable = false, rmtemp = false,
+        julialibs = false, release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -80,6 +81,11 @@ function static_julia(
     if autodeps
         executable && (shared = true)
         shared && (object = true)
+    end
+
+    if release
+        optimize == nothing && (optimize = "3")
+        debug == nothing && (debug = "0")
     end
 
     juliaprog = abspath(juliaprog)
