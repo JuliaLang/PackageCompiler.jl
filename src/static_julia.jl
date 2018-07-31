@@ -29,7 +29,7 @@ end
 
 compiles the Julia file at path `juliaprog` with keyword arguments:
 
-    cprog                     C program to compile (required only when building an executable; if not provided a minimal driver program is used)
+    cprog                     C program to compile (required only when building an executable, if not provided a minimal driver program is used)
     verbose                   increase verbosity
     quiet                     suppress non-error messages
     builddir                  build directory
@@ -42,7 +42,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     executable                build executable file
     rmtemp                    remove temporary build files
     copy_julialibs            copy Julia libraries to build directory
-    copy_files                copy semicolon-delimited list of files to build directory
+    copy_files                copy user-specified files to build directory (either `nothing` or a string array)
     release                   build in release mode, with `-O3 -g0`
     sysimage <file>           start up with the given system image file
     precompiled {yes|no}      use precompiled code from system image if available
@@ -158,7 +158,7 @@ function static_julia(
 
     copy_julialibs && copy_julia_libraries(builddir, verbose)
 
-    copy_files != nothing && copy_files_userlist(copy_files, builddir, verbose)
+    copy_files != nothing && copy_files_array(copy_files, builddir, verbose, "Copy user-specified files to build directory:")
 
     quiet || println("All done")
 end
@@ -293,9 +293,11 @@ function remove_temporary_files(builddir, verbose)
     verbose && !remove && println("  none")
 end
 
-function copy_files(files, builddir, verbose)
+function copy_files_array(files_array, builddir, verbose, message)
+    verbose && println(message)
     copy = false
-    for src in files
+    for src in files_array
+        isfile(src) || error("Cannot find file: \"$src\"")
         dst = joinpath(builddir, basename(src))
         if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
             verbose && println("  $(basename(src))")
@@ -325,16 +327,5 @@ function copy_julia_libraries(builddir, verbose)
         end
     end
     filter!(v -> !contains07(v, r"debug"), libfiles)
-    verbose && println("Copy Julia libraries to build directory:")
-    copy_files(libfiles, builddir, verbose)
-end
-
-function copy_files_userlist(files_userlist, builddir, verbose)
-    files = strip.(split(files_userlist, ";"))
-    filter!(v -> !isempty(v), files)
-    for f in files
-        isfile(f) || error("Cannot find file: \"$f\"")
-    end
-    verbose && println("Copy user supplied list of files to build directory:")
-    copy_files(files, builddir, verbose)
+    copy_files_array(libfiles, builddir, verbose, "Copy Julia libraries to build directory:")
 end

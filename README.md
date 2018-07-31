@@ -97,9 +97,9 @@ optional arguments:
   -e, --executable      build executable file
   -t, --rmtemp          remove temporary build files
   -j, --copy-julialibs  copy Julia libraries to build directory
-  -f, --copy-files <filelist>
-                        copy semicolon-delimited list of files to
-                        build directory
+  -f, --copy-file <file>
+                        copy file to build directory, can be repeated
+                        for multiple files
   -r, --release         build in release mode, with `-O3 -g0`
   -J, --sysimage <file>
                         start up with the given system image file
