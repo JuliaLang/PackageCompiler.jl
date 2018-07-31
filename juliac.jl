@@ -13,7 +13,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "Julia program to compile"
         "cprog"
             arg_type = String
-            help = "C program to compile (required only when building an executable; if not provided a minimal driver program is used)"
+            help = "C program to compile (required only when building an executable, if not provided a minimal driver program is used)"
         "--verbose", "-v"
             action = :store_true
             help = "increase verbosity"
@@ -53,10 +53,12 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--copy-julialibs", "-j"
             action = :store_true
             help = "copy Julia libraries to build directory"
-        "--copy-files", "-f"
+        "--copy-file", "-f"
             arg_type = String
-            metavar = "<filelist>"
-            help = "copy semicolon-delimited list of files to build directory"
+            action = :append_arg
+            dest_name = "copy-files"
+            metavar = "<file>"
+            help = "copy file to build directory, can be repeated for multiple files"
         "--release", "-r"
             action = :store_true
             help = "build in release mode, with `-O3 -g0`"
@@ -146,6 +148,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         """
 
     parsed_args = parse_args(args, s)
+
+    parsed_args["copy-files"] == String[] && (parsed_args["copy-files"] = nothing)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
     if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files"]) == [false, false, false, false, false, false, nothing]
