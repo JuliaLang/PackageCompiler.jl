@@ -127,9 +127,9 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = joinpath(builddir, outname * (julia_v07 ? ".a" : ".o"))
-    s_file = joinpath(builddir, outname * ".$(Libdl.dlext)")
-    e_file = joinpath(builddir, outname * executable_ext)
+    o_file = outname * (julia_v07 ? ".a" : ".o")
+    s_file = outname * ".$(Libdl.dlext)"
+    e_file = outname * executable_ext
 
     if object
         if snoopfile != nothing
@@ -144,19 +144,19 @@ function static_julia(
             juliaprog = jlmain
         end
         build_object(
-            juliaprog, o_file, verbose,
+            juliaprog, o_file, builddir, verbose,
             sysimage, precompiled, compilecache, home, startup_file, handle_signals,
             compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
         )
     end
 
-    shared && build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
+    shared && build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags)
 
-    executable && build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
+    executable && build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, cc, cc_flags)
 
-    rmtemp && remove_temporary_files(builddir, verbose)
+    rmtemp && remove_temp_files(builddir, verbose)
 
-    copy_julialibs && copy_julia_libraries(builddir, verbose)
+    copy_julialibs && copy_julia_libs(builddir, verbose)
 
     copy_files != nothing && copy_files_array(copy_files, builddir, verbose, "Copy user-specified files to build directory:")
 
@@ -204,16 +204,16 @@ function build_julia_cmd(
 end
 
 function build_object(
-        juliaprog, o_file, verbose,
+        juliaprog, o_file, builddir, verbose,
         sysimage, precompiled, compilecache, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
+    iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
     julia_cmd = build_julia_cmd(
         sysimage, precompiled, compilecache, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
-    cache_dir = joinpath(dirname(o_file), "cache_ji_v$VERSION")
-    iswindows() && ((juliaprog, cache_dir) = replace.((juliaprog, cache_dir), "\\", "\\\\"))
+    cache_dir = "cache_ji_v$VERSION"
     if julia_v07
         expr = "
   Base.__init__(); Sys.__init__() # initialize \"Base\" and \"Sys\" modules
@@ -230,7 +230,9 @@ function build_object(
     if !julia_v07 && compilecache == "yes"
         command = `$julia_cmd -e $expr`
         verbose && println("Build \".ji\" local cache:\n  $command")
-        run(command)
+        cd(builddir) do
+            run(command)
+        end
     end
     command = `$julia_cmd --output-o $o_file -e $expr`
     if julia_v07
@@ -238,10 +240,12 @@ function build_object(
     else
         verbose && println("Build object file \"$o_file\":\n  $command")
     end
-    run(command)
+    cd(builddir) do
+        run(command)
+    end
 end
 
-function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
+function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags)
     # Prevent compiler from stripping all symbols from the shared lib.
     if julia_v07
         if isapple()
@@ -252,16 +256,18 @@ function build_shared(s_file, o_file, verbose, optimize, debug, cc, cc_flags)
     end
     command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
-        command = `$command -Wl,-install_name,@rpath/$(basename(s_file))`
+        command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
     verbose && println("Build shared library \"$s_file\":\n  $command")
-    run(command)
+    cd(builddir) do
+        run(command)
+    end
 end
 
-function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, cc_flags)
-    command = `$cc -DJULIAC_PROGRAM_LIBNAME=\"$(basename(s_file))\" -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
+function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, cc, cc_flags)
+    command = `$cc -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
     if iswindows()
         RPMbindir = mingw_dir("bin")
         incdir = mingw_dir("include")
@@ -279,10 +285,12 @@ function build_executable(e_file, cprog, s_file, verbose, optimize, debug, cc, c
         command = `$command -march=pentium4`
     end
     verbose && println("Build executable \"$e_file\":\n  $command")
-    run(command)
+    cd(builddir) do
+        run(command)
+    end
 end
 
-function remove_temporary_files(builddir, verbose)
+function remove_temp_files(builddir, verbose)
     verbose && println("Remove temporary files:")
     remove = false
     for tmp in filter(x -> endswith(x, ".o") || endswith(x, ".a") || startswith(x, "cache_ji_v"), readdir(builddir))
@@ -308,7 +316,7 @@ function copy_files_array(files_array, builddir, verbose, message)
     verbose && !copy && println("  none")
 end
 
-function copy_julia_libraries(builddir, verbose)
+function copy_julia_libs(builddir, verbose)
     # TODO: these flags should probably be emitted from `julia-config.jl` / `compiler_flags.jl` also:
     if julia_v07
         shlibdir = iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
