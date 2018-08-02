@@ -36,9 +36,8 @@ end
 """
     build_shared_lib(
         julia_program, output_name = nothing;
-        snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
-        release = false,
+        snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
+        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -51,9 +50,8 @@ end
 """
 function build_shared_lib(
         julia_program, output_name = nothing;
-        snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
-        release = false,
+        snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
+        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -62,9 +60,8 @@ function build_shared_lib(
     )
     static_julia(
         julia_program, verbose = verbose, quiet = quiet,
-        builddir = builddir, outname = output_name, snoopfile = snoopfile,
-        autodeps = true, shared = true, copy_julialibs = copy_julialibs, copy_files = copy_files,
-        release = release,
+        builddir = builddir, outname = output_name, snoopfile = snoopfile, autodeps = true, shared = true,
+        copy_julialibs = copy_julialibs, copy_files = copy_files, release = release, Release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
@@ -76,9 +73,8 @@ end
 """
     build_executable(
         julia_program, output_name = nothing, c_program = nothing;
-        snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
-        release = false,
+        snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
+        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -91,9 +87,8 @@ end
 """
 function build_executable(
         julia_program, output_name = nothing, c_program = nothing;
-        snoopfile = nothing, builddir = nothing,
-        verbose = false, quiet = false, copy_julialibs = true, copy_files = nothing,
-        release = false,
+        snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
+        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -102,9 +97,8 @@ function build_executable(
     )
     static_julia(
         julia_program, cprog = c_program, verbose = verbose, quiet = quiet,
-        builddir = builddir, outname = output_name, snoopfile = snoopfile,
-        autodeps = true, executable = true, copy_julialibs = copy_julialibs, copy_files = copy_files,
-        release = release,
+        builddir = builddir, outname = output_name, snoopfile = snoopfile, autodeps = true, executable = true,
+        copy_julialibs = copy_julialibs, copy_files = copy_files, release = release, Release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
