@@ -61,7 +61,10 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "copy file to build directory, can be repeated for multiple files"
         "--release", "-r"
             action = :store_true
-            help = "build in release mode, with `-O3 -g0`"
+            help = "build in release mode, implies `-O3 -g0` unless otherwise specified"
+        "--Release", "-R"
+            action = :store_true
+            help = "perform a fully automated release build, equivalent to `-caetjr`"
         "--sysimage", "-J"
             arg_type = String
             metavar = "<file>"
@@ -144,7 +147,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         \ua0\ua0juliac.jl -vae hello.jl        # verbose, build executable and deps\n
         \ua0\ua0juliac.jl -vae hello.jl prog.c # embed into user defined C program\n
         \ua0\ua0juliac.jl -qo hello.jl         # quiet, build object file only\n
-        \ua0\ua0juliac.jl -vosej hello.jl      # build all and copy Julia libs
+        \ua0\ua0juliac.jl -vosej hello.jl      # build all and copy Julia libs\n
+        \ua0\ua0juliac.jl -vR hello.jl         # fully automated release build
         """
 
     parsed_args = parse_args(args, s)
@@ -152,7 +156,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args["copy-files"] == String[] && (parsed_args["copy-files"] = nothing)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files"]) == [false, false, false, false, false, false, nothing]
+    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files", "Release"]) == [false, false, false, false, false, false, nothing, false]
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end

@@ -43,7 +43,8 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     rmtemp                    remove temporary build files
     copy_julialibs            copy Julia libraries to build directory
     copy_files                copy user-specified files to build directory (either `nothing` or a string array)
-    release                   build in release mode, with `-O3 -g0`
+    release                   build in release mode, implies `-O3 -g0` unless otherwise specified
+    Release                   perform a fully automated release build, equivalent to `-caetjr`
     sysimage <file>           start up with the given system image file
     precompiled {yes|no}      use precompiled code from system image if available
     compilecache {yes|no}     enable/disable incremental precompilation of modules
@@ -65,7 +66,7 @@ function static_julia(
         juliaprog;
         cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, snoopfile = nothing,
         clean = false, autodeps = false, object = false, shared = false, executable = false, rmtemp = false,
-        copy_julialibs = false, copy_files = nothing, release = false,
+        copy_julialibs = false, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -79,6 +80,10 @@ function static_julia(
     cc == nothing && (cc = system_compiler)
 
     verbose && quiet && (quiet = false)
+
+    if Release
+        clean = autodeps = executable = rmtemp = copy_julialibs = release = true
+    end
 
     if autodeps
         executable && (shared = true)
