@@ -37,6 +37,9 @@ build_executable(
     snoopfile = "call_functions.jl", # Julia script which calls functions that you want to make sure to have precompiled [optional]
     builddir = "path/to/builddir" # that's where the compiled artifacts will end up [optional]
 )
+
+# Building a shared library
+build_shared_lib("hello.jl")
 ```
 
 
