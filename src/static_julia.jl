@@ -220,6 +220,7 @@ function build_object(
     )
     cache_dir = "cache_ji_v$VERSION"
     if julia_v07
+        # TODO: verify if this initialization is correct for Julia v0.7
         expr = "
   Base.__init__(); Sys.__init__() # initialize \"Base\" and \"Sys\" modules
   pushfirst!(Base.DEPOT_PATH, \"$cache_dir\") # save precompiled modules locally
@@ -232,6 +233,7 @@ function build_object(
   include(\"$juliaprog\") # include Julia program file
   empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
     end
+    # TODO: verify if this can be used with Julia v0.7 too (currently it does not seem to work), or how to precompile modules
     if !julia_v07 && compilecache == "yes"
         command = `$julia_cmd -e $expr`
         verbose && println("Build \".ji\" local cache:\n  $command")
