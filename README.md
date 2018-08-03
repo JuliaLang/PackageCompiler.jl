@@ -5,58 +5,74 @@
 
 [![codecov.io](http://codecov.io/github/JuliaLang/PackageCompiler.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
-Remove jit overhead from your package and compile it into a system image.
-
+Remove just-in-time compilation overhead from your package and compile it into a system image.
 
 ## Usage example
 E.g. do:
+
 ```Julia
 using PackageCompiler
 
 # This command will use the runtest.jl of Matcha + UnicodeFun to find out what functions to precompile!
-# force = false to not force overwriting julia's current system image
+# `force = false` to not force overwriting Julia's current system image
 compile_package("Matcha", "UnicodeFun", force = false, reuse = false)
 
-# build again, reusing the snoop file
+# Build again, reusing the snoop file
 compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
 
 # You can define a file that will get run for snooping explicitly like this:
 # this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
 compile_package("Matcha", "relative/path/for_snooping.jl")
 
-# if you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
+# If you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
 revert()
 
 # Or if you simply want to get a native system image e.g. when you have downloaded the generic Julia install:
 force_native_image!()
 
-# building an executable
-
+# Build an executable
 build_executable(
     "hello.jl", # Julia script containing a `julia_main` function, e.g. like `examples/hello.jl`
     snoopfile = "call_functions.jl", # Julia script which calls functions that you want to make sure to have precompiled [optional]
     builddir = "path/to/builddir" # that's where the compiled artifacts will end up [optional]
 )
 
-# Building a shared library
+# Build a shared library
 build_shared_lib("hello.jl")
 ```
 
-
 ## Troubleshooting:
 
-- You might need to tweak your runtest, since SnoopCompile can have problems with some statements. Please open issues about concrete problems! This is also why there is a way to point to a file different from runtests.jl, for the case it becomes impossible to combine testing and snoop compiling (just pass `("package", "snoopfile.jl")`)!
+- You might need to tweak your runtest, since `SnoopCompile` can have problems
+with some statements. Please open issues about concrete problems! This is also
+why there is a way to point to a file different from `runtests.jl`, for the case
+it becomes impossible to combine testing and snoop compiling, just pass
+`("package", "snoopfile.jl")`!
 
-- non const globals are problematic, or globals defined in functions - removing those got me to 95% of making the package safe for static compilation
+- Non constant globals and globals defined in functions are problematic.
+Removing those got me to 95% of making the package safe for static compilation.
 
-- type unstable code had some inference issues (around 2 occurrence, where I’m still not sure what was happening) - both cases happened with dictionaries… Only way to find those was investigating the segfaults with `gdb`, but then it was relatively easy to just juggle around the code, since the stacktraces accurately pointed to the problem. The non const globals might be related since they introduce type instabilities.
+- Type unstable code had some inference issues (around 2 occurrence, where I’m
+still not sure what was happening, and both cases happened with dictionaries).
+The only way to find those was investigating the segfaults with `gdb`, but then
+it was relatively easy to just juggle around the code, since the stacktraces
+accurately pointed to the problem. The non constant globals might be related
+since they introduce type instabilities.
 
-- some generated functions needed reordering of the functions they call ( actually, even for normal compilation, all functions that get called in a generated function should be defined before it)
+- Some generated functions needed reordering of the functions they call
+(actually, even for normal compilation, all functions that get called in a
+generated function should be defined before it).
 
-- I uncovered one out of bounds issue, that somehow was not coming up without static-compilation
-- I used julia-debug to uncover most bugs, but actually, the last errors I was trying to uncover where due to using julia-debug!
+- I uncovered one out-of-bounds issue, that somehow was not coming up without
+static compilation.
 
-- you’re pretty much on your own and need to use gdb to find the issues and I still don’t know what the underlying julia issues are and when they will get fixed :wink: See: https://github.com/JuliaLang/julia/issues/24533. Hopefully we look at a better story with Julia 1.0!
+- I used `julia-debug` to uncover most bugs, but actually the last errors I was
+trying to uncover where due to `julia-debug` itself!
+
+- You’re pretty much on your own and need to use `gdb` to find any issues and I
+still don’t know what the underlying julia issues are and when they will get
+fixed :wink: See: https://github.com/JuliaLang/julia/issues/24533.
+Hopefully we'll look at a better story with Julia 1.0!
 
 
 # Static Julia Compiler
@@ -170,7 +186,7 @@ Note that for a julia function to be callable from `C`, it must be defined with
 `Base.@ccallable`, e.g. `Base.@ccallable foo()::Cint = 3`.
 
 ## Building an executable
-To compile a julia program into an executable, you can use either the julia
+To compile a Julia program into an executable, you can use either the julia
 api, `build_executable("hello.jl", "hello")`, or the command line, `$
 juliac.jl -vae hello.jl`.
 
@@ -194,7 +210,7 @@ end
 
 Please see
 [examples/hello.jl](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/hello.jl)
-for an example julia program.
+for an example Julia program.
 
 ### Notes
 
@@ -245,17 +261,11 @@ code. A driver script such as the one in `program.c` can then be used
 to build a binary that runs the Julia code.
 
 Instead of a driver script, the generated system image can be embedded
-into a larger program following the embedding examples and relevant
-sections in the Julia manual. Note that the name of the generated system
+into a larger program, see the
+[Embedding Julia](https://docs.julialang.org/en/stable/manual/embedding/)
+section of the Julia manual. Note that the name of the generated system
 image (`"libhello"` for `hello.jl`) is accessible from C in the
 preprocessor macro `JULIAC_PROGRAM_LIBNAME`.
 
-With Julia 0.7, a single large binary can be created, which does not
-require the driver program to load the shared library. An example of
-that is in `program2.c`, where the image file is the binary itself.
-
 For more information on static Julia compilation see:\
 https://juliacomputing.com/blog/2016/02/09/static-julia.html
-
-For more information on embedding Julia see:\
-https://github.com/JuliaLang/julia/blob/master/doc/src/manual/embedding.md
