@@ -1,6 +1,7 @@
 function verify_gcc(gcc)
     try # success errors when not successful :(
         return success(`$gcc --version`)
+    catch
     end
     return false
 end
