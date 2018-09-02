@@ -1,3 +1,5 @@
+using Serialization
+
 # Taken from SnoopCompile
 function snoop_vanilla(filename, path)
     code_object = """
