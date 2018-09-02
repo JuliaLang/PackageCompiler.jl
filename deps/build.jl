@@ -25,7 +25,7 @@ function build()
     if isfile("deps.jl")
         include("deps.jl")
         if verify_gcc(gcc)
-            info("gcc already installed and package already build")
+            @info "GCC already installed and package already built"
             return
         else
             rm("deps.jl")
@@ -37,14 +37,14 @@ function build()
             error("Using compiler override from environment variable CC = $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
         end
         gccpath = ENV["CC"]
-        info("using $gccpath as a compiler from environment variable CC")
+        @info "Using `$gccpath` as C compiler from environment variable CC"
     end
 
-    info("installing gcc")
+    @info "Installing GCC"
 
     if verify_gcc("cc")
         gccpath = "cc"
-        info("using cc as a compiler")
+        @info "Using `cc` as C compiler"
     elseif iswindows()
         gccpath = joinpath(
             WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
@@ -56,10 +56,10 @@ function build()
         if !isfile(gccpath)
             error("Couldn't install gcc via winrpm")
         end
-        info("using gcc from WinRPM as a compiler")
+        @info "Using `gcc` from WinRPM as C compiler"
     elseif isunix() && verify_gcc("gcc")
         gccpath = "gcc"
-        info("using gcc as a compiler")
+        @info "Using `gcc` as C compiler"
     end
 
     if isempty(gccpath)

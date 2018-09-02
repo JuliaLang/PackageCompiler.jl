@@ -47,7 +47,7 @@ function copy_system_image(src, dest, ignore_missing = false)
             end
             mv(destfile, destfile * ".backup", remove_destination = true)
         end
-        info("Copying system image: $srcfile to $destfile")
+        @info "Copying system image: $srcfile to $destfile"
         cp(srcfile, destfile, remove_destination = true)
     end
 end
@@ -141,24 +141,20 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             backup = syspath * ".packagecompiler_backup"
             isfile(backup) || mv(syspath, backup)
             cp(imgfile, syspath)
-            info(
-                "Replaced system image successfully. Next start of julia will load the newly compiled system image.
-                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
-            )
+            @info "Replaced system image successfully. Next start of julia will load the newly compiled system image.\n" *
+                "If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
         catch e
             @warn "An error occured while replacing sysimg files:" error=e
-            info("Recovering old system image from backup")
+            @info "Recovering old system image from backup"
             # if any file is missing in default system image, revert!
             if !isfile(syspath)
-                info("$syspath missing. Reverting!")
+                @info "$syspath missing. Reverting!"
                 revert(debug)
             end
         end
     else
-        info("""
-            Not replacing system image.
-            You can start julia with julia -J $(imgfile) to load the compiled files.
-        """)
+        @info "Not replacing system image.\n" *
+            "You can start julia with julia -J $(imgfile) to load the compiled files."
     end
     imgfile
 end

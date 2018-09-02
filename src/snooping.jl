@@ -39,7 +39,7 @@ function snoop(path, compilationfile, csv)
             try
                 eval(tmp_mod, :(import $k))
                 println(io, "import $k")
-                info("import $k")
+                @info "import $k"
             catch e
                 @warn "Module not found: $k"
             end
