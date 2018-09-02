@@ -1,28 +1,10 @@
 __precompile__()
 module PackageCompiler
 
-# TODO: remove once Julia v0.7 is released
-const julia_v07 = VERSION > v"0.7-"
-if julia_v07
-    using Libdl
-    const isunix = Sys.isunix
-    const islinux = Sys.islinux
-    const isapple = Sys.isapple
-    const iswindows = Sys.iswindows
-    const JULIA_BINDIR = Sys.BINDIR
-    const contains07 = contains
-else
-    const isunix = is_unix
-    const islinux = is_linux
-    const isapple = is_apple
-    const iswindows = is_windows
-    const JULIA_BINDIR = JULIA_HOME
-    contains07(str, reg) = ismatch(reg, str)
-end
-
+using Libdl
 using SnoopCompile
 
-iswindows() && using WinRPM
+Sys.iswindows() && using WinRPM
 
 include("compiler_flags.jl")
 include("static_julia.jl")
@@ -54,14 +36,8 @@ end
 
 julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
 julia_cpu_target(x::String) = x # TODO match against available targets
-if julia_v07
-    function julia_cpu_target(::Nothing)
-        replace(Base.julia_cmd().exec[2], "-C", "")
-    end
-else
-    function julia_cpu_target(::Void)
-        replace(Base.julia_cmd().exec[2], "-C", "")
-    end
+function julia_cpu_target(::Nothing)
+    replace(Base.julia_cmd().exec[2], "-C", "")
 end
 
 """

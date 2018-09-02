@@ -15,7 +15,7 @@ else
 end
 
 system_compiler = gcc
-executable_ext = iswindows() ? ".exe" : ""
+executable_ext = Sys.iswindows() ? ".exe" : ""
 
 function mingw_dir(folders...)
     joinpath(
@@ -132,7 +132,7 @@ function static_julia(
         mkpath(builddir)
     end
 
-    o_file = outname * (julia_v07 ? ".a" : ".o")
+    o_file = outname * ".a"
     s_file = outname * ".$(Libdl.dlext)"
     e_file = outname * executable_ext
 
@@ -213,40 +213,27 @@ function build_object(
         sysimage, precompiled, compilecache, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
-    iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
+    Sys.iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
     julia_cmd = build_julia_cmd(
         sysimage, precompiled, compilecache, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
     cache_dir = "cache_ji_v$VERSION"
-    if julia_v07
-        # TODO: verify if this initialization is correct for Julia v0.7
-        expr = "
+    # TODO: verify if this initialization is correct for Julia v1.0
+    expr = "
   Base.__init__(); Sys.__init__() # initialize \"Base\" and \"Sys\" modules
   pushfirst!(Base.DEPOT_PATH, \"$cache_dir\") # save precompiled modules locally
   include(\"$juliaprog\") # include Julia program file"
-    else
-        expr = "
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove any builtin paths
-  push!(Base.LOAD_CACHE_PATH, \"$cache_dir\") # enable usage of precompiled files
-  Sys.__init__(); Base.early_init(); # JULIA_HOME is not defined, initializing manually
-  include(\"$juliaprog\") # include Julia program file
-  empty!(Base.LOAD_CACHE_PATH) # reset / remove build-system-relative paths"
-    end
-    # TODO: verify if this can be used with Julia v0.7 too (currently it does not seem to work), or how to precompile modules
-    if !julia_v07 && compilecache == "yes"
-        command = `$julia_cmd -e $expr`
-        verbose && println("Build \".ji\" local cache:\n  $command")
-        cd(builddir) do
-            run(command)
-        end
-    end
+    # TODO: verify if this can be used with Julia v1.0 (currently it does not seem to work, but it used to work with Julia v0.6), or how to precompile modules
+    #if compilecache == "yes"
+    #    command = `$julia_cmd -e $expr`
+    #    verbose && println("Build \".ji\" local cache:\n  $command")
+    #    cd(builddir) do
+    #        run(command)
+    #    end
+    #end
     command = `$julia_cmd --output-o $o_file -e $expr`
-    if julia_v07
-        verbose && println("Build static library \"$o_file\":\n  $command")
-    else
-        verbose && println("Build object file \"$o_file\":\n  $command")
-    end
+    verbose && println("Build static library \"$o_file\":\n  $command")
     cd(builddir) do
         run(command)
     end
@@ -254,17 +241,15 @@ end
 
 function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags)
     # Prevent compiler from stripping all symbols from the shared lib.
-    if julia_v07
-        if isapple()
-            o_file = `-Wl,-all_load $o_file`
-        else
-            o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
-        end
+    if Sys.isapple()
+        o_file = `-Wl,-all_load $o_file`
+    else
+        o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
     end
     command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
-    if isapple()
+    if Sys.isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
-    elseif iswindows()
+    elseif Sys.iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
     verbose && println("Build shared library \"$s_file\":\n  $command")
@@ -275,13 +260,13 @@ end
 
 function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, cc, cc_flags)
     command = `$cc -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
-    if iswindows()
+    if Sys.iswindows()
         RPMbindir = mingw_dir("bin")
         incdir = mingw_dir("include")
         push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
         ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
         command = `$command -I$incdir`
-    elseif isapple()
+    elseif Sys.isapple()
         command = `$command -Wl,-rpath,@executable_path`
     else
         command = `$command -Wl,-rpath,\$ORIGIN`
@@ -300,7 +285,7 @@ end
 function remove_temp_files(builddir, verbose)
     verbose && println("Remove temporary files:")
     remove = false
-    for tmp in filter(x -> endswith(x, ".o") || endswith(x, ".a") || startswith(x, "cache_ji_v"), readdir(builddir))
+    for tmp in filter(x -> endswith(x, ".a") || startswith(x, "cache_ji_v"), readdir(builddir))
         verbose && println("  $tmp")
         rm(joinpath(builddir, tmp), recursive=true)
         remove = true
@@ -325,22 +310,17 @@ end
 
 function copy_julia_libs(builddir, verbose)
     # TODO: these flags should probably be emitted from `julia-config.jl` / `compiler_flags.jl` also:
-    if julia_v07
-        shlibdir = iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
-        private_shlibdir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
-    else
-        shlibdir = iswindows() ? JULIA_HOME : joinpath(JULIA_HOME, Base.LIBDIR)
-        private_shlibdir = joinpath(JULIA_HOME, Base.PRIVATE_LIBDIR)
-    end
+    shlibdir = Sys.iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
+    private_shlibdir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
     libfiles = String[]
     dlext = "." * Libdl.dlext
     for dir in (shlibdir, private_shlibdir)
-        if iswindows() || isapple()
+        if Sys.iswindows() || Sys.isapple()
             append!(libfiles, joinpath.(dir, filter(x -> endswith(x, dlext) && !startswith(x, "sys"), readdir(dir))))
         else
-            append!(libfiles, joinpath.(dir, filter(x -> contains07(x, r"^lib.+\.so(?:\.\d+)*$"), readdir(dir))))
+            append!(libfiles, joinpath.(dir, filter(x -> occursin(r"^lib.+\.so(?:\.\d+)*$", x), readdir(dir))))
         end
     end
-    filter!(v -> !contains07(v, r"debug"), libfiles)
+    filter!(v -> !occursin(r"debug", v), libfiles)
     copy_files_array(libfiles, builddir, verbose, "Copy Julia libraries to build directory:")
 end

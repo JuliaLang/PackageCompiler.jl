@@ -72,29 +72,15 @@ end
         )
         # Check that the output from the program is as expected:
         exe = joinpath(builddir, outname*executable_ext)
-        if PackageCompiler.julia_v07
-            output = read(`$exe a b c`, String)
-        else
-            output = readstring(`$exe a b c`)
-        end
+        output = read(`$exe a b c`, String)
         println(output)
-        if PackageCompiler.julia_v07
-            @test output ==
-                "@__FILE__: $argsjlfile\n" *
-                "PROGRAM_FILE: $exe\n" *
-                "argv: [\"a\", \"b\", \"c\"]\n" *
-                "ARGS: [\"a\", \"b\", \"c\"]\n" *
-                "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
-                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
-        else
-            @test output ==
-                "@__FILE__: $argsjlfile\n" *
-                "PROGRAM_FILE: $exe\n" *
-                "argv: String[\"a\", \"b\", \"c\"]\n" *
-                "ARGS: String[\"a\", \"b\", \"c\"]\n" *
-                "Base.ARGS: String[\"a\", \"b\", \"c\"]\n" *
-                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
-        end
+        @test output ==
+            "@__FILE__: $argsjlfile\n" *
+            "PROGRAM_FILE: $exe\n" *
+            "argv: [\"a\", \"b\", \"c\"]\n" *
+            "ARGS: [\"a\", \"b\", \"c\"]\n" *
+            "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
+            "Core.ARGS: Any[\"$(Sys.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
     end
 end
 
@@ -110,17 +96,9 @@ end
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            if PackageCompiler.julia_v07
-                @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
-            else
-                @test contains(readstring(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`), "-g")
-            end
+            @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
             # Just as a control, make sure that without passing '--help', we don't see "-g"
-            if PackageCompiler.julia_v07
-                @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
-            else
-                @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
-            end
+            @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
         end
     end
 end

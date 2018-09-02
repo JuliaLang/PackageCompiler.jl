@@ -162,18 +162,8 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     end
 
     juliaprog = pop!(parsed_args, "juliaprog")
-    if PackageCompiler.julia_v07
-        filter!(kv -> kv.second !== nothing && kv.second !== false, parsed_args)
-    else
-        filter!((k, v) -> v !== nothing && v !== false, parsed_args)
-    end
-    if PackageCompiler.julia_v07
-        kw_args = [Symbol(replace(kv.first, "-" => "_")) => kv.second for kv in parsed_args]
-    else
-        kw_args = map(parsed_args) do kv
-            Symbol(replace(kv.first, "-", "_")) => kv.second
-        end
-    end
+    filter!(kv -> kv.second !== nothing && kv.second !== false, parsed_args)
+    kw_args = [Symbol(replace(kv.first, "-" => "_")) => kv.second for kv in parsed_args]
 
     static_julia(juliaprog; kw_args...)
 

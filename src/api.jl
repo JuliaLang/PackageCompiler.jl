@@ -20,7 +20,7 @@ function build_sysimg(
         cc = nothing, cc_flags = nothing
     )
     # build vanilla backup system image
-    clean_sysimg = get_backup!(contains(basename(Base.julia_cmd().exec[1]), "debug"), cpu_target)
+    clean_sysimg = get_backup!(occursin("debug", basename(Base.julia_cmd().exec[1])), cpu_target)
     static_julia(
         userimg_path, verbose = verbose, quiet = quiet,
         builddir = sysimg_path, outname = "sys",
