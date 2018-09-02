@@ -27,9 +27,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         try
             touch("$sysimg_path.ji")
         catch
-            err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
-            err_msg *= "and is writable; absolute paths work best.)"
-            error(err_msg)
+            error("Unable to modify $sysimg_path.ji, ensure that parent directory exists and is writable")
         end
         compiler_path, compiler = if julia_v07
             joinpath(dirname(sysimg_path), "basecompiler"), "compiler/compiler.jl"
