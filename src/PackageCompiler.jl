@@ -27,10 +27,10 @@ function copy_system_image(src, dest, ignore_missing = false)
             if isfile(destfile * ".backup")
                 rm(destfile * ".backup", force = true)
             end
-            mv(destfile, destfile * ".backup", remove_destination = true)
+            mv(destfile, destfile * ".backup", force = true)
         end
         @info "Copying system image: $srcfile to $destfile"
-        cp(srcfile, destfile, remove_destination = true)
+        cp(srcfile, destfile, force = true)
     end
 end
 

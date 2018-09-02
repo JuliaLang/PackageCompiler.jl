@@ -116,7 +116,7 @@ function static_julia(
     if clean
         if isdir(builddir)
             verbose && println("Remove build directory")
-            rm(builddir, recursive=true)
+            rm(builddir, recursive = true)
         else
             verbose && println("Build directory does not exist")
         end
@@ -287,7 +287,7 @@ function remove_temp_files(builddir, verbose)
     remove = false
     for tmp in filter(x -> endswith(x, ".a") || startswith(x, "cache_ji_v"), readdir(builddir))
         verbose && println("  $tmp")
-        rm(joinpath(builddir, tmp), recursive=true)
+        rm(joinpath(builddir, tmp), recursive = true)
         remove = true
     end
     verbose && !remove && println("  none")
@@ -301,7 +301,7 @@ function copy_files_array(files_array, builddir, verbose, message)
         dst = joinpath(builddir, basename(src))
         if filesize(src) != filesize(dst) || ctime(src) > ctime(dst) || mtime(src) > mtime(dst)
             verbose && println("  $(basename(src))")
-            cp(src, dst, remove_destination=true, follow_symlinks=false)
+            cp(src, dst, force = true, follow_symlinks = false)
             copy = true
         end
     end
