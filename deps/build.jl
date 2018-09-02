@@ -1,8 +1,9 @@
 function verify_gcc(gcc)
-    try # success errors when not successful :(
+    try
         return success(`$gcc --version`)
+    catch
+        return false
     end
-    return false
 end
 
 # TODO: remove once Julia v0.7 is released
