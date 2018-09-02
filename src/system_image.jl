@@ -2,10 +2,10 @@
 
 function default_sysimg_path(debug = false)
     ext = debug ? "sys-debug" : "sys"
-    if isunix()
+    if Sys.isunix()
         dirname(Libdl.dlpath(ext))
     else
-        normpath(JULIA_BINDIR, "..", "lib", "julia")
+        normpath(Sys.BINDIR, "..", "lib", "julia")
     end
 end
 
@@ -29,11 +29,8 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         catch
             error("Unable to modify $sysimg_path.ji, ensure that parent directory exists and is writable")
         end
-        compiler_path, compiler = if julia_v07
-            joinpath(dirname(sysimg_path), "basecompiler"), "compiler/compiler.jl"
-        else
-            joinpath(dirname(sysimg_path), "inference"), "coreimg.jl"
-        end
+        compiler_path = joinpath(dirname(sysimg_path), "basecompiler")
+        compiler = "compiler/compiler.jl"
 
         # Start by building inference.{ji,o}
         inference_path = joinpath(dirname(sysimg_path), "inference")
