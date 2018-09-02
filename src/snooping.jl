@@ -41,7 +41,7 @@ function snoop(path, compilationfile, csv)
                 println(io, "import $k")
                 info("import $k")
             catch e
-                warn("Module not found: $k")
+                @warn "Module not found: $k"
             end
         end
         for (k, v) in pc
@@ -57,7 +57,7 @@ function snoop(path, compilationfile, csv)
                     # (usually, SnoopCompile emits 1% erroring statements)
                     println(io, "try\n    ", ln, "\nend")
                 catch e
-                    warn("Not emitted because code couldn't parse: ", ln)
+                    @warn "Not emitted because code couldn't parse: $ln"
                 end
             end
         end
@@ -78,7 +78,7 @@ function static_library_snoop()
                 # (usually, SnoopCompile emits 1% erroring statements)
                 println(io, "try\n    ", ln, "\nend")
             catch e
-                warn("Not emitted because code couldn't parse: ", ln)
+                @warn "Not emitted because code couldn't parse: $ln"
             end
         end
     end

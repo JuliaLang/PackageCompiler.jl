@@ -146,8 +146,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
                 If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`."
             )
         catch e
-            warn("An error has occured while replacing sysimg files:")
-            warn(e)
+            @warn "An error occured while replacing sysimg files:" error=e
             info("Recovering old system image from backup")
             # if any file is missing in default system image, revert!
             if !isfile(syspath)
@@ -166,9 +165,8 @@ end
 
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
-        warn("Your Julia system image is not compiled natively for this CPU architecture.
-        Please run `PackageCompiler.force_native_image!()` for optimal Julia performance"
-        )
+        @warn "Your Julia system image is not compiled natively for this CPU architecture.\n" *
+            "Please run `PackageCompiler.force_native_image!()` for optimal Julia performance."
     end
 end
 
