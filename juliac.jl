@@ -3,7 +3,7 @@ using ArgParse, PackageCompiler
 Base.@ccallable function julia_main(args::Vector{String})::Cint
 
     s = ArgParseSettings("Static Julia Compiler",
-                         version = "$(basename(@__FILE__)) version 0.7-DEV",
+                         version = "$(basename(@__FILE__)) version 0.7",
                          add_version = true)
 
     @add_arg_table s begin
@@ -72,16 +72,6 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             arg_type = String
             metavar = "<file>"
             help = "start up with the given system image file"
-        "--precompiled"
-            arg_type = String
-            metavar = "{yes|no}"
-            range_tester = (x -> x ∈ ("yes", "no"))
-            help = "use precompiled code from system image if available"
-        "--compilecache"
-            arg_type = String
-            metavar = "{yes|no}"
-            range_tester = (x -> x ∈ ("yes", "no"))
-            help = "enable/disable incremental precompilation of modules"
         "--home", "-H"
             arg_type = String
             metavar = "<dir>"
@@ -90,12 +80,32 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             arg_type = String
             metavar = "{yes|no}"
             range_tester = (x -> x ∈ ("yes", "no"))
-            help = "load ~/.juliarc.jl"
+            help = "load `~/.julia/config/startup.jl`"
         "--handle-signals"
             arg_type = String
             metavar = "{yes|no}"
             range_tester = (x -> x ∈ ("yes", "no"))
             help = "enable or disable Julia's default signal handlers"
+        "--sysimage-native-code"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "use native code from system image if available"
+        "--compiled-modules"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable or disable incremental precompilation of modules"
+        "--depwarn"
+            arg_type = String
+            metavar = "{yes|no|error}"
+            range_tester = (x -> x ∈ ("yes", "no", "error"))
+            help = "enable or disable syntax and method deprecation warnings"
+        "--warn-overwrite"
+            arg_type = String
+            metavar = "{yes|no}"
+            range_tester = (x -> x ∈ ("yes", "no"))
+            help = "enable or disable method overwrite warnings"
         "--compile"
             arg_type = String
             metavar = "{yes|no|all|min}"
@@ -104,7 +114,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--cpu-target", "-C"
             arg_type = String
             metavar = "<target>"
-            help = "limit usage of CPU features up to <target> (implies default `--precompiled=no`)"
+            help = "limit usage of CPU features up to <target> (implies default `--sysimage-native-code=no`)"
         "--optimize", "-O"
             arg_type = Int
             metavar = "{0,1,2,3}"
@@ -130,11 +140,6 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{ieee,fast}"
             range_tester = (x -> x ∈ ("ieee", "fast"))
             help = "disallow or enable unsafe floating point optimizations"
-        "--depwarn"
-            arg_type = String
-            metavar = "{yes|no|error}"
-            range_tester = (x -> x ∈ ("yes", "no", "error"))
-            help = "enable or disable syntax and method deprecation warnings"
         "--cc"
             arg_type = String
             metavar = "<cc>"
