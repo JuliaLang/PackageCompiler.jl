@@ -84,15 +84,17 @@ Run `juliac.jl -h` for help:
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
                  [-a] [-o] [-s] [-e] [-t] [-j] [-f <file>] [-r] [-R]
-                 [-J <file>] [--precompiled {yes|no}]
-                 [--compilecache {yes|no}] [-H <dir>]
-                 [--startup-file {yes|no}] [--handle-signals {yes|no}]
+                 [-J <file>] [-H <dir>] [--startup-file {yes|no}]
+                 [--handle-signals {yes|no}]
+                 [--sysimage-native-code {yes|no}]
+                 [--compiled-modules {yes|no}]
+                 [--depwarn {yes|no|error}]
+                 [--warn-overwrite {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--depwarn {yes|no|error}] [--cc <cc>]
-                 [--cc-flags <flags>] [--version] [-h] juliaprog
-                 [cprog]
+                 [--cc <cc>] [--cc-flags <flags>] [--version] [-h]
+                 juliaprog [cprog]
 
 Static Julia Compiler
 
@@ -125,24 +127,28 @@ optional arguments:
                         equivalent to `-caetjr`
   -J, --sysimage <file>
                         start up with the given system image file
-  --precompiled {yes|no}
-                        use precompiled code from system image if
-                        available
-  --compilecache {yes|no}
-                        enable/disable incremental precompilation of
-                        modules
   -H, --home <dir>      set location of `julia` executable
   --startup-file {yes|no}
-                        load ~/.juliarc.jl
+                        load `~/.julia/config/startup.jl`
   --handle-signals {yes|no}
                         enable or disable Julia's default signal
                         handlers
+  --sysimage-native-code {yes|no}
+                        use native code from system image if available
+  --compiled-modules {yes|no}
+                        enable or disable incremental precompilation
+                        of modules
+  --depwarn {yes|no|error}
+                        enable or disable syntax and method
+                        deprecation warnings
+  --warn-overwrite {yes|no}
+                        enable or disable method overwrite warnings
   --compile {yes|no|all|min}
                         enable or disable JIT compiler, or request
                         exhaustive compilation
   -C, --cpu-target <target>
                         limit usage of CPU features up to <target>
-                        (implies default `--precompiled=no`)
+                        (implies default `--sysimage-native-code=no`)
   -O, --optimize {0,1,2,3}
                         set the optimization level (type: Int64)
   -g, --debug <level>   enable / set the level of debug info
@@ -153,9 +159,6 @@ optional arguments:
   --math-mode {ieee,fast}
                         disallow or enable unsafe floating point
                         optimizations
-  --depwarn {yes|no|error}
-                        enable or disable syntax and method
-                        deprecation warnings
   --cc <cc>             system C compiler
   --cc-flags <flags>    pass custom flags to the system C compiler
                         when building a shared library or executable
