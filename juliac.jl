@@ -74,11 +74,6 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             metavar = "{yes|no}"
             range_tester = (x -> x ∈ ("yes", "no"))
             help = "use precompiled code from system image if available"
-        "--compilecache"
-            arg_type = String
-            metavar = "{yes|no}"
-            range_tester = (x -> x ∈ ("yes", "no"))
-            help = "enable/disable incremental precompilation of modules"
         "--home", "-H"
             arg_type = String
             metavar = "<dir>"

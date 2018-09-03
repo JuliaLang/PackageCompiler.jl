@@ -150,7 +150,7 @@ function static_julia(
         end
         build_object(
             juliaprog, o_file, builddir, verbose,
-            sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+            sysimage, precompiled, home, startup_file, handle_signals,
             compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
         )
     end
@@ -179,12 +179,11 @@ function julia_flags(optimize, debug, cc_flags)
 end
 
 function build_julia_cmd(
-        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        sysimage, precompiled, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
-    # TODO: `precompiled` and `compilecache` may be removed in future, see: https://github.com/JuliaLang/PackageCompiler.jl/issues/47
+    # TODO: `precompiled`  may be removed in future, see: https://github.com/JuliaLang/PackageCompiler.jl/issues/47
     precompiled == nothing && cpu_target != nothing && (precompiled = "no")
-    compilecache == nothing && (compilecache = "no")
     # TODO: `startup_file` may be removed in future with `julia-compile`, see: https://github.com/JuliaLang/julia/issues/15864
     startup_file == nothing && (startup_file = "no")
     julia_cmd = `$(Base.julia_cmd())`
@@ -193,7 +192,6 @@ function build_julia_cmd(
     end
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
     precompiled == nothing || push!(julia_cmd.exec, "--precompiled=$precompiled")
-    compilecache == nothing || push!(julia_cmd.exec, "--compilecache=$compilecache")
     home == nothing || push!(julia_cmd.exec, "-H=$home")
     startup_file == nothing || push!(julia_cmd.exec, "--startup-file=$startup_file")
     handle_signals == nothing || push!(julia_cmd.exec, "--handle-signals=$handle_signals")
@@ -210,12 +208,12 @@ end
 
 function build_object(
         juliaprog, o_file, builddir, verbose,
-        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        sysimage, precompiled, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
     iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
     julia_cmd = build_julia_cmd(
-        sysimage, precompiled, compilecache, home, startup_file, handle_signals,
+        sysimage, precompiled, home, startup_file, handle_signals,
         compile, cpu_target, optimize, debug, inline, check_bounds, math_mode, depwarn
     )
     cache_dir = "cache_ji_v$VERSION"

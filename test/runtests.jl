@@ -1,5 +1,5 @@
 using PackageCompiler
-using Base.Test
+using Test
 
 # If this works without error we should be in pretty good shape!
 # This command will use the runtest.jl of Matcha to find out what functions to precompile!
