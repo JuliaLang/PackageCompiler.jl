@@ -49,7 +49,7 @@ function snoop(path, compilationfile, csv)
         for (k, v) in pc
             for ln in v
                 # replace `_` for free parameters, which print out a warning otherwise
-                ln = replace(ln, delims, s"\1XXX\2")
+                ln = replace(ln, delims => s"\1XXX\2")
                 # only print out valid lines
                 # TODO figure out the actual problems and why snoop compile emits invalid code
                 try
@@ -70,7 +70,7 @@ function static_library_snoop()
     for (k, v) in pc
         for ln in v
             # replace `_` for free parameters, which print out a warning otherwise
-            ln = replace(ln, delims, s"\1XXX\2")
+            ln = replace(ln, delims => s"\1XXX\2")
             # only print out valid lines
             # TODO figure out the actual problems and why snoop compile emits invalid code
             try

@@ -35,7 +35,7 @@ end
 julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
 julia_cpu_target(x::String) = x # TODO match against available targets
 function julia_cpu_target(::Nothing)
-    replace(Base.julia_cmd().exec[2], "-C", "")
+    replace(Base.julia_cmd().exec[2], "-C" => "")
 end
 
 """

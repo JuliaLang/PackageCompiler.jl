@@ -18,7 +18,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         julia_cmd = Base.julia_cmd()
         julia = julia_cmd.exec[1]
         cpu_target = if cpu_target == nothing
-            replace(julia_cmd.exec[2], "-C", "")
+            replace(julia_cmd.exec[2], "-C" => "")
         else
             cpu_target
         end

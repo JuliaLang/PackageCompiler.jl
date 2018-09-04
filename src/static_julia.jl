@@ -217,7 +217,7 @@ function build_object(
         sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
         depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
     )
-    Sys.iswindows() && (juliaprog = replace(juliaprog, "\\", "\\\\"))
+    Sys.iswindows() && (juliaprog = replace(juliaprog, "\\" => "\\\\"))
     julia_cmd = build_julia_cmd(
         sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
         depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
