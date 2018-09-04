@@ -3,26 +3,27 @@ using Pkg, Serialization
 # Taken from SnoopCompile
 function snoop_vanilla(filename, path)
     code_object = """
-    while !eof(stdin)
-        eval(Main, deserialize(stdin))
-    end
-    """
+        using Serialization
+        while !eof(stdin)
+            Core.eval(Main, deserialize(stdin))
+        end
+        """
     julia_cmd = build_julia_cmd(
         get_backup!(false, nothing), nothing, nothing, nothing, nothing, nothing,
         nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing
     )
     @show julia_cmd
-    in, io = open(`$julia_cmd --eval $code_object`, "w", stdout)
-    serialize(in, quote
+    process = open(`$julia_cmd -e $code_object`, stdout, write = true)
+    serialize(process, quote
         import SnoopCompile
     end)
     # Now that the new process knows about SnoopCompile, it can
     # expand the macro in this next expression
-    serialize(in, quote
-          SnoopCompile.@snoop1 $filename include($(escape_string(path)))
+    serialize(process, quote
+          SnoopCompile.@snoop $filename include($(escape_string(path)))
+          exit()
     end)
-    close(in)
-    wait(io)
+    wait(process)
     println("done.")
     nothing
 end
@@ -34,12 +35,12 @@ function snoop(path, compilationfile, csv)
     delims = r"([\{\} \n\(\),])_([\{\} \n\(\),])"
     tmp_mod = eval(:(module $(gensym()) end))
     open(compilationfile, "w") do io
+        println(io, "Base.__init__()")
         println(io, "Sys.__init__()")
-        println(io, "Base.early_init()")
         for (k, v) in pc
             k == :unknown && continue
             try
-                eval(tmp_mod, :(import $k))
+                Core.eval(tmp_mod, :(import $k))
                 println(io, "import $k")
                 @info "import $k"
             catch e
@@ -53,7 +54,7 @@ function snoop(path, compilationfile, csv)
                 # only print out valid lines
                 # TODO figure out the actual problems and why snoop compile emits invalid code
                 try
-                    parse(ln) # parse to make sure expression is parsing without error
+                    Meta.parse(ln) # parse to make sure expression is parsing without error
                     # wrap in try catch to catch problematic code emitted by SnoopCompile
                     # without interupting the whole precompilation
                     # (usually, SnoopCompile emits 1% erroring statements)
@@ -104,11 +105,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...)
         package = package_folder(get_root_dir(abs_package_path))
         isdir(package) || mkpath(package)
         precompile_file = joinpath(package, "precompile.jl")
-        snoop(
-            file2snoop,
-            precompile_file,
-            joinpath(package, "snooped.csv")
-        )
+        snoop(file2snoop, precompile_file, joinpath(package, "snooped.csv"))
         precompile_file
     end
     open(userimg, "w") do io
