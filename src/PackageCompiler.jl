@@ -1,9 +1,7 @@
 __precompile__()
 module PackageCompiler
 
-using Libdl
-using SnoopCompile
-
+using Libdl, SnoopCompile
 Sys.iswindows() && using WinRPM
 
 include("compiler_flags.jl")
