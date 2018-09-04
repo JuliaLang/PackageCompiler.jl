@@ -79,7 +79,7 @@ end
             "argv: [\"a\", \"b\", \"c\"]\n" *
             "ARGS: [\"a\", \"b\", \"c\"]\n" *
             "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
-            "Core.ARGS: Any[\"$(Sys.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
+            "Core.ARGS: Any[\"$(Sys.iswindows() ? replace(exe, "\\" => "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
     end
 end
 
