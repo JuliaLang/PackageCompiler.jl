@@ -1,4 +1,4 @@
-using PackageCompiler
+using PackageCompiler, Pkg
 
 dir(f...) = joinpath(@__DIR__, f...)
 cd(@__DIR__)
