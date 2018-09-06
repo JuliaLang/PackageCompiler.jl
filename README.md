@@ -13,16 +13,16 @@ E.g. do:
 ```Julia
 using PackageCompiler
 
-# This command will use the runtest.jl of Matcha + UnicodeFun to find out what functions to precompile!
+# This command will use the `runtest.jl` of `ArgParse` + `SnoopCompile` to find out what functions to precompile!
 # `force = false` to not force overwriting Julia's current system image
-compile_package("Matcha", "UnicodeFun", force = false, reuse = false)
+compile_package("ArgParse", "SnoopCompile", force = false, reuse = false)
 
 # Build again, reusing the snoop file
-compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
+compile_package("ArgParse", "SnoopCompile", force = false, reuse = true)
 
 # You can define a file that will get run for snooping explicitly like this:
 # this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
-compile_package("Matcha", "relative/path/for_snooping.jl")
+compile_package("ArgParse", "relative/path/for_snooping.jl")
 
 # If you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
 revert()
