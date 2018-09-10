@@ -1,10 +1,10 @@
 using PackageCompiler, Test
 
 # If this works without error we should be in pretty good shape!
-# This command will use the `runtest.jl` of `ArgParse` + `SnoopCompile` to find out what functions to precompile!
-compile_package("ArgParse", "SnoopCompile", force = false, reuse = false) # false to not force overwriting julia's current system image
+# This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
+compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = false) # false to not force overwriting julia's current system image
 # build again, with resuing the snoop file
-img_file = compile_package("ArgParse", "SnoopCompile", force = false, reuse = true)
+img_file = compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = true)
 # TODO test revert - I suppose i wouldn't have enough rights on travis to move around dll's?
 julia = Base.julia_cmd().exec[1]
 @testset "basic tests" begin
@@ -18,7 +18,7 @@ julia = Base.julia_cmd().exec[1]
         sysfile = joinpath(dir, "sys")
         PackageCompiler.compile_system_image(sysfile, "native")
         @test isfile(sysfile * ".o")
-        @test isfile(sysfile * ".$(Libdl.dlext)")
+        @test isfile(sysfile * ".$(PackageCompiler.Libdl.dlext)")
     end
 end
 
@@ -39,7 +39,7 @@ end
         )
     end
     builddir = joinpath(basedir, relativebuilddir)
-    @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
+    @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
     @test isfile(joinpath(builddir, "hello$executable_ext"))
     @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
     for i = 1:100
@@ -89,7 +89,7 @@ end
         jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
         @test success(`$julia $juliac -vaej $jlfile $cfile --builddir $builddir`)
-        @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
+        @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
         @test isfile(joinpath(builddir, "hello$executable_ext"))
         @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
         @testset "--cc-flags" begin

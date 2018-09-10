@@ -143,11 +143,26 @@ function static_julia(
         if snoopfile != nothing
             snoopfile = abspath(snoopfile)
             precompfile = joinpath(builddir, "precompiled.jl")
-            snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"))
+            snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"), Vector{Pair{String,String}}(), String["Main"])
             jlmain = joinpath(builddir, "julia_main.jl")
             open(jlmain, "w") do io
-                println(io, "include(\"$(escape_string(relpath(precompfile, builddir)))\")")
                 println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
+                println(io, """
+                    let M = Module() # Prevent this from putting anything into the Main namespace
+                        for m in Base.loaded_modules_array()
+                            Core.isdefined(M, nameof(m)) || Core.eval(M, Expr(:const, Expr(:(=), nameof(m), m)))
+                        end
+                        for n in names(Main)
+                            if Core.isdefined(Main, n) && isconst(Main, n)
+                                m = getfield(Main, n)
+                                m isa Module && (Core.isdefined(M, nameof(m)) || Core.eval(M, Expr(:const, Expr(:(=), nameof(m), m))))
+                            end
+                        end
+                    """)
+                println(io, "Base.include(M, ", repr(relpath(precompfile, builddir)), ")")
+                println(io, """
+                    end # let
+                    """)
             end
             juliaprog = jlmain
         end
