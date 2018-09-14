@@ -17,12 +17,15 @@ end
 system_compiler = gcc
 executable_ext = Sys.iswindows() ? ".exe" : ""
 
-function mingw_dir(folders...)
-    joinpath(
-        WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
-        "sys-root", "mingw", folders...
-    )
+if Sys.iswindows()
+    function run_PATH(cmd)
+        bindir = dirname(cmd.exec[1])
+        run(setenv(cmd, ["PATH=" * bindir * ";" * ENV["PATH"]]))
+    end
+else
+    const run_PATH = run
 end
+
 
 """
     static_julia(juliaprog::String; kw_args...)
@@ -306,18 +309,14 @@ int exit_jl_runtime()
     end
     verbose && println("Build shared library $(repr(s_file)):\n  $command")
     cd(builddir) do
-        run(command)
+        run_PATH(command)
     end
 end
 
 function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, cc, cc_flags)
     command = `$cc -DJULIAC_PROGRAM_LIBNAME=$s_file -o $e_file $cprog $s_file $(julia_flags(optimize, debug, cc_flags))`
     if Sys.iswindows()
-        RPMbindir = mingw_dir("bin")
-        incdir = mingw_dir("include")
-        push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
-        ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir
-        command = `$command -I$incdir`
+        # functionality doesn't readily exist on this platform
     elseif Sys.isapple()
         command = `$command -Wl,-rpath,@executable_path`
     else
@@ -330,7 +329,7 @@ function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, c
     end
     verbose && println("Build executable $(repr(e_file)):\n  $command")
     cd(builddir) do
-        run(command)
+        run_PATH(command)
     end
 end
 
