@@ -1,7 +1,7 @@
 environment:
   matrix:
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.6/julia-0.6-latest-win32.exe"
-  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.6/julia-0.6-latest-win64.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/1.0/julia-1.0-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/1.0/julia-1.0-latest-win64.exe"
 
 ## uncomment the following lines to allow failures on nightly julia
 ## (tests will run but not make your overall status red)
@@ -38,8 +38,8 @@ install:
 build_script:
 # Need to convert from shallow to complete for Pkg.clone to work
   - IF EXIST .git\shallow (git fetch --unshallow)
-  - C:\projects\julia\bin\julia -e "versioninfo();
+  - C:\projects\julia\bin\julia -e "using InteractiveUtils, Pkg; versioninfo();
       Pkg.clone(pwd(), \"PackageCompiler\"); Pkg.build(\"PackageCompiler\")"
 
 test_script:
-  - C:\projects\julia\bin\julia -e "Pkg.test(\"PackageCompiler\")"
+  - C:\projects\julia\bin\julia -e "using Pkg; Pkg.test(\"PackageCompiler\")"
