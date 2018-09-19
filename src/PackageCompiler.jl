@@ -67,7 +67,7 @@ end
 """
 Reverts a forced compilation of the system image.
 This will restore any previously backed up system image files, or
-build a new, clean system image
+build a new, clean system image.
 """
 function revert(debug = false)
     syspath = default_sysimg_path(debug)
@@ -105,8 +105,8 @@ end
 """
     compile_package(packages...; kw_args...)
 
-with packages being either a string naming a package, or a tuple (package_name, precompile_file).
-If no precompile file is given, it will use the packages runtests.jl, which is a good canditate
+with packages being either a string naming a package, or a tuple `(package_name, precompile_file)`.
+If no precompile file is given, it will use the packages `runtests.jl`, which is a good canditate
 for figuring out what functions to compile!
 """
 function compile_package(packages...; kw_args...)
@@ -114,26 +114,26 @@ function compile_package(packages...; kw_args...)
         # If no explicit path to a seperate precompile file, use runtests
         isa(package, String) && return (package, "test/runtests.jl")
         isa(package, Tuple{String, String}) && return package
-        error("Unrecognized package. Use `packagename::String`, or (packagename::String, rel_path_to_testfile::String). Found: $package")
+        error("Unrecognized package. Use `packagename::String`, or `(packagename::String, rel_path_to_testfile::String)`. Found: `$package`")
     end
     compile_package(args...; kw_args...)
 end
 
 """
-    compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
+    compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
 
 Compile a list of packages. Each package comes as a tuple of `(package_name, precompile_file)`
 where the precompile file should contain all function calls, that should get compiled into the system image.
-Usually the runtests.jl file is a good candidate, since it should run all important functions of a package.
+Usually the `runtests.jl` file is a good candidate, since it should run all important functions of a package.
 """
-function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
+function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
     userimg = sysimg_folder("precompile.jl")
     if !reuse
         snoop_userimg(userimg, packages...)
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
-    build_sysimg(image_path, userimg)
+    build_sysimg(image_path, userimg, cpu_target=cpu_target)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     syspath = joinpath(default_sysimg_path(debug), "sys.$(Libdl.dlext)")
     if force
@@ -143,7 +143,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             cp(imgfile, syspath)
             info(
                 "Replaced system image successfully. Next start of julia will load the newly compiled system image.
-                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`"
+                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`."
             )
         catch e
             warn("An error has occured while replacing sysimg files:")
@@ -158,7 +158,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
     else
         info("""
             Not replacing system image.
-            You can start julia with julia -J $(imgfile) to load the compiled files.
+            You can start julia with `julia -J $(imgfile)` to load the compiled files.
         """)
     end
     imgfile
