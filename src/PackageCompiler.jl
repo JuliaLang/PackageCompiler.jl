@@ -126,14 +126,14 @@ Compile a list of packages. Each package comes as a tuple of `(package_name, pre
 where the precompile file should contain all function calls, that should get compiled into the system image.
 Usually the runtests.jl file is a good candidate, since it should run all important functions of a package.
 """
-function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false)
+function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
     userimg = sysimg_folder("precompile.jl")
     if !reuse
         snoop_userimg(userimg, packages...)
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
-    build_sysimg(image_path, userimg)
+    build_sysimg(image_path, userimg, cpu_target=cpu_target)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     syspath = joinpath(default_sysimg_path(debug), "sys.$(Libdl.dlext)")
     if force
