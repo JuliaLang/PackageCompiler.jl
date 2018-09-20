@@ -40,6 +40,7 @@ function snoop(path, compilationfile, csv, subst, blacklist)
     data = SnoopCompile.read(csv)
     #pc = SnoopCompile.parcel(reverse!(data[2]))
     pc = SnoopCompile.format_userimg(reverse!(data[2]), subst=subst, blacklist=blacklist)
+    pc = map(x -> "try; $x; catch ex; @warn \"\"\"skipping line: $(repr(x)).\"\"\" exception=ex; end\n", pc)
     SnoopCompile.write(compilationfile, pc)
     nothing
 end
@@ -82,11 +83,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...)
             end
             """)
         for path in snooped_precompiles
-            for l in eachline(path)
-                print(output, "try; ")
-                write(output, l)
-                print(output, "; catch ex; @warn \"\"\"skipping line: $(repr(l)).\"\"\" exception=ex; end\n")
-            end
+            open(input -> write(output, input), path)
             println(output)
         end
         println(output, """
