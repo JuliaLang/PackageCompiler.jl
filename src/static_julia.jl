@@ -255,7 +255,7 @@ end
 
 function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags, shared_init)
     # Prevent compiler from stripping all symbols from the shared lib.
-    si_file = nothing
+    si_file = ""
     if shared_init
         si_file = joinpath(builddir, "lib_init.c")
         open(si_file, "w") do io
@@ -293,7 +293,8 @@ function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc
             o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
         end
     end
-    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $s_file $o_file $si_file $(julia_flags(optimize, debug, cc_flags))`
+    command = shared_init ? `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $s_file $o_file $si_file $(julia_flags(optimize, debug, cc_flags))` :
+        `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
