@@ -10,7 +10,7 @@ if julia_v07
     const isapple = Sys.isapple
     const iswindows = Sys.iswindows
     const JULIA_BINDIR = Sys.BINDIR
-    const contains07 = contains
+    const contains07(str, reg) = occursin(reg, str)
 else
     const isunix = is_unix
     const islinux = is_linux
