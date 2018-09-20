@@ -39,6 +39,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     autodeps                  automatically build required dependencies
     object                    build object file
     shared                    build shared library
+    shared_init               shared library includes init_jl_runtime and exit_jl_runtime for julia runtime initialization
     executable                build executable file
     rmtemp                    remove temporary build files
     copy_julialibs            copy Julia libraries to build directory
@@ -65,7 +66,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
 function static_julia(
         juliaprog;
         cprog = nothing, verbose = false, quiet = false, builddir = nothing, outname = nothing, snoopfile = nothing,
-        clean = false, autodeps = false, object = false, shared = false, executable = false, rmtemp = false,
+        clean = false, autodeps = false, object = false, shared = false, shared_init = false, executable = false, rmtemp = false,
         copy_julialibs = false, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
@@ -155,7 +156,7 @@ function static_julia(
         )
     end
 
-    shared && build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags)
+    shared && build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags, shared_init)
 
     executable && build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, cc, cc_flags)
 
@@ -252,8 +253,39 @@ function build_object(
     end
 end
 
-function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags)
+function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc_flags, shared_init)
     # Prevent compiler from stripping all symbols from the shared lib.
+    si_file = nothing
+    if shared_init
+        si_file = joinpath(builddir, "lib_init.c")
+        open(si_file, "w") do io
+            print(io, """
+                // Julia headers (for initialization and gc commands)
+                #include "uv.h"
+                #include "julia.h"
+
+                #ifdef JULIA_DEFINE_FAST_TLS // only available in Julia v0.7 and above
+                JULIA_DEFINE_FAST_TLS()
+                #endif
+                int init_jl_runtime()
+                {	                    
+                    libsupport_init();
+                    // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
+                    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
+                    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
+                    julia_init(JL_IMAGE_JULIA_HOME);
+                    return(0);                    
+                }
+                int exit_jl_runtime()
+                {	
+                    int retcode;
+                    jl_atexit_hook(retcode);
+                    return retcode;                    
+                }
+                """
+            )
+        end
+    end
     if julia_v07
         if isapple()
             o_file = `-Wl,-all_load $o_file`
@@ -261,15 +293,20 @@ function build_shared(s_file, o_file, builddir, verbose, optimize, debug, cc, cc
             o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
         end
     end
-    command = `$cc -shared -o $s_file $o_file $(julia_flags(optimize, debug, cc_flags))`
+    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $s_file $o_file $si_file $(julia_flags(optimize, debug, cc_flags))`
     if isapple()
         command = `$command -Wl,-install_name,@rpath/$s_file`
     elseif iswindows()
+        RPMbindir = mingw_dir("bin")
+        incdir = mingw_dir("include")
+        push!(Base.Libdl.DL_LOAD_PATH, RPMbindir) # TODO does this need to be reversed?
+        ENV["PATH"] = ENV["PATH"] * ";" * RPMbindir        
+        command = `$command -I$incdir`
         command = `$command -Wl,--export-all-symbols`
     end
     verbose && println("Build shared library \"$s_file\":\n  $command")
     cd(builddir) do
-        run(command)
+        run(command)        
     end
 end
 

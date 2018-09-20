@@ -56,7 +56,7 @@ function build_shared_lib(
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-        cc = nothing, cc_flags = nothing
+        cc = nothing, cc_flags = nothing, shared_init = false
     )
     static_julia(
         julia_program, verbose = verbose, quiet = quiet,
@@ -66,7 +66,7 @@ function build_shared_lib(
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
         inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn,
-        cc = cc, cc_flags = cc_flags
+        cc = cc, cc_flags = cc_flags, shared_init = shared_init
     )
 end
 
