@@ -32,20 +32,20 @@ function build()
 
     @info "Installing GCC"
 
+    gccargs = ``
     if verify_gcc("cc")
         gccpath = "cc"
         @info "Using `cc` as C compiler"
     elseif Sys.iswindows()
-        gccpath = joinpath(
-            WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
-            "sys-root", "mingw", "bin", "gcc.exe"
-        )
+        sysroot = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32", "sys-root")
+        gccpath = joinpath(sysroot, "mingw", "bin", "gcc.exe")
         if !isfile(gccpath)
             WinRPM.install("gcc", yes = true)
         end
         if !isfile(gccpath)
             error("Couldn't install gcc via winrpm")
         end
+        gccargs = `$gccargs --sysroot $sysroot`
         @info "Using `gcc` from WinRPM as C compiler"
     elseif Sys.isunix() && verify_gcc("gcc")
         gccpath = "gcc"
@@ -56,8 +56,7 @@ function build()
         error("Please make sure to provide a working gcc in your path!")
     end
     open("deps.jl", "w") do io
-        print(io, "const gcc = ")
-        println(io, '"', escape_string(gccpath), '"')
+        println(io, "const gcc = ", repr(`$gccpath $gccargs`))
     end
 end
 
