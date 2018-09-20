@@ -44,6 +44,9 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--shared", "-s"
             action = :store_true
             help = "build shared library"
+        "--init-shared", "-i"
+            action = :store_true
+            help = "add `init_jl_runtime` and `exit_jl_runtime` to shared library for runtime initialization"
         "--executable", "-e"
             action = :store_true
             help = "build executable file"

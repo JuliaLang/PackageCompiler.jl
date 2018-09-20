@@ -49,8 +49,8 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $compiler_path.ji --startup-file=no sysimg.jl`)
 
         build_shared(
-            "$sysimg_path.$(Libdl.dlext)", "$sysimg_path.o", ".",
-            true, nothing, debug ? 2 : nothing, cc, nothing
+            "$sysimg_path.$(Libdl.dlext)", "$sysimg_path.o", false,
+            ".", true, nothing, debug ? 2 : nothing, cc, nothing
         )
     end
 end
