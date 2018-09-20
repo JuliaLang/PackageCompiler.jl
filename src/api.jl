@@ -37,7 +37,7 @@ end
     build_shared_lib(
         julia_program, output_name = nothing;
         snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
-        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
+        init_shared = false, copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
@@ -51,22 +51,22 @@ end
 function build_shared_lib(
         julia_program, output_name = nothing;
         snoopfile = nothing, builddir = nothing, verbose = false, quiet = false,
-        copy_julialibs = true, copy_files = nothing, release = false, Release = false,
+        init_shared = false, copy_julialibs = true, copy_files = nothing, release = false, Release = false,
         sysimage = nothing, precompiled = nothing, compilecache = nothing,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         compile = nothing, cpu_target = nothing, optimize = nothing, debug = nothing,
         inline = nothing, check_bounds = nothing, math_mode = nothing, depwarn = nothing,
-        cc = nothing, cc_flags = nothing, shared_init = false
+        cc = nothing, cc_flags = nothing
     )
     static_julia(
         julia_program, verbose = verbose, quiet = quiet,
         builddir = builddir, outname = output_name, snoopfile = snoopfile, autodeps = true, shared = true,
-        copy_julialibs = copy_julialibs, copy_files = copy_files, release = release, Release = release,
+        init_shared = init_shared, copy_julialibs = copy_julialibs, copy_files = copy_files, release = release, Release = release,
         sysimage = sysimage, precompiled = precompiled, compilecache = compilecache,
         home = home, startup_file = startup_file, handle_signals = handle_signals,
         compile = compile, cpu_target = cpu_target, optimize = optimize, debug = debug,
         inline = inline, check_bounds = check_bounds, math_mode = math_mode, depwarn = depwarn,
-        cc = cc, cc_flags = cc_flags, shared_init = shared_init
+        cc = cc, cc_flags = cc_flags
     )
 end
 

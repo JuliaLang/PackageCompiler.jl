@@ -84,8 +84,8 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
-                 [-a] [-o] [-s] [-e] [-t] [-j] [-f <file>] [-r] [-R]
-                 [-J <file>] [--precompiled {yes|no}]
+                 [-a] [-o] [-s] [-i] [-e] [-t] [-j] [-f <file>] [-r]
+                 [-R] [-J <file>] [--precompiled {yes|no}]
                  [--compilecache {yes|no}] [-H <dir>]
                  [--startup-file {yes|no}] [--handle-signals {yes|no}]
                  [--compile {yes|no|all|min}] [-C <target>]
@@ -114,6 +114,8 @@ optional arguments:
   -a, --autodeps        automatically build required dependencies
   -o, --object          build object file
   -s, --shared          build shared library
+  -i, --init-shared     add `init_jl_runtime` and `exit_jl_runtime` to
+                        shared library for runtime initialization
   -e, --executable      build executable file
   -t, --rmtemp          remove temporary build files
   -j, --copy-julialibs  copy Julia libraries to build directory

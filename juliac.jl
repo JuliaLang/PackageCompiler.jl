@@ -44,9 +44,9 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         "--shared", "-s"
             action = :store_true
             help = "build shared library"
-        "--shared-init", "-i"
+        "--init-shared", "-i"
             action = :store_true
-            help = "build shared library including jl_runtime initialization"
+            help = "add `init_jl_runtime` and `exit_jl_runtime` to shared library for runtime initialization"
         "--executable", "-e"
             action = :store_true
             help = "build executable file"
@@ -159,7 +159,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args["copy-files"] == String[] && (parsed_args["copy-files"] = nothing)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "shared-init", "executable", "rmtemp", "copy-julialibs", "copy-files", "Release"]) == [false, false, false, false, false, false, false, nothing, false]
+    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files", "Release"]) == [false, false, false, false, false, false, nothing, false]
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
