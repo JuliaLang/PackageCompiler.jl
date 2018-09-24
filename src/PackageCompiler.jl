@@ -128,7 +128,7 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
         end
     else
         @info """Not replacing system image.
-            You can start julia with `julia -J $(imgfile)` to load the compiled files."""
+            You can start julia with $(`julia -J $imgfile`) at a posix shell to load the compiled files."""
     end
     imgfile
 end
