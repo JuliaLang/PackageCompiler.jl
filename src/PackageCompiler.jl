@@ -1,28 +1,8 @@
 __precompile__()
 module PackageCompiler
 
-# TODO: remove once Julia v0.7 is released
-const julia_v07 = VERSION > v"0.7-"
-if julia_v07
-    using Libdl
-    const isunix = Sys.isunix
-    const islinux = Sys.islinux
-    const isapple = Sys.isapple
-    const iswindows = Sys.iswindows
-    const JULIA_BINDIR = Sys.BINDIR
-    const contains07 = contains
-else
-    const isunix = is_unix
-    const islinux = is_linux
-    const isapple = is_apple
-    const iswindows = is_windows
-    const JULIA_BINDIR = JULIA_HOME
-    contains07(str, reg) = ismatch(reg, str)
-end
-
-using SnoopCompile
-
-iswindows() && using WinRPM
+using Libdl, SnoopCompile
+Sys.iswindows() && using WinRPM
 
 include("compiler_flags.jl")
 include("static_julia.jl")
@@ -45,23 +25,17 @@ function copy_system_image(src, dest, ignore_missing = false)
             if isfile(destfile * ".backup")
                 rm(destfile * ".backup", force = true)
             end
-            mv(destfile, destfile * ".backup", remove_destination = true)
+            mv(destfile, destfile * ".backup", force = true)
         end
-        info("Copying system image: $srcfile to $destfile")
-        cp(srcfile, destfile, remove_destination = true)
+        @info "Copying system image: $srcfile to $destfile"
+        cp(srcfile, destfile, force = true)
     end
 end
 
 julia_cpu_target(x) = error("CPU target needs to be a string or `nothing`")
 julia_cpu_target(x::String) = x # TODO match against available targets
-if julia_v07
-    function julia_cpu_target(::Nothing)
-        replace(Base.julia_cmd().exec[2], "-C", "")
-    end
-else
-    function julia_cpu_target(::Void)
-        replace(Base.julia_cmd().exec[2], "-C", "")
-    end
+function julia_cpu_target(::Nothing)
+    replace(Base.julia_cmd().exec[2], "-C" => "")
 end
 
 """
@@ -141,34 +115,28 @@ function compile_package(packages::Tuple{String, String}...; force = false, reus
             backup = syspath * ".packagecompiler_backup"
             isfile(backup) || mv(syspath, backup)
             cp(imgfile, syspath)
-            info(
-                "Replaced system image successfully. Next start of julia will load the newly compiled system image.
-                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`."
-            )
+            @info """Replaced system image successfully. Next start of julia will load the newly compiled system image.
+                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`."""
         catch e
-            warn("An error has occured while replacing sysimg files:")
-            warn(e)
-            info("Recovering old system image from backup")
+            @warn "An error occured while replacing sysimg files:" error=e
+            @info "Recovering old system image from backup"
             # if any file is missing in default system image, revert!
             if !isfile(syspath)
-                info("$syspath missing. Reverting!")
+                @info "$syspath missing. Reverting!"
                 revert(debug)
             end
         end
     else
-        info("""
-            Not replacing system image.
-            You can start julia with `julia -J $(imgfile)` to load the compiled files.
-        """)
+        @info """Not replacing system image.
+            You can start julia with $(`julia -J $imgfile`) at a posix shell to load the compiled files."""
     end
     imgfile
 end
 
 function __init__()
     if Base.julia_cmd().exec[2] != "-Cnative"
-        warn("Your Julia system image is not compiled natively for this CPU architecture.
-        Please run `PackageCompiler.force_native_image!()` for optimal Julia performance"
-        )
+        @warn "Your Julia system image is not compiled natively for this CPU architecture.\n" *
+            "Please run `PackageCompiler.force_native_image!()` for optimal Julia performance."
     end
 end
 

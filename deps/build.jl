@@ -6,17 +6,7 @@ function verify_gcc(gcc)
     end
 end
 
-# TODO: remove once Julia v0.7 is released
-const julia_v07 = VERSION > v"0.7-"
-if julia_v07
-    const isunix = Sys.isunix
-    const iswindows = Sys.iswindows
-else
-    const isunix = is_unix
-    const iswindows = is_windows
-end
-
-if iswindows()
+if Sys.iswindows()
     using WinRPM
 end
 
@@ -25,7 +15,7 @@ function build()
     if isfile("deps.jl")
         include("deps.jl")
         if verify_gcc(gcc)
-            info("gcc already installed and package already build")
+            @info "GCC already installed and package already built"
             return
         else
             rm("deps.jl")
@@ -37,37 +27,36 @@ function build()
             error("Using compiler override from environment variable CC = $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
         end
         gccpath = ENV["CC"]
-        info("using $gccpath as a compiler from environment variable CC")
+        @info "Using `$gccpath` as C compiler from environment variable CC"
     end
 
-    info("installing gcc")
+    @info "Installing GCC"
 
+    gccargs = ``
     if verify_gcc("cc")
         gccpath = "cc"
-        info("using cc as a compiler")
-    elseif iswindows()
-        gccpath = joinpath(
-            WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
-            "sys-root", "mingw", "bin", "gcc.exe"
-        )
+        @info "Using `cc` as C compiler"
+    elseif Sys.iswindows()
+        sysroot = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32", "sys-root")
+        gccpath = joinpath(sysroot, "mingw", "bin", "gcc.exe")
         if !isfile(gccpath)
             WinRPM.install("gcc", yes = true)
         end
         if !isfile(gccpath)
             error("Couldn't install gcc via winrpm")
         end
-        info("using gcc from WinRPM as a compiler")
-    elseif isunix() && verify_gcc("gcc")
+        gccargs = `$gccargs --sysroot $sysroot`
+        @info "Using `gcc` from WinRPM as C compiler"
+    elseif Sys.isunix() && verify_gcc("gcc")
         gccpath = "gcc"
-        info("using gcc as a compiler")
+        @info "Using `gcc` as C compiler"
     end
 
     if isempty(gccpath)
         error("Please make sure to provide a working gcc in your path!")
     end
     open("deps.jl", "w") do io
-        print(io, "const gcc = ")
-        println(io, '"', escape_string(gccpath), '"')
+        println(io, "const gcc = ", repr(`$gccpath $gccargs`))
     end
 end
 

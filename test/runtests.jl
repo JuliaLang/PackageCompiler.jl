@@ -1,11 +1,10 @@
-using PackageCompiler
-using Base.Test
+using PackageCompiler, Test
 
 # If this works without error we should be in pretty good shape!
-# This command will use the runtest.jl of Matcha to find out what functions to precompile!
-compile_package("Matcha", "UnicodeFun", force = false, reuse = false) # false to not force overwriting julia's current system image
+# This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
+compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = false) # false to not force overwriting julia's current system image
 # build again, with resuing the snoop file
-img_file = compile_package("Matcha", "UnicodeFun", force = false, reuse = true)
+img_file = compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = true)
 # TODO test revert - I suppose i wouldn't have enough rights on travis to move around dll's?
 julia = Base.julia_cmd().exec[1]
 @testset "basic tests" begin
@@ -19,7 +18,7 @@ julia = Base.julia_cmd().exec[1]
         sysfile = joinpath(dir, "sys")
         PackageCompiler.compile_system_image(sysfile, "native")
         @test isfile(sysfile * ".o")
-        @test isfile(sysfile * ".$(Libdl.dlext)")
+        @test isfile(sysfile * ".$(PackageCompiler.Libdl.dlext)")
     end
 end
 
@@ -40,7 +39,7 @@ end
         )
     end
     builddir = joinpath(basedir, relativebuilddir)
-    @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
+    @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
     @test isfile(joinpath(builddir, "hello$executable_ext"))
     @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
     for i = 1:100
@@ -72,29 +71,15 @@ end
         )
         # Check that the output from the program is as expected:
         exe = joinpath(builddir, outname*executable_ext)
-        if PackageCompiler.julia_v07
-            output = read(`$exe a b c`, String)
-        else
-            output = readstring(`$exe a b c`)
-        end
+        output = read(`$exe a b c`, String)
         println(output)
-        if PackageCompiler.julia_v07
-            @test output ==
-                "@__FILE__: $argsjlfile\n" *
-                "PROGRAM_FILE: $exe\n" *
-                "argv: [\"a\", \"b\", \"c\"]\n" *
-                "ARGS: [\"a\", \"b\", \"c\"]\n" *
-                "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
-                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
-        else
-            @test output ==
-                "@__FILE__: $argsjlfile\n" *
-                "PROGRAM_FILE: $exe\n" *
-                "argv: String[\"a\", \"b\", \"c\"]\n" *
-                "ARGS: String[\"a\", \"b\", \"c\"]\n" *
-                "Base.ARGS: String[\"a\", \"b\", \"c\"]\n" *
-                "Core.ARGS: Any[\"$(PackageCompiler.iswindows() ? replace(exe, "\\", "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
-        end
+        @test output ==
+            "@__FILE__: $argsjlfile\n" *
+            "PROGRAM_FILE: $exe\n" *
+            "argv: [\"a\", \"b\", \"c\"]\n" *
+            "ARGS: [\"a\", \"b\", \"c\"]\n" *
+            "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
+            "Core.ARGS: Any[\"$(Sys.iswindows() ? replace(exe, "\\" => "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
     end
 end
 
@@ -104,23 +89,15 @@ end
         jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
         cfile = joinpath(@__DIR__, "..", "examples", "program.c")
         @test success(`$julia $juliac -vaej $jlfile $cfile --builddir $builddir`)
-        @test isfile(joinpath(builddir, "hello.$(Libdl.dlext)"))
+        @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
         @test isfile(joinpath(builddir, "hello$executable_ext"))
         @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
         @testset "--cc-flags" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            if PackageCompiler.julia_v07
-                @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
-            else
-                @test contains(readstring(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`), "-g")
-            end
+            @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
             # Just as a control, make sure that without passing '--help', we don't see "-g"
-            if PackageCompiler.julia_v07
-                @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
-            else
-                @test !contains(readstring(`$julia $juliac -se $jlfile $cfile --builddir $builddir`), "-g")
-            end
+            @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
         end
     end
 end

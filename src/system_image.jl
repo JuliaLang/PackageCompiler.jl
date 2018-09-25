@@ -2,10 +2,10 @@
 
 function default_sysimg_path(debug = false)
     ext = debug ? "sys-debug" : "sys"
-    if isunix()
+    if Sys.isunix()
         dirname(Libdl.dlpath(ext))
     else
-        normpath(JULIA_BINDIR, "..", "lib", "julia")
+        normpath(Sys.BINDIR, "..", "lib", "julia")
     end
 end
 
@@ -18,7 +18,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         julia_cmd = Base.julia_cmd()
         julia = julia_cmd.exec[1]
         cpu_target = if cpu_target == nothing
-            replace(julia_cmd.exec[2], "-C", "")
+            replace(julia_cmd.exec[2], "-C" => "")
         else
             cpu_target
         end
@@ -27,26 +27,21 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         try
             touch("$sysimg_path.ji")
         catch
-            err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
-            err_msg *= "and is writable; absolute paths work best.)"
-            error(err_msg)
+            error("Unable to modify $sysimg_path.ji, ensure that parent directory exists and is writable")
         end
-        compiler_path, compiler = if julia_v07
-            joinpath(dirname(sysimg_path), "basecompiler"), "compiler/compiler.jl"
-        else
-            joinpath(dirname(sysimg_path), "inference"), "coreimg.jl"
-        end
+        compiler_path = joinpath(dirname(sysimg_path), "basecompiler")
+        compiler = "compiler/compiler.jl"
 
         # Start by building inference.{ji,o}
         inference_path = joinpath(dirname(sysimg_path), "inference")
-        info("Building inference.o")
-        info("$julia -C $cpu_target --output-ji $compiler_path.ji --output-o $compiler_path.o $compiler")
-        run(`$julia -C $cpu_target --output-ji $compiler_path.ji --output-o $compiler_path.o $compiler`)
+        command = `$julia -C $cpu_target --output-ji $compiler_path.ji --output-o $compiler_path.o $compiler`
+        @info "Building `inference.o`:\n$command"
+        run(command)
 
         # Bootstrap off of that to create sys.{ji,o}
-        info("Building sys.o")
-        info("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $compiler_path.ji --startup-file=no sysimg.jl")
-        run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $compiler_path.ji --startup-file=no sysimg.jl`)
+        command = `$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $compiler_path.ji --startup-file=no sysimg.jl`
+        @info "Building `sys.o`:\n$command"
+        run(command)
 
         build_shared(
             "$sysimg_path.$(Libdl.dlext)", "$sysimg_path.o", false,

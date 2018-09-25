@@ -3,11 +3,7 @@
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
 
 function shell_escape(str)
-    if julia_v07
-        str = replace(str, "'" => "'\''")
-    else
-        str = replace(str, "'", "'\''")
-    end
+    str = replace(str, "'" => "'\''")
     return "'$str'"
 end
 
@@ -19,25 +15,17 @@ function libDir()
     end
 end
 
-if julia_v07
-    private_libDir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
-else
-    private_libDir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
-end
+private_libDir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
 
 function includeDir()
-    if julia_v07
-        return abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
-    else
-        return abspath(JULIA_HOME, Base.INCLUDEDIR, "julia")
-    end
+    return abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 end
 
 function ldflags()
     fl = "-L$(shell_escape(libDir()))"
-    if iswindows()
+    if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
-    elseif islinux()
+    elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
     return fl
@@ -49,7 +37,7 @@ function ldlibs()
     else
         "julia"
     end
-    if isunix()
+    if Sys.isunix()
         return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
     else
         return "-l$libname -lopenlibm"
@@ -64,7 +52,7 @@ function cflags()
     if threadingOn()
         print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
-    if isunix()
+    if Sys.isunix()
         print(flags, " -fPIC")
     end
     return String(take!(flags))
