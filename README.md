@@ -1,6 +1,5 @@
 # PackageCompiler
-`julia v0.6`: [![Build Status](https://travis-ci.org/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/PackageCompiler.jl)
-<br>`julia v0.7+`: partial support, work in progress.
+[![Build Status](https://travis-ci.org/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/PackageCompiler.jl)
 
 [![Coverage Status](https://coveralls.io/repos/JuliaLang/PackageCompiler.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaLang/PackageCompiler.jl?branch=master)
 
