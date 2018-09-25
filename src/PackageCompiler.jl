@@ -1,4 +1,3 @@
-__precompile__()
 module PackageCompiler
 
 using Libdl, SnoopCompile
