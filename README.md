@@ -83,8 +83,8 @@ Run `juliac.jl -h` for help:
 
 ```
 usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
-                 [-a] [-o] [-s] [-i] [-e] [-t] [-j] [-f <file>] [-r] [-R]
-                 [-J <file>] [-H <dir>] [--startup-file {yes|no}]
+                 [-a] [-o] [-s] [-i] [-e] [-t] [-j] [-f <file>] [-r]
+                 [-R] [-J <file>] [-H <dir>] [--startup-file {yes|no}]
                  [--handle-signals {yes|no}]
                  [--sysimage-native-code {yes|no}]
                  [--compiled-modules {yes|no}]
@@ -126,7 +126,7 @@ optional arguments:
   -r, --release         build in release mode, implies `-O3 -g0`
                         unless otherwise specified
   -R, --Release         perform a fully automated release build,
-                        equivalent to `-caetjr`
+                        equivalent to `-atjr`
   -J, --sysimage <file>
                         start up with the given system image file
   -H, --home <dir>      set location of `julia` executable
@@ -172,7 +172,7 @@ examples:
   juliac.jl -vae hello.jl prog.c # embed into user defined C program
   juliac.jl -qo hello.jl         # quiet, build object file only
   juliac.jl -vosej hello.jl      # build all and copy Julia libs
-  juliac.jl -vR hello.jl         # fully automated release build
+  juliac.jl -vRe hello.jl        # fully automated release build
 ```
 
 ## Building a shared library
