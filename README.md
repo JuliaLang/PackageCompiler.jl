@@ -220,7 +220,7 @@ for an example Julia program.
 ### Notes
 
 1. The `juliac.jl` script is located in the `PackageCompiler` root
-   folder (`Pkg.dir("PackageCompiler")`).
+   folder (`normpath(Base.find_package("PackageCompiler"), "..", "..")`).
 
 2. A shared library containing the system image `hello.so`, and a
    driver binary `hello` are created in the `builddir` directory.
