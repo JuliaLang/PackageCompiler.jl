@@ -315,8 +315,7 @@ function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, c
         command = `$command -Wl,-rpath,\$ORIGIN`
     end
     if Int == Int32
-        # TODO this was added because of an error with julia on win32 that suggested this line.
-        # Seems to work, not sure if it's correct
+        # TODO: this was added because of an error with julia on win32 that suggested this line, it seems to work but I'm not sure if it's correct
         command = `$command -march=pentium4`
     end
     verbose && println("Build executable $(repr(e_file)):\n  $command")
@@ -352,7 +351,7 @@ function copy_files_array(files_array, builddir, verbose, message)
 end
 
 function copy_julia_libs(builddir, verbose)
-    # TODO: these flags should probably be emitted from `julia-config.jl` / `compiler_flags.jl` also:
+    # TODO: these flags should probably be emitted also by `julia-config.jl` and `compiler_flags.jl`
     shlibdir = Sys.iswindows() ? Sys.BINDIR : joinpath(Sys.BINDIR, Base.LIBDIR)
     private_shlibdir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
     libfiles = String[]
