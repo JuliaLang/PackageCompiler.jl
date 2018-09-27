@@ -45,5 +45,5 @@ packages = [
 ]
 
 for elem in packages
-    cp(Pkg.dir(elem), dir("build", elem))
+    cp(normpath(Base.find_package(elem), "..", ".."), dir("build", elem))
 end
