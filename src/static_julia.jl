@@ -48,7 +48,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     copy_julialibs                   copy Julia libraries to build directory
     copy_files                       copy user-specified files to build directory (either `nothing` or a string array)
     release                          build in release mode, implies `-O3 -g0` unless otherwise specified
-    Release                          perform a fully automated release build, equivalent to `-caetjr`
+    Release                          perform a fully automated release build, equivalent to `-atjr`
     sysimage <file>                  start up with the given system image file
     home <dir>                       set location of `julia` executable
     startup_file {yes|no}            load `~/.julia/config/startup.jl`
@@ -88,7 +88,7 @@ function static_julia(
     verbose && quiet && (quiet = false)
 
     if Release
-        clean = autodeps = executable = rmtemp = copy_julialibs = release = true
+        autodeps = rmtemp = copy_julialibs = release = true
     end
 
     if autodeps

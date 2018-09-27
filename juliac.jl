@@ -67,7 +67,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             help = "build in release mode, implies `-O3 -g0` unless otherwise specified"
         "--Release", "-R"
             action = :store_true
-            help = "perform a fully automated release build, equivalent to `-caetjr`"
+            help = "perform a fully automated release build, equivalent to `-atjr`"
         "--sysimage", "-J"
             arg_type = String
             metavar = "<file>"
@@ -156,7 +156,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
         \ua0\ua0juliac.jl -vae hello.jl prog.c # embed into user defined C program\n
         \ua0\ua0juliac.jl -qo hello.jl         # quiet, build object file only\n
         \ua0\ua0juliac.jl -vosej hello.jl      # build all and copy Julia libs\n
-        \ua0\ua0juliac.jl -vR hello.jl         # fully automated release build
+        \ua0\ua0juliac.jl -vRe hello.jl        # fully automated release build
         """
 
     parsed_args = parse_args(args, s)
@@ -164,7 +164,7 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
     parsed_args["copy-files"] == String[] && (parsed_args["copy-files"] = nothing)
 
     # TODO: in future it may be possible to broadcast dictionary indexing, see: https://discourse.julialang.org/t/accessing-multiple-values-of-a-dictionary/8648
-    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files", "Release"]) == [false, false, false, false, false, false, nothing, false]
+    if getindex.(Ref(parsed_args), ["clean", "object", "shared", "executable", "rmtemp", "copy-julialibs", "copy-files"]) == [false, false, false, false, false, false, nothing]
         parsed_args["quiet"] || println("nothing to do, exiting\ntry \"$(basename(@__FILE__)) -h\" for more information")
         exit(0)
     end
