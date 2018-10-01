@@ -22,7 +22,7 @@ compile_package("ArgParse", "SnoopCompile", force = false, reuse = true)
 
 # You can define a file that will get run for snooping explicitly like this:
 # this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
-compile_package("ArgParse", "relative/path/for_snooping.jl")
+compile_package(("ArgParse", "relative/path/for_snooping.jl"))
 
 # If you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
 revert()
