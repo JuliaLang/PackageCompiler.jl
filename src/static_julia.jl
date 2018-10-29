@@ -273,7 +273,7 @@ function build_shared(s_file, o_file, init_shared, builddir, verbose, optimize, 
 		void init_jl_runtime() // alternate name for jl_init_with_image, with hardcoded library name
 		{
 		    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
-		    const char rel_libname[] = JULIAC_PROGRAMLIBNAME;
+		    const char rel_libname[] = JULIAC_PROGRAM_LIBNAME;
 		    jl_init_with_image(NULL, rel_libname);
 		}
 		void exit_jl_runtime(int retcode) // alternate name for jl_atexit_hook
