@@ -144,10 +144,12 @@ Base.@ccallable function julia_main(args::Vector{String})::Cint
             arg_type = String
             metavar = "<cc>"
             help = "system C compiler"
-        "--cc-flags"
+        "--cc-flag"
             arg_type = String
-            metavar = "<flags>"
-            help = "pass custom flags to the system C compiler when building a shared library or executable"
+            action = :append_arg
+            dest_name = "cc-flags"
+            metavar = "<flag>"
+            help = "pass custom flag to the system C compiler when building a shared library or executable, can be repeated for multiple flags"
     end
 
     s.epilog = """

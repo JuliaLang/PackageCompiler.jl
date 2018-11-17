@@ -92,10 +92,10 @@ end
         @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
         @test isfile(joinpath(builddir, "hello$executable_ext"))
         @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
-        @testset "--cc-flags" begin
+        @testset "--cc-flag" begin
             # Try passing `--help` to $cc. This should work for any system compiler.
             # Then grep the output for "-g", which should be present on any system.
-            @test occursin("-g", read(`$julia $juliac -se --cc-flags="--help" $jlfile $cfile --builddir $builddir`, String))
+            @test occursin("-g", read(`$julia $juliac -se --cc-flag="--help" $jlfile $cfile --builddir $builddir`, String))
             # Just as a control, make sure that without passing '--help', we don't see "-g"
             @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
         end

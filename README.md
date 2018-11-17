@@ -93,7 +93,7 @@ usage: juliac.jl [-v] [-q] [-d <dir>] [-n <name>] [-p <file>] [-c]
                  [--compile {yes|no|all|min}] [-C <target>]
                  [-O {0,1,2,3}] [-g <level>] [--inline {yes|no}]
                  [--check-bounds {yes|no}] [--math-mode {ieee,fast}]
-                 [--cc <cc>] [--cc-flags <flags>] [--version] [-h]
+                 [--cc <cc>] [--cc-flag <flag>] [--version] [-h]
                  juliaprog [cprog]
 
 Static Julia Compiler
@@ -162,8 +162,9 @@ optional arguments:
                         disallow or enable unsafe floating point
                         optimizations
   --cc <cc>             system C compiler
-  --cc-flags <flags>    pass custom flags to the system C compiler
-                        when building a shared library or executable
+  --cc-flag <flag>      pass custom flag to the system C compiler when
+                        building a shared library or executable, can
+                        be repeated for multiple flags
   --version             show version information and exit
   -h, --help            show this help message and exit
 
