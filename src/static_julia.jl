@@ -65,7 +65,7 @@ compiles the Julia file at path `juliaprog` with keyword arguments:
     check_bounds {yes|no}            emit bounds checks always or never
     math_mode {ieee,fast}            disallow or enable unsafe floating point optimizations
     cc                               system C compiler
-    cc_flags <flags>                 pass custom flags to the system C compiler when building a shared library or executable
+    cc_flags <flags>                 pass custom flags to the system C compiler when building a shared library or executable (either `nothing` or a string array)
 """
 function static_julia(
         juliaprog;
