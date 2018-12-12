@@ -34,7 +34,6 @@ function snoop_vanilla(flags, filename, commands, pwd)
 end
 
 
-Pkg.TOML.parsefile(Pkg.PKGMODE_PROJECT)
 using Pkg
 function get_dependencies(package_root)
     project = joinpath(package_root, "Project.toml")
@@ -70,27 +69,33 @@ function snoop(package, snoopfile, outputfile)
     end
     deps = get_dependencies(M.package_path)
     deps_usings = string("using ", join(deps, ", "))
+    @eval M begin
+        $(Meta.parse(deps_usings))
+    end
     open(outputfile, "w") do io
         println(io, """
-        if !isdefined(Base, :uv_eventloop)
-            Base.reinit_stdio()
-        end
+        # if !isdefined(Base, :uv_eventloop)
+        #     Base.reinit_stdio()
+        # end
         Base.init_load_path()
         Base.init_depot_path()
         using Pkg
         Pkg.activate($(repr(M.package_path)))
-        Pkg.instantiate()
+        # Pkg.instantiate()
         using $package
         $deps_usings
         """)
         for line in eachline(tmp_file)
+            # replace function instances, which turn up as typeof(func)().
+            # TODO why would they be represented in a way that doesn't actually work?
+            line = replace(line, r"typeof\(([\u00A0-\uFFFF\w_!´\.]*@?[\u00A0-\uFFFF\w_!´]+)\)\(\)" => s"\1")
             expr = Meta.parse(line, raise = false)
             if expr.head != :error
                 try
                     M.eval(M, expr)
                     println(io, line)
                 catch e
-                    @warn "couldn't eval $line" exception = e
+                    @warn "could not eval $line" exception = e
                 end
             end
         end
