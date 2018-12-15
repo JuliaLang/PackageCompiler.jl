@@ -101,10 +101,12 @@ function static_julia(
         debug == nothing && (debug = "0")
     end
 
-    juliaprog = abspath(juliaprog)
-    isfile(juliaprog) || error("Cannot find file: \"$juliaprog\"")
-    quiet || println("Julia program file:\n  \"$juliaprog\"")
-
+    if juliaprog != nothing
+        juliaprog = abspath(juliaprog)
+        isfile(juliaprog) || error("Cannot find file: \"$juliaprog\"")
+        quiet || println("Julia program file:\n  \"$juliaprog\"")
+    end
+    
     if executable
         cprog = abspath(cprog)
         isfile(cprog) || error("Cannot find file: \"$cprog\"")
@@ -149,7 +151,7 @@ function static_julia(
             snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"), Vector{Pair{String,String}}(), String["Main"])
             jlmain = joinpath(builddir, "julia_main.jl")
             open(jlmain, "w") do io
-                println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
+                juliaprog != nothing && println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
                 println(io, """
                     let M = Module() # Prevent this from putting anything into the Main namespace
                         for m in Base.loaded_modules_array()
@@ -235,7 +237,7 @@ function build_object(
         sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
         depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
     )
-    Sys.iswindows() && (juliaprog = replace(juliaprog, "\\" => "\\\\"))
+    Sys.iswindows() && (juliaprog != nothing) && (juliaprog = replace(juliaprog, "\\" => "\\\\"))
     julia_cmd = build_julia_cmd(
         sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
         depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
@@ -245,8 +247,10 @@ function build_object(
     expr = """
         Base.__init__(); Sys.__init__() # initialize `Base` and `Sys` modules
         pushfirst!(Base.DEPOT_PATH, $(repr(cache_dir))) # save precompiled modules locally
-        include($(repr(juliaprog))) # include Julia program file
         """
+    juliaprog != nothing && (expr = expr * """
+        include($(repr(juliaprog))) # include Julia program file
+        """)
     # TODO: fix this for Julia v1.0, or how to precompile modules?
     #if compiled_modules == "yes"
     #    command = `$julia_cmd -e $expr`
