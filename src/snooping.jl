@@ -136,7 +136,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_p
         package = package_folder(get_root_dir(abs_package_path))
         isdir(package) || mkpath(package)
         precompile_file = joinpath(package, "precompile.jl")
-        # snoop(module_name, file2snoop, precompile_file; additional_packages = additional_packages)
+        snoop(module_name, file2snoop, precompile_file; additional_packages = additional_packages)
         return precompile_file
     end
     # merge all of the temporary files into a single output
