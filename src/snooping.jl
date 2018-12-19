@@ -45,7 +45,7 @@ function recursive_install_dependencies(package::Symbol, deps = Set{Symbol}(), v
   else
     error("No Project.toml or REQUIRE found for package $package")
   end
-  foreach(x-> get_dependencies(x, deps, visited; installed = installed), copy(deps))
+  foreach(x-> recursive_install_dependencies(x, deps, visited; installed = installed), copy(deps))
   deps
 end
 
