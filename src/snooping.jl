@@ -91,16 +91,21 @@ function snoop(package, snoopfile, outputfile; additional_packages = Symbol[])
         using $package
         $deps_usings
         """)
+        line_idx = 0
         for line in eachline(tmp_file)
             # replace function instances, which turn up as typeof(func)().
             # TODO why would they be represented in a way that doesn't actually work?
             line = replace(line, r"typeof\(([\u00A0-\uFFFF\w_!´\.]*@?[\u00A0-\uFFFF\w_!´]+)\)\(\)" => s"\1")
+            # This is ridicilous, yes, but we need a unique symbol to replace `_`,
+            # which otherwise ends up as an uncatchable syntax error
+            line = replace(line, r"\b_\b" => "🐃")
             expr = Meta.parse(line, raise = false)
-            if expr.head != :error
+            if expr.head in (:error, :incomplete)
                 # we need to wrap into try catch, since some anonymous symbols won't
                 # be found... there is also still a high probability, that some modules
                 # aren't defined
-                println(io, "try;", line, "; catch e; @warn \"could not eval $line\" exception = e; end")
+                line_idx += 1
+                println(io, "try;", line, "; catch e; @warn \"couldn't precompile statement $line_idx\" exception = e; end")
             end
         end
     end
@@ -131,15 +136,13 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_p
         package = package_folder(get_root_dir(abs_package_path))
         isdir(package) || mkpath(package)
         precompile_file = joinpath(package, "precompile.jl")
-        snoop(module_name, file2snoop, precompile_file; additional_packages = additional_packages)
+        # snoop(module_name, file2snoop, precompile_file; additional_packages = additional_packages)
         return precompile_file
     end
     # merge all of the temporary files into a single output
     open(userimg, "w") do output
-        println(output, """
         # Prevent this from being put into the Main namespace
-        Core.eval(Module(), quote
-        """)
+        println(output, "module CompilationModule")
         for (pkg, _) in packages
             println(output, "import $pkg")
         end
@@ -147,7 +150,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_p
             open(input -> write(output, input), path)
             println(output)
         end
-        println(output, "end) # eval")
+        println(output, "end # let")
     end
     nothing
 end
