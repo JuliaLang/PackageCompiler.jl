@@ -1,115 +1,60 @@
 using Pkg, Serialization
 
-function get_dependencies(package_root)
-    project = joinpath(package_root, "Project.toml")
-    if !isfile(project)
-        error("Your package needs to have a Project.toml for static compilation. Please read here how to upgrade:")
-    end
-    project_deps = Pkg.TOML.parsefile(project)["deps"]
-    Symbol.(keys(project_deps))
-end
 
-"""
-Recursively get's all dependencies for `package` and makes sure they're installed!
-Note, that this will mutate your current Pkg environment!
-Returns all dependencies!
-"""
-function recursive_install_dependencies(package::Symbol, deps = Set{Symbol}(), visited = Set{Symbol}(); installed = Pkg.installed())
-  package in visited && return deps
-  if !haskey(installed, string(package))
-    @info "installing $package"
-    Pkg.add(string(package))
-  end
-  push!(visited, package)
-  M = @eval Module() ((import $package; $package))
-  project = joinpath(dirname(pathof(M)), "..", "Project.toml")
-  require = joinpath(dirname(pathof(M)), "..", "REQUIRE")
-  if isfile(project)
-    toml = Pkg.TOML.parsefile(project)
-    if haskey(toml, "deps")
-      push!(deps, Symbol.(keys(toml["deps"]))...)
-    end
-  elseif isfile(require)
-    for line in eachline(require)
-      isempty(line) && continue
-      any(x-> occursin(x, line), (
-        "windows", "osx", "unix", "linux", "julia", "#"
-      )) && continue
-      m = match(r"([a-zA-Z\-]+)", line)
-      if m == nothing
-        @warn("Can't match package: $line") # just means we got our regex wrong
-      else
-        push!(deps, Symbol(m[1]))
-      end
-    end
-  else
-    error("No Project.toml or REQUIRE found for package $package")
-  end
-  foreach(x-> recursive_install_dependencies(x, deps, visited; installed = installed), copy(deps))
-  deps
-end
-
-
-function snoop(package, snoopfile, outputfile; additional_packages = Symbol[])
+function snoop(package, snoopfile, outputfile, reuse = false)
+    packages = extract_using(snoopfile)
     command = """
-    using Pkg, $package
-    using $(join(additional_packages, ", "))
-    package_path = abspath(joinpath(dirname(pathof($package)), ".."))
-    Pkg.activate(package_path)
-    Pkg.instantiate()
+    using Pkg, PackageCompiler, $package
     include($(repr(snoopfile)))
     """
-    tmp_file = joinpath(@__DIR__, "precompile_tmp.jl")
-    julia_cmd = build_julia_cmd(
-        get_backup!(false, nothing), nothing, nothing, nothing, nothing, nothing,
-        nothing, nothing, "all", nothing, "0", nothing, nothing, nothing, nothing
-    )
-    run(`$julia_cmd --trace-compile=$tmp_file -e $command`)
+    # let's use a file in the PackageCompiler dir,
+    # so it doesn't get lost if a later step fails
+    tmp_file = sysimg_folder("precompile_tmp.jl")
+    if !reuse
+        julia_cmd = build_julia_cmd(
+            get_backup!(false, nothing), nothing, nothing, nothing, nothing, nothing,
+            nothing, nothing, "all", nothing, "0", nothing, nothing, nothing, nothing
+        )
+        run(`$julia_cmd --trace-compile=$tmp_file -e $command`)
+    end
     M = Module()
     @eval M begin
         using Pkg
-        using $package
-        package_path = abspath(joinpath(dirname(pathof($package)), ".."))
-        Pkg.activate(package_path)
-        Pkg.instantiate()
+        using $(Symbol(package))
     end
-    deps = [get_dependencies(M.package_path); collect(additional_packages)]
-    deps_usings = string("using ", join(deps, ", "))
-    @eval M begin
-        $(Meta.parse(deps_usings))
-    end
+    actually_used = extract_used_packages(tmp_file)
+    require_uninstalled.(actually_used, (M,))
+    line_idx = 0
+    missed = 0
     open(outputfile, "w") do io
         println(io, """
-        # Initialize Pkg
-        Base.init_load_path()
-        Base.init_depot_path()
-        using Pkg
-        Pkg.activate($(repr(M.package_path)))
-        # Initialize REPL module for Docs
-        using REPL
-        Base.REPL_MODULE_REF[] = REPL
-        using $package
-        $deps_usings
+        PackageCompiler.require_uninstalled.($(repr(actually_used)), @__MODULE__)
         """)
-        line_idx = 0
         for line in eachline(tmp_file)
+            line_idx += 1
             # replace function instances, which turn up as typeof(func)().
             # TODO why would they be represented in a way that doesn't actually work?
             line = replace(line, r"typeof\(([\u00A0-\uFFFF\w_!´\.]*@?[\u00A0-\uFFFF\w_!´]+)\)\(\)" => s"\1")
-            # This is ridicilous, yes, but we need a unique symbol to replace `_`,
+            # Is this ridicilous? Yes, it is! But we need a unique symbol to replace `_`,
             # which otherwise ends up as an uncatchable syntax error
             line = replace(line, r"\b_\b" => "🐃")
-            expr = Meta.parse(line, raise = false)
-            if expr.head in (:error, :incomplete)
-                # we need to wrap into try catch, since some anonymous symbols won't
-                # be found... there is also still a high probability, that some modules
-                # aren't defined
-                line_idx += 1
-                println(io, "try;", line, "; catch e; @warn \"couldn't precompile statement $line_idx\" exception = e; end")
+            try
+                expr = Meta.parse(line, raise = true)
+                if expr.head != :incomplete
+                    # after all this, we still need to wrap into try catch,
+                    # since some anonymous symbols won't be found...
+                    println(io, "try;", line, "; catch e; @warn \"couldn't precompile statement $line_idx\" exception = e; end")
+                else
+                    missed += 1
+                    @warn "Incomplete line in precompile file: $line"
+                end
+            catch e
+                missed += 1
+                @warn "Parse error in precompile file: $line" exception=e
             end
         end
     end
-    rm(tmp_file, force = true)
+    @info "used $(line_idx - missed) out of $line_idx precompile statements"
     outputfile
 end
 

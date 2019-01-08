@@ -8,6 +8,9 @@ include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
+include("pkg.jl")
+include("incremental.jl")
+
 
 const sysimage_binaries = ("sys.$(Libdl.dlext)",)
 
