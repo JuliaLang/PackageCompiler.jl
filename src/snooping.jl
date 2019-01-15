@@ -25,7 +25,7 @@ function snoop(package, snoopfile, outputfile, reuse = false)
     missed = 0
     open(outputfile, "w") do io
         println(io, """
-        PackageCompiler.require_uninstalled.($(repr(actually_used)), @__MODULE__)
+        PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
         """)
         for line in eachline(tmp_file)
             line_idx += 1
@@ -92,7 +92,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_p
             open(input -> write(output, input), path)
             println(output)
         end
-        println(output, "end # let")
+        println(output, "end # CompilationModule")
     end
     nothing
 end
