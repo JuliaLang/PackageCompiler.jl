@@ -12,7 +12,7 @@ function snoop(package, snoopfile, outputfile, reuse = false)
     tmp_file = sysimg_folder("precompile_tmp.jl")
     if !reuse
         julia = Base.julia_cmd()[1]
-        run(`$julia compile=all -O0 --trace-compile=$tmp_file -e $command`)
+        run(`$julia --compile=all -O0 --trace-compile=$tmp_file -e $command`)
     end
     M = Module()
     @eval M begin
