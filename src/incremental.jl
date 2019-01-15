@@ -44,8 +44,8 @@ Fix for https://github.com/JuliaLang/julia/issues/30479
 function Fix30479()
     """
     _bindir = ccall(:jl_get_julia_bindir, Any, ())::String
-    @eval(Sys, BINDIR = $(_bindir))
-    @eval(Sys, STDLIB = joinpath($_bindir, "..", "share", "julia", "stdlib", string('v', (VERSION.major), '.', VERSION.minor)))
+    @eval(Sys, BINDIR = \$(_bindir))
+    @eval(Sys, STDLIB = joinpath(\$_bindir, "..", "share", "julia", "stdlib", string('v', (VERSION.major), '.', VERSION.minor)))
     """
 end
 
