@@ -211,32 +211,33 @@ function build_julia_cmd(
     # TODO: `startup_file` may be removed in future with `julia-compile`, see: https://github.com/JuliaLang/julia/issues/15864
     startup_file == nothing && (startup_file = "no")
     julia_cmd = `$(Base.julia_cmd())`
-    get_flag_idx(flag_str) = findfirst(f->(length(f) > length(flag_str) &&
-                                           f[1:length(flag_str)]==flag_str), julia_cmd.exec)
-    function set_flag(flag_str, val)
-        flag_idx = get_flag_idx(flag_str)
+    function get_flag_idx(julia_cmd, flag_str)
+        findfirst(f->(length(f) > length(flag_str) &&
+                      f[1:length(flag_str)]==flag_str), julia_cmd.exec)
+    end
+    function set_flag(julia_cmd, flag_str, val)
+        flag_idx = get_flag_idx(julia_cmd, flag_str)
         if flag_idx != nothing
             julia_cmd.exec[flag_idx] = "$flag_str$val"
         else
             push!(julia_cmd.exec, "$flag_str$val")
         end
     end
-    sysimage == nothing || set_flag("-J", sysimage)
-    home == nothing || set_flag("-H=", home)
-    startup_file == nothing || set_flag("--startup-file=", startup_file)
-    handle_signals == nothing || set_flag("--handle-signals=", handle_signals)
-    sysimage_native_code == nothing || set_flag("--sysimage-native-code=", sysimage_native_code)
-    compiled_modules == nothing || set_flag("--compiled-modules=", compiled_modules)
-    depwarn == nothing || set_flag("--depwarn=", depwarn)
-    warn_overwrite == nothing || set_flag("--warn-overwrite=", warn_overwrite)
-    compile == nothing || set_flag("--compile=", compile)
-    cpu_target == nothing || set_flag("-C", cpu_target)
-    optimize == nothing || set_flag("-O", optimize)
-    debug == nothing || set_flag("-g", debug)
-    inline == nothing || set_flag("--inline=", inline)
-    check_bounds == nothing || set_flag("--check-bounds=", check_bounds)
-    math_mode == nothing || set_flag("--math-mode=", math_mode)
-    @show julia_cmd
+    sysimage == nothing || set_flag(julia_cmd, "-J", sysimage)
+    home == nothing || set_flag(julia_cmd, "-H=", home)
+    startup_file == nothing || set_flag(julia_cmd, "--startup-file=", startup_file)
+    handle_signals == nothing || set_flag(julia_cmd, "--handle-signals=", handle_signals)
+    sysimage_native_code == nothing || set_flag(julia_cmd, "--sysimage-native-code=", sysimage_native_code)
+    compiled_modules == nothing || set_flag(julia_cmd, "--compiled-modules=", compiled_modules)
+    depwarn == nothing || set_flag(julia_cmd, "--depwarn=", depwarn)
+    warn_overwrite == nothing || set_flag(julia_cmd, "--warn-overwrite=", warn_overwrite)
+    compile == nothing || set_flag(julia_cmd, "--compile=", compile)
+    cpu_target == nothing || set_flag(julia_cmd, "-C", cpu_target)
+    optimize == nothing || set_flag(julia_cmd, "-O", optimize)
+    debug == nothing || set_flag(julia_cmd, "-g", debug)
+    inline == nothing || set_flag(julia_cmd, "--inline=", inline)
+    check_bounds == nothing || set_flag(julia_cmd, "--check-bounds=", check_bounds)
+    math_mode == nothing || set_flag(julia_cmd, "--math-mode=", math_mode)
     julia_cmd
 end
 
