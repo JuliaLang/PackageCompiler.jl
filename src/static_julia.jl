@@ -106,7 +106,7 @@ function static_julia(
         isfile(juliaprog) || error("Cannot find file: \"$juliaprog\"")
         quiet || println("Julia program file:\n  \"$juliaprog\"")
     end
-    
+
     if executable
         cprog = abspath(cprog)
         isfile(cprog) || error("Cannot find file: \"$cprog\"")
@@ -212,7 +212,7 @@ function build_julia_cmd(
     startup_file == nothing && (startup_file = "no")
     julia_cmd = `$(Base.julia_cmd())`
     if length(julia_cmd.exec) != 5 || !all(startswith.(julia_cmd.exec[2:5], ["-C", "-J", "--compile", "--depwarn"]))
-        error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia")
+        error("Unexpected format of \"Base.julia_cmd()\", you may be using an incompatible version of Julia:\n$julia_cmd")
     end
     sysimage == nothing || (julia_cmd.exec[3] = "-J$sysimage")
     home == nothing || push!(julia_cmd.exec, "-H=$home")
