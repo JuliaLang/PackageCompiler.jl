@@ -238,6 +238,9 @@ function build_julia_cmd(
     inline == nothing || set_flag(julia_cmd, "--inline=", inline)
     check_bounds == nothing || set_flag(julia_cmd, "--check-bounds=", check_bounds)
     math_mode == nothing || set_flag(julia_cmd, "--math-mode=", math_mode)
+    # Disable incompatible flags
+    set_flag(julia_cmd, "--code-coverage=", "none")
+
     julia_cmd
 end
 
