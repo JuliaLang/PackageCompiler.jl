@@ -3,6 +3,9 @@ using PackageCompiler, Test
 # If this works without error we should be in pretty good shape!
 # This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
 compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = false) # false to not force overwriting julia's current system image
+
+PackageCompiler.compile_incremental(:ColorTypes)
+
 # Build again, reusing the snoop file
 img_file = compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = true)
 # TODO: I would like to test `revert` as well, but I suppose I wouldn't have enough rights on Travis CI to move around dll's?
