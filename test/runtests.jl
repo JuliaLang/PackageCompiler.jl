@@ -9,20 +9,7 @@ cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
 @test read(cmd, String) == "no segfaults, yay\n"
 
 julia = Base.julia_cmd().exec[1]
-@testset "basic tests" begin
-    @test isfile(img_file)
-    userimg = PackageCompiler.sysimg_folder("precompile.jl")
-    @test isfile(userimg)
-    # Make sure we actually snooped stuff
-    @test length(readlines(userimg)) > 700
-    @test success(`$julia -J $img_file`)
-    mktempdir() do dir
-        sysfile = joinpath(dir, "sys")
-        PackageCompiler.compile_system_image(sysfile, "native")
-        @test isfile(sysfile * ".o")
-        @test isfile(sysfile * ".$(PackageCompiler.Libdl.dlext)")
-    end
-end
+
 
 @testset "build_executable" begin
     jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
