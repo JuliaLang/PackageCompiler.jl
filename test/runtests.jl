@@ -1,9 +1,6 @@
 using PackageCompiler, Test
 
-# If this works without error we should be in pretty good shape!
-# This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
-compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = false) # false to not force overwriting julia's current system image
-
+# This is the new compile_package
 syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
 test_code = """
 using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
@@ -11,9 +8,6 @@ using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
 cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
 @test read(cmd, String) == "no segfaults, yay\n"
 
-# Build again, reusing the snoop file
-img_file = compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = true)
-# TODO: I would like to test `revert` as well, but I suppose I wouldn't have enough rights on Travis CI to move around dll's?
 julia = Base.julia_cmd().exec[1]
 @testset "basic tests" begin
     @test isfile(img_file)
