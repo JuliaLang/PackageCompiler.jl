@@ -192,6 +192,10 @@ function package_toml(package::Symbol)
     deps = toml["deps"]
     # Add the package itself
     deps[toml["name"]] = toml["uuid"]
+    # Add the packages we need
+    deps["Pkg"] = package_uuid("Pkg")
+    deps["PackageCompiler"] = package_uuid("PackageCompiler")
+
     test_deps = get(toml, "extras", Dict())
     compile_toml = Dict()
     compile_toml["name"] = string(package, "Precompile")
@@ -206,5 +210,9 @@ function package_toml(package::Symbol)
         )
     end
     runtests = joinpath(pkg_root, "test", "runtests.jl")
+    # Manifest needs to be newly generated, so rm it to not get stuck with an old one
+    if isfile(package_folder(pstr, "Manifest.toml"))
+        rm(package_folder(pstr, "Manifest.toml"))
+    end
     precompile_toml, runtests
 end
