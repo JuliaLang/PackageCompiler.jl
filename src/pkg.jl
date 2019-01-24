@@ -189,7 +189,7 @@ function package_toml(package::Symbol)
 
     toml = TOML.parsefile(precompile_toml)
 
-    deps = toml["deps"]
+    deps = get(toml, "deps", Dict())
     # Add the package itself
     deps[toml["name"]] = toml["uuid"]
     # Add the packages we need

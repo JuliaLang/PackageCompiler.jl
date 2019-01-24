@@ -4,7 +4,12 @@ using PackageCompiler, Test
 # This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
 compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = false) # false to not force overwriting julia's current system image
 
-PackageCompiler.compile_incremental(:ColorTypes)
+syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
+test_code = """
+using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
+"""
+cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+@test read(cmd, String) == "no segfaults, yay\n"
 
 # Build again, reusing the snoop file
 img_file = compile_package("ColorTypes", "FixedPointNumbers", force = false, reuse = true)

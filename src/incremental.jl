@@ -101,11 +101,16 @@ Runs `code` in a new julia command!
 You can overwrite any julia command line flag by setting it to a value.
 If nothing is chosen, it will default to the value of the current julia process.
 """
-function run_julia(
+function run_julia(code::String; kw...)
+    run(julia_code_cmd(code; kw...))
+end
+
+function julia_code_cmd(
         code::String;
         g = nothing, O = nothing, output_o = nothing, J = nothing,
         startup_file = nothing, trace_compile = nothing, compile = nothing
     )
+
     jl_cmd = Base.julia_cmd()
     cmd = `$(jl_cmd.exec[1])` # extract julia exe
 
@@ -117,13 +122,11 @@ function run_julia(
     add_command!(cmd.exec, true, jl_cmd, "--startup-file", startup_file)
     add_command!(cmd.exec, true, jl_cmd, "--compile", compile)
     add_command!(cmd.exec, true, jl_cmd, "--trace-compile", trace_compile)
-
-    mktempdir() do dir
-        codepath = joinpath(dir, "code.jl")
-        open(io-> println(io, code), codepath, "w")
-        push!(cmd.exec, codepath)
-        return run(cmd)
-    end
+    # for better debug, let's not make a tmp file and immediately delete it!
+    file = sysimg_folder("run_julia_code.jl")
+    open(io-> println(io, code), file, "w")
+    push!(cmd.exec, file)
+    cmd
 end
 
 
