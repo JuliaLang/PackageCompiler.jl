@@ -84,23 +84,19 @@ THIS IS JUST A TEMPORARY SOLUTION FOR PACKAGES WITHOUT A TOML AND WILL GET MOVED
 using Pkg: Operations, Types
 using UUIDs
 
-function create_project_from_require(path::String, toml_path::String)
+function create_project_from_require(pkgname::String, path::String, toml_path::String)
     ctx = Pkg.Types.Context()
     # Package data
     path = abspath(path)
-    m = match(Pkg.Types.reg_pkg, path)
-    m === nothing && error("cannot determine package name from path: $(path)")
-    pkgname = m.captures[1]
-
     mainpkg = Types.PackageSpec(pkgname)
     Pkg.Operations.registry_resolve!(ctx.env, [mainpkg])
     if !Operations.has_uuid(mainpkg)
         uuid = UUIDs.uuid1()
-        @info "Unregistered package, giving it a new UUID: $uuid"
+        @info "Unregistered package $pkgname, giving it a new UUID: $uuid"
         mainpkg.version = v"0.1.0"
     else
         uuid = mainpkg.uuid
-        @info "Registered package, using already given UUID: $(mainpkg.uuid)"
+        @info "Registered package $pkgname, using already given UUID: $(mainpkg.uuid)"
         Pkg.Operations.set_maximum_version_registry!(ctx.env, mainpkg)
         v = mainpkg.version
         # Remove the build
@@ -186,7 +182,7 @@ function package_toml(package::Symbol)
     precompile_toml = package_folder(pstr, "Project.toml")
     isdir(dirname(precompile_toml)) || mkpath(dirname(precompile_toml))
     if !isfile(toml)
-        create_project_from_require(pkg_root, precompile_toml)
+        create_project_from_require(pstr, pkg_root, precompile_toml)
     else
         cp(toml, precompile_toml, force = true)
     end

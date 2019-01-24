@@ -109,10 +109,10 @@ function run_julia(
     jl_cmd = Base.julia_cmd()
     cmd = `$(jl_cmd.exec[1])` # extract julia exe
 
-    add_command!(cmd.exec, false, jl_cmd, "-g", g)
     add_command!(cmd.exec, false, jl_cmd, "-O", O)
     add_command!(cmd.exec, false, jl_cmd, "-J", J)
 
+    add_command!(cmd.exec, true, jl_cmd, "-g", g)
     add_command!(cmd.exec, true, jl_cmd, "--output-o", output_o)
     add_command!(cmd.exec, true, jl_cmd, "--startup-file", startup_file)
     add_command!(cmd.exec, true, jl_cmd, "--compile", compile)

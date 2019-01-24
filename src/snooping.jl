@@ -13,7 +13,7 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     # so it doesn't get lost if a later step fails
     tmp_file = sysimg_folder("precompile_tmp.jl")
     if !reuse
-        run_julia(command, compile = "all", O = 0, trace_compile = tmp_file)
+        run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     end
     actually_used = extract_used_packages(tmp_file)
     line_idx = 0; missed = 0
