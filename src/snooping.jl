@@ -1,31 +1,35 @@
 using Pkg, Serialization
 
 
-function snoop(package, snoopfile, outputfile, reuse = false)
+function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     packages = extract_using(snoopfile)
     command = """
-    using Pkg, PackageCompiler, $package
+    using Pkg, PackageCompiler
+    Pkg.activate($(repr(tomlpath)))
+    Pkg.instantiate()
     include($(repr(snoopfile)))
     """
     # let's use a file in the PackageCompiler dir,
     # so it doesn't get lost if a later step fails
     tmp_file = sysimg_folder("precompile_tmp.jl")
     if !reuse
-        julia = Base.julia_cmd()[1]
-        run(`$julia --compile=all -O0 --trace-compile=$tmp_file -e $command`)
-    end
-    M = Module()
-    @eval M begin
-        using Pkg
-        using $(Symbol(package))
+        run_julia(command, compile = "all", O = 0, trace_compile = tmp_file)
     end
     actually_used = extract_used_packages(tmp_file)
-    require_uninstalled.(actually_used, (M,))
-    line_idx = 0
-    missed = 0
+    line_idx = 0; missed = 0
     open(outputfile, "w") do io
         println(io, """
-        PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
+            # need to activate our environment first
+            Pkg.activate($(repr(tomlpath)))
+            Pkg.instantiate()
+            # We need to use all used packages in the precompile file for maximum
+            # usage of the precompile statements.
+            # Since this can be any recursive dependency of the package we AOT compile,
+            # we decided to just use them without installing them. An added
+            # benefit is, that we can call __init__ this way more savely, since
+            # incremental sysimage compilation won't call __init__ on `using`
+            # https://github.com/JuliaLang/julia/issues/22910
+            PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
         """)
         for line in eachline(tmp_file)
             line_idx += 1
