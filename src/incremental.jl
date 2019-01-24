@@ -128,7 +128,20 @@ end
 
 
 """
-Incrementally
+    compile_incremental(
+        toml_path::String, snoopfile::String;
+        force = false, reuse = false, verbose = true,
+        debug = false, cc_flags = nothing
+    )
+
+    Extract all calls from `snoopfile` and ahead of time compiles them
+    incrementally into the current system image.
+    `force = true` will replace the old system image with the new one.
+    The `toml` will need to contain all packages that `snoopfile` uses explicitely.
+    Implicitely used packages & modules doen't need to be contained!
+
+    For a simpler version to just compile a single package have a look at:
+    `compile_incremental(package::Symbol)`
 """
 function compile_incremental(
         toml_path::String, snoopfile::String;
@@ -147,7 +160,21 @@ function compile_incremental(
     return sysout, curr_syso
 end
 
+"""
+    compile_incremental(
+        package::Symbol;
+        force = false, reuse = false, verbose = true,
+        debug = false, cc_flags = nothing
+    )
 
+    Compiles `package` incrementally into the current system image.
+    `force = true` will replace the old system image with the new one.
+    compile_incremental will automatically use the Package/test/runtests.jl to
+    figure out what functions to compile. So the coverage of Package's tests will
+    directly correlate with how much is getting ahead of time compiled.
+    For a less magical version of compile_incremental, have a look at:
+    `compile_incremental(toml_path::String, snoopfile::String)`
+"""
 function compile_incremental(package::Symbol; kw...)
     toml, testfile = package_toml(package)
     compile_incremental(toml, testfile; kw...)
