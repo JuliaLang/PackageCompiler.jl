@@ -35,8 +35,7 @@ end
 function Include(path)
   """
   M = Module()
-  # Pkg + PackageCompiler needed for using Pkgs
-  @eval(M, using PackageCompiler, Pkg)
+  # Include into anonymous module to not polute namespace
   @eval(M, (Base.include(\$M, $(repr(path)))))
   """
 end
