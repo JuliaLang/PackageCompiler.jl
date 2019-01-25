@@ -10,7 +10,6 @@ cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
 
 julia = Base.julia_cmd().exec[1]
 
-
 @testset "build_executable" begin
     jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
     basedir = mktempdir()

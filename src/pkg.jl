@@ -193,8 +193,8 @@ function package_toml(package::Symbol)
     # Add the package itself
     deps[toml["name"]] = toml["uuid"]
     # Add the packages we need
-    deps["Pkg"] = package_uuid("Pkg")
-    deps["PackageCompiler"] = package_uuid("PackageCompiler")
+    deps["Pkg"] = string(package_uuid("Pkg"))
+    deps["PackageCompiler"] = string(package_uuid("PackageCompiler"))
 
     test_deps = get(toml, "extras", Dict())
     compile_toml = Dict()
