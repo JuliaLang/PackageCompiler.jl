@@ -5,8 +5,14 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     packages = extract_using(snoopfile)
     command = """
     using Pkg, PackageCompiler
-    Pkg.activate($(repr(tomlpath)))
-    Pkg.instantiate()
+    """
+    if tomlpath != nothing
+        command *= """
+        Pkg.activate($(repr(tomlpath)))
+        Pkg.instantiate()
+        """
+    end
+    command *= """
     include($(repr(snoopfile)))
     """
     # let's use a file in the PackageCompiler dir,
