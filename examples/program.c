@@ -1,8 +1,8 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 // Standard headers
-#include <string>
-#include <stdint>
+#include <string.h>
+#include <stdint.h>
 
 // Julia headers (for initialization and gc commands)
 #include "uv.h"
