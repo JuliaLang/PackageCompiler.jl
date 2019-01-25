@@ -1,7 +1,6 @@
 module PackageCompiler
 
 using Libdl, SnoopCompile
-Sys.iswindows() && using WinRPM
 
 include("compiler_flags.jl")
 include("static_julia.jl")
