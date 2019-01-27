@@ -51,7 +51,7 @@ end
 """
     extract_flag(flag, jl_cmd = Base.julia_cmd())
 
-Extracts the value for `flag` from the current julia cmd
+Extracts the value for `flag` from `jl_cmd`.
 """
 function extract_flag(flag, jl_cmd = Base.julia_cmd())
     for elem in jl_cmd.exec
@@ -71,7 +71,7 @@ current_systemimage() = extract_flag_value("-J")
 """
     add_command!(cmd, ignore, jl_cmd, flag, value)
 
-Adds a command to `cmd` - either choosing the julia default for value == nothing,
+Add a command to `cmd` - either choosing the julia default if `value == nothing`,
 or adds value!. If ignore = true, and command not in jl_cmd && value == nothing,
 command gets not added.
 """
@@ -96,9 +96,9 @@ end
         startup_file = "no"
     )
 
-Runs `code` in a new julia command!
+Run `code` in a julia command.
 You can overwrite any julia command line flag by setting it to a value.
-If nothing is chosen, it will default to the value of the current julia process.
+If the flag has the value `nothing`, the value of the flag of the current julia process is used.
 """
 function run_julia(code::String; kw...)
     run(julia_code_cmd(code; kw...))
@@ -139,11 +139,10 @@ end
     Extract all calls from `snoopfile` and ahead of time compiles them
     incrementally into the current system image.
     `force = true` will replace the old system image with the new one.
-    The `toml` will need to contain all packages that `snoopfile` uses explicitely.
-    Implicitely used packages & modules doen't need to be contained!
+    The argument `toml_path` should contain a project file of the packages that `snoopfile` explicitly uses.
+    Implicitly used packages & modules don't need to be contained!
 
-    For a simpler version to just compile a single package have a look at:
-    `compile_incremental(package::Symbol)`
+    To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
 """
 function compile_incremental(
         toml_path::String, snoopfile::String;
@@ -169,11 +168,11 @@ end
         debug = false, cc_flags = nothing
     )
 
-    Compiles `package` incrementally into the current system image.
+    Incrementally compile `package` into the current system image.
     `force = true` will replace the old system image with the new one.
-    compile_incremental will automatically use the Package/test/runtests.jl to
-    figure out what functions to compile. So the coverage of Package's tests will
-    directly correlate with how much is getting ahead of time compiled.
+    `compile_incremental` will run the `Package/test/runtests.jl` file to
+    and record the functions getting compiled. The coverage of the Package's tests will
+    thus determine what is getting ahead of time compiled.
     For a more explicit version of compile_incremental, see:
     `compile_incremental(toml_path::String, snoopfile::String)`
 """
