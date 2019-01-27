@@ -174,7 +174,7 @@ end
     compile_incremental will automatically use the Package/test/runtests.jl to
     figure out what functions to compile. So the coverage of Package's tests will
     directly correlate with how much is getting ahead of time compiled.
-    For a less magical version of compile_incremental, have a look at:
+    For a more explicit version of compile_incremental, see:
     `compile_incremental(toml_path::String, snoopfile::String)`
 """
 function compile_incremental(package::Symbol; kw...)
