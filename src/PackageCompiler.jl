@@ -95,11 +95,18 @@ function compile_package(packages...; kw_args...)
 end
 
 """
-    compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
+    compile_package(
+        packages::Tuple{String, String}...;
+        force = false, reuse = false, debug = false, cpu_target = nothing,
+        additional_packages = Symbol[]
+    )
 
 Compile a list of packages. Each package comes as a tuple of `(package_name, precompile_file)`
 where the precompile file should contain all function calls, that should get compiled into the system image.
 Usually the `runtests.jl` file is a good candidate, since it should run all important functions of a package.
+You can pass `additional_packages` a vector of symbols with package names, to help AOT compiling
+uninstalled, recursive dependencies of `packages`. Look at `compile_incremental` to
+use a toml instead.
 """
 function compile_package(
         packages::Tuple{String, String}...;

@@ -15,8 +15,9 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     command *= """
     include($(repr(snoopfile)))
     """
+
     # let's use a file in the PackageCompiler dir,
-    # so it doesn't get lost if a later step fails
+    # so it doesn't get lost if later steps fail
     tmp_file = sysimg_folder("precompile_tmp.jl")
     if !reuse
         run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
@@ -37,7 +38,7 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
             # usage of the precompile statements.
             # Since this can be any recursive dependency of the package we AOT compile,
             # we decided to just use them without installing them. An added
-            # benefit is, that we can call __init__ this way more savely, since
+            # benefit is, that we can call __init__ this way more easily, since
             # incremental sysimage compilation won't call __init__ on `using`
             # https://github.com/JuliaLang/julia/issues/22910
             using PackageCompiler
