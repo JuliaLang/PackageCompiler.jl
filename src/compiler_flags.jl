@@ -145,8 +145,7 @@ const flags_with_cmdval = Set([
 
 function to_cmd_val(key::Symbol, val)
     # undocumented auto!? well we can only skip it I guess
-    key == :check_bounds && val == 0 && return ""
-    if key in (:depwarn, :warn_overwrite, :startupfile)
+    if key in (:depwarn, :warn_overwrite)
         val == 0  && return "no"
         val == 1 && return "yes"
         val == 2 && return "error"
@@ -165,7 +164,7 @@ function to_cmd_val(key::Symbol, val)
         val == 0 && return "ieee"
         val == 1 && return "fast"
     end
-    val in (0, -1) && return "auto"
+    val in (0, -1) && return ""
     val == 1 && return "yes"
     val == 2 && return "no"
 end
