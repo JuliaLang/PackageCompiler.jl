@@ -78,7 +78,7 @@ function compile_incremental(
     code = PrecompileCommand(precompiles)
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
-        track_allocation = "no", startup_file = "no", code_coverage = "no"
+        track_allocation = "none", startup_file = "no", code_coverage = "none"
     )
     build_shared(sysout, systemp, false, sysimg_folder(), verbose, "3", debug, system_compiler, cc_flags)
     curr_syso = current_systemimage()
