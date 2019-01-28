@@ -13,7 +13,13 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
         """
     end
     command *= """
-    include($(repr(snoopfile)))
+    # let's wrap the snoop file in a try catch...
+    # This way we still do some snooping even if there is an error in the tests!
+    try
+        include($(repr(snoopfile)))
+    catch e
+        @warn("Snoop file errored. Precompile statements were recorded untill error!", exception = e)
+    end
     """
 
     # let's use a file in the PackageCompiler dir,
