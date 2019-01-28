@@ -8,6 +8,13 @@ using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
 cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
 @test read(cmd, String) == "no segfaults, yay\n"
 
+syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers, :ColorTypes)
+test_code = """
+using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
+"""
+cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+@test read(cmd, String) == "no segfaults, yay\n"
+
 julia = Base.julia_cmd().exec[1]
 
 @testset "build_executable" begin

@@ -25,14 +25,6 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     actually_used = extract_used_packages(tmp_file)
     line_idx = 0; missed = 0
     open(outputfile, "w") do io
-        if tomlpath != nothing
-            println(io, """
-                using Pkg, PackageCompiler
-                # need to activate our environment first
-                Pkg.activate($(repr(tomlpath)))
-                Pkg.instantiate()
-            """)
-        end
         println(io, """
             # We need to use all used packages in the precompile file for maximum
             # usage of the precompile statements.
