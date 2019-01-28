@@ -177,6 +177,8 @@ function package_toml(package::Symbol)
     pkg_module = Base.require(pkg)
     pkg_root = normpath(joinpath(dirname(pathof(pkg_module)), ".."))
     toml = joinpath(pkg_root, "Project.toml")
+    runtests = joinpath(pkg_root, "test", "runtests.jl")
+    isfile(toml) && return toml, runtests
     # We will create a new toml, based that will include all test dependencies etc
     # We're also using the precompile toml as a temp toml for packages not having a toml
     precompile_toml = package_folder(pstr, "Project.toml")
@@ -209,7 +211,6 @@ function package_toml(package::Symbol)
             sorted = true, by = key-> (Types.project_key_order(key), key)
         )
     end
-    runtests = joinpath(pkg_root, "test", "runtests.jl")
     # Manifest needs to be newly generated, so rm it to not get stuck with an old one
     if isfile(package_folder(pstr, "Manifest.toml"))
         rm(package_folder(pstr, "Manifest.toml"))
