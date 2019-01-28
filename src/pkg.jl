@@ -84,6 +84,36 @@ THIS IS JUST A TEMPORARY SOLUTION FOR PACKAGES WITHOUT A TOML AND WILL GET MOVED
 using Pkg: Operations, Types
 using UUIDs
 
+
+function packages_from_require(reqfile::String)
+    ctx = Pkg.Types.Context()
+    pkgs = Types.PackageSpec[]
+    compatibility = Pair{String, String}[]
+    for r in Pkg.Pkg2.Reqs.read(reqfile)
+        r isa Pkg.Pkg2.Reqs.Requirement || continue
+        r.package == "julia" && continue
+        push!(pkgs, Types.PackageSpec(r.package))
+        intervals = r.versions.intervals
+        if length(intervals) != 1
+            @warn "Project.toml creator cannot handle multiple requirements for $(r.package), ignoring"
+        else
+            l = intervals[1].lower
+            h = intervals[1].upper
+            if l != v"0.0.0-"
+                # no upper bound
+                if h == typemax(VersionNumber)
+                    push!(compatibility, r.package => string(">=", VersionNumber(l.major, l.minor, l.patch)))
+                else # assume semver
+                    push!(compatibility, r.package => string(">=", VersionNumber(l.major, l.minor, l.patch), ", ",
+                                                             "<", VersionNumber(h.major, h.minor, h.patch)))
+                end
+            end
+        end
+    end
+    Operations.registry_resolve!(ctx.env, pkgs)
+    Operations.ensure_resolved(ctx.env, pkgs)
+    pkgs
+end
 function create_project_from_require(pkgname::String, path::String, toml_path::String)
     ctx = Pkg.Types.Context()
     # Package data
@@ -110,29 +140,7 @@ function create_project_from_require(pkgname::String, path::String, toml_path::S
     reqfiles = [joinpath(path, "REQUIRE"), joinpath(path, "test", "REQUIRE")]
     for (reqfile, pkgs) in zip(reqfiles, [dep_pkgs, test_pkgs])
         if isfile(reqfile)
-            for r in Pkg.Pkg2.Reqs.read(reqfile)
-                r isa Pkg.Pkg2.Reqs.Requirement || continue
-                r.package == "julia" && continue
-                push!(pkgs, Types.PackageSpec(r.package))
-                intervals = r.versions.intervals
-                if length(intervals) != 1
-                    @warn "Project.toml creator cannot handle multiple requirements for $(r.package), ignoring"
-                else
-                    l = intervals[1].lower
-                    h = intervals[1].upper
-                    if l != v"0.0.0-"
-                        # no upper bound
-                        if h == typemax(VersionNumber)
-                            push!(compatibility, r.package => string(">=", VersionNumber(l.major, l.minor, l.patch)))
-                        else # assume semver
-                            push!(compatibility, r.package => string(">=", VersionNumber(l.major, l.minor, l.patch), ", ",
-                                                                     "<", VersionNumber(h.major, h.minor, h.patch)))
-                        end
-                    end
-                end
-            end
-            Operations.registry_resolve!(ctx.env, pkgs)
-            Operations.ensure_resolved(ctx.env, pkgs)
+            append!(pkgs, packages_from_require(reqfile))
         end
     end
 
@@ -178,20 +186,25 @@ function package_toml(package::Symbol)
     pkg_root = normpath(joinpath(dirname(pathof(pkg_module)), ".."))
     toml = joinpath(pkg_root, "Project.toml")
     runtests = joinpath(pkg_root, "test", "runtests.jl")
-    isfile(toml) && return toml, runtests
     # We will create a new toml, based that will include all test dependencies etc
     # We're also using the precompile toml as a temp toml for packages not having a toml
     precompile_toml = package_folder(pstr, "Project.toml")
     isdir(dirname(precompile_toml)) || mkpath(dirname(precompile_toml))
+    test_deps = Dict()
     if !isfile(toml)
         create_project_from_require(pstr, pkg_root, precompile_toml)
     else
+        testreq = joinpath(pkg_root, "test", "REQUIRE")
+        if isfile(testreq)
+            pkgs = packages_from_require(testreq)
+            test_deps = Dict(pkg.name => string(pkg.uuid) for pkg in pkgs)
+        end
         cp(toml, precompile_toml, force = true)
     end
 
     toml = TOML.parsefile(precompile_toml)
 
-    deps = get(toml, "deps", Dict())
+    deps = merge(get(toml, "deps", Dict()), test_deps)
     # Add the package itself
     deps[toml["name"]] = toml["uuid"]
     # Add the packages we need
