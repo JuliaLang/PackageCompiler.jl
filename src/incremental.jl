@@ -93,6 +93,8 @@ function compile_incremental(
         if precompile_file != precompiles
             cp(precompile_file, precompiles, force = true)
         end
+    elseif snoopfile == nothing && precompile_file == nothing
+        # reuse precompiles
     else
         snoop(toml_path, snoopfile, precompiles)
     end
@@ -136,6 +138,9 @@ function compile_incremental(packages::Symbol...; kw...)
         "compat" => Dict(),
     )
     precompiles_all = package_folder("incremental_precompile.jl")
+    open(precompiles_all, "w") do io
+        println(io, "# Precompile file for $(join(packages, " "))")
+    end
     for package in packages
         precompiles = package_folder(string(package), "incremental_precompile.jl")
         toml, testfile = package_toml(package)
