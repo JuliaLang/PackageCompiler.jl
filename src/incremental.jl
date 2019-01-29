@@ -96,8 +96,8 @@ function compile_incremental(
     else
         snoop(toml_path, snoopfile, precompiles)
     end
-    systemp = joinpath(sysimg_folder(), "sys.a")
-    sysout = joinpath(sysimg_folder(), "sys.$(Libdl.dlext)")
+    systemp = sysimg_folder("sys.a")
+    sysout = sysimg_folder("sys.$(Libdl.dlext)")
     code = PrecompileCommand(precompiles)
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
