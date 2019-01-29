@@ -29,6 +29,12 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
         run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     end
     actually_used = extract_used_packages(tmp_file)
+    if tomlpath != nothing
+        # add toml packages, in case extract_used_packages misses a package
+        deps = get(TOML.parsefile(tomlpath), "deps", Dict{String, Any}())
+        union!(actually_used, string.(keys(deps)))
+    end
+
     line_idx = 0; missed = 0
     open(outputfile, "w") do io
         println(io, """
