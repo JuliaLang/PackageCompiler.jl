@@ -152,6 +152,6 @@ function __init__()
     end
 end
 
-export compile_package, revert, force_native_image!, executable_ext, build_executable, build_shared_lib, static_julia
+export compile_package, revert, force_native_image!, executable_ext, build_executable, build_shared_lib, static_julia, compile_incremental
 
 end # module
