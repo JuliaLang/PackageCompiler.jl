@@ -1,13 +1,15 @@
 module PackageCompiler
 
 using Libdl, SnoopCompile
-Sys.iswindows() && using WinRPM
 
 include("compiler_flags.jl")
 include("static_julia.jl")
 include("api.jl")
 include("snooping.jl")
 include("system_image.jl")
+include("pkg.jl")
+include("incremental.jl")
+
 
 const sysimage_binaries = ("sys.$(Libdl.dlext)",)
 
@@ -93,16 +95,27 @@ function compile_package(packages...; kw_args...)
 end
 
 """
-    compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
+    compile_package(
+        packages::Tuple{String, String}...;
+        force = false, reuse = false, debug = false, cpu_target = nothing,
+        additional_packages = Symbol[]
+    )
 
 Compile a list of packages. Each package comes as a tuple of `(package_name, precompile_file)`
 where the precompile file should contain all function calls, that should get compiled into the system image.
 Usually the `runtests.jl` file is a good candidate, since it should run all important functions of a package.
+You can pass `additional_packages` a vector of symbols with package names, to help AOT compiling
+uninstalled, recursive dependencies of `packages`. Look at `compile_incremental` to
+use a toml instead.
 """
-function compile_package(packages::Tuple{String, String}...; force = false, reuse = false, debug = false, cpu_target = nothing)
+function compile_package(
+        packages::Tuple{String, String}...;
+        force = false, reuse = false, debug = false, cpu_target = nothing,
+        additional_packages = Symbol[]
+    )
     userimg = sysimg_folder("precompile.jl")
     if !reuse
-        snoop_userimg(userimg, packages...)
+        snoop_userimg(userimg, packages...; additional_packages = additional_packages)
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()

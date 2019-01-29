@@ -148,7 +148,7 @@ function static_julia(
         if snoopfile != nothing
             snoopfile = abspath(snoopfile)
             precompfile = joinpath(builddir, "precompiled.jl")
-            snoop(snoopfile, precompfile, joinpath(builddir, "snoop.csv"), Vector{Pair{String,String}}(), String["Main"])
+            snoop(nothing, snoopfile, precompfile)
             jlmain = joinpath(builddir, "julia_main.jl")
             open(jlmain, "w") do io
                 juliaprog != nothing && println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
