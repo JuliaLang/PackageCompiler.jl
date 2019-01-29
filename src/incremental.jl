@@ -37,11 +37,34 @@ function Include(path)
 end
 
 """
+Exit hooks can get serialized and therefore end up in weird behaviour
+When incrementally compiling
+"""
+function ExitHooksStart()
+    """
+    atexit_hook_copy = copy(Base.atexit_hooks) # make backup
+    # clean state so that any package we use can carelessly call atexit
+    empty!(Base.atexit_hooks)
+    """
+end
+
+function ExitHooksEnd()
+    """
+    Base._atexit() # run all exit hooks we registered during precompile
+    empty!(Base.atexit_hooks) # don't serialize the exit hooks we run + added
+    # atexit_hook_copy should be empty, but who knows what base will do in the future
+    append!(Base.atexit_hooks, atexit_hook_copy)
+    """
+end
+
+"""
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
-    InitBase() * Fix30479() * InitREPL() * Include(path)
+    ExitHooksStart() * InitBase() * Fix30479() * InitREPL() * Include(path) * ExitHooksEnd()
 end
+
+
 
 """
     compile_incremental(
@@ -59,7 +82,7 @@ end
     To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
 """
 function compile_incremental(
-        toml_path::String, snoopfile::Union{String, Nothing};
+        toml_path::Union{String, Nothing}, snoopfile::Union{String, Nothing};
         force = false, precompile_file = nothing, verbose = true,
         debug = false, cc_flags = nothing
     )
