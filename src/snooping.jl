@@ -75,3 +75,48 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     @info "used $(line_idx - missed) out of $line_idx precompile statements"
     outputfile
 end
+
+
+"""
+    snoop_userimg(userimg, packages::Tuple{String, String}...)
+
+    Traces all function calls in packages and writes out `precompile` statements into the file `userimg`
+"""
+function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_packages = Symbol[])
+    snooped_precompiles = map(packages) do package_snoopfile
+        package, snoopfile = package_snoopfile
+        module_file = ""
+        abs_package_path = if ispath(package)
+            path = normpath(abspath(package))
+            module_file = joinpath(path, "src", basename(path) * ".jl")
+            path
+        else
+            module_file = Base.find_package(package)
+            if module_file == nothing
+                error("Package $package not installed. Please install before precompiling!")
+            end
+            normpath(module_file, "..", "..")
+        end
+        module_name = Symbol(splitext(basename(module_file))[1])
+        file2snoop = normpath(abspath(joinpath(abs_package_path, snoopfile)))
+        package = package_folder(get_root_dir(abs_package_path))
+        isdir(package) || mkpath(package)
+        precompile_file = joinpath(package, "precompile.jl")
+        snoop(nothing, file2snoop, precompile_file)
+        return precompile_file
+    end
+    # merge all of the temporary files into a single output
+    open(userimg, "w") do output
+        # Prevent this from being put into the Main namespace
+        println(output, "module CompilationModule")
+        for (pkg, _) in packages
+            println(output, "import $pkg")
+        end
+        for path in snooped_precompiles
+            open(input -> write(output, input), path)
+            println(output)
+        end
+        println(output, "end # CompilationModule")
+    end
+    nothing
+end
