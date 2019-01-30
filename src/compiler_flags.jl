@@ -226,7 +226,7 @@ function run_julia(code::String; kw...)
 end
 
 function jl_command(flag, value)
-    (isnothing(value) || isempty(value)) && return ""
+    (value === nothing || isempty(value)) && return ""
     if is_short_flag(flag)
         string("-", flag, value)
     else
