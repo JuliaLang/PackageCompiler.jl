@@ -148,26 +148,13 @@ function static_julia(
         if snoopfile != nothing
             snoopfile = abspath(snoopfile)
             precompfile = joinpath(builddir, "precompiled.jl")
-            snoop(nothing, snoopfile, precompfile)
+            snoop(nothing, nothing, snoopfile, precompfile)
             jlmain = joinpath(builddir, "julia_main.jl")
             open(jlmain, "w") do io
-                juliaprog != nothing && println(io, "include(\"$(escape_string(relpath(juliaprog, builddir)))\")")
-                println(io, """
-                    let M = Module() # Prevent this from putting anything into the Main namespace
-                        for m in Base.loaded_modules_array()
-                            Core.isdefined(M, nameof(m)) || Core.eval(M, Expr(:const, Expr(:(=), nameof(m), m)))
-                        end
-                        for n in names(Main)
-                            if Core.isdefined(Main, n) && isconst(Main, n)
-                                m = getfield(Main, n)
-                                m isa Module && (Core.isdefined(M, nameof(m)) || Core.eval(M, Expr(:const, Expr(:(=), nameof(m), m))))
-                            end
-                        end
-                    """)
-                println(io, "Base.include(M, ", repr(relpath(precompfile, builddir)), ")")
-                println(io, """
-                    end # let
-                    """)
+                # this file will get included via @eval Module() include(...)
+                # but the juliaprog should be included in the main module
+                juliaprog != nothing && println(io, "Base.include(Main, $(repr(relpath(juliaprog, builddir))))")
+                println(io, "Base.include(@__MODULE__, $(repr(relpath(precompfile, builddir))))")
             end
             juliaprog = jlmain
         end
@@ -249,32 +236,33 @@ function build_object(
         sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
         depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
     )
-    Sys.iswindows() && (juliaprog != nothing) && (juliaprog = replace(juliaprog, "\\" => "\\\\"))
-    julia_cmd = build_julia_cmd(
-        sysimage, home, startup_file, handle_signals, sysimage_native_code, compiled_modules,
-        depwarn, warn_overwrite, compile, cpu_target, optimize, debug, inline, check_bounds, math_mode
+    # TODO really refactor this :D
+    build_object(
+        juliaprog, o_file, builddir, verbose;
+        sysimage = sysimage, startup_file = startup_file,
+        handle_signals = handle_signals, sysimage_native_code = sysimage_native_code,
+        compiled_modules = compiled_modules,
+        depwarn = depwarn, warn_overwrite = warn_overwrite,
+        compile = compile, cpu_target = cpu_target, optimize = optimize,
+        debug_level = debug, inline = inline, check_bounds = check_bounds, math_mode = math_mode
     )
-    cache_dir = "cache_ji_v$VERSION"
-    # TODO: verify if this initialization is correct for Julia v1.0
-    expr = """
-        Base.__init__(); Sys.__init__() # initialize `Base` and `Sys` modules
-        pushfirst!(Base.DEPOT_PATH, $(repr(cache_dir))) # save precompiled modules locally
-        """
-    juliaprog != nothing && (expr = expr * """
-        include($(repr(juliaprog))) # include Julia program file
-        """)
-    # TODO: fix this for Julia v1.0, or how to precompile modules?
-    #if compiled_modules == "yes"
-    #    command = `$julia_cmd -e $expr`
-    #    verbose && println("Build \".ji\" local cache:\n  $command")
-    #    cd(builddir) do
-    #        run(command)
-    #    end
-    #end
-    command = `$julia_cmd --output-o $o_file -e $expr`
+end
+
+function build_object(
+        juliaprog, o_file, builddir, verbose; julia_flags...
+    )
+    Sys.iswindows() && (juliaprog != nothing) && (juliaprog = replace(juliaprog, "\\" => "\\\\"))
+    command = ExitHooksStart() * InitBase() * InitREPL()
+    if juliaprog != nothing
+        command *= Include(juliaprog)
+    end
+    command *= ExitHooksEnd()
     verbose && println("Build static library $(repr(o_file)):\n  $command")
     cd(builddir) do
-        run(command)
+        run_julia(
+            command; julia_flags...,
+            output_o = o_file, track_allocation = "none", code_coverage = "none"
+        )
     end
 end
 

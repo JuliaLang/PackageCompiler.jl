@@ -226,12 +226,18 @@ function run_julia(code::String; kw...)
 end
 
 function jl_command(flag, value)
-    isempty(value) && return ""
+    (value === nothing || isempty(value)) && return ""
     if is_short_flag(flag)
         string("-", flag, value)
     else
         string("--", flag, "=", value)
     end
+end
+
+
+function push_command!(cmd, flag, value)
+    command = jl_command(flag, value)
+    isempty(command) || push!(cmd.exec, command)
 end
 
 function julia_code_cmd(
@@ -244,13 +250,12 @@ function julia_code_cmd(
     for (k, v) in kw
         jl_key = jl_option_key(k)
         flag = jl_options_to_flag[jl_key]
-        push!(cmd.exec, jl_command(flag, v))
+        push_command!(cmd, flag, v)
     end
     # add remaining commands from JLOptions
     for key in setdiff(keys(jl_options_to_flag), keys(kw))
         flag = jl_options_to_flag[key]
-        command = jl_command(flag, jl_option_value(jl_options, key))
-        isempty(command) || push!(cmd.exec, command)
+        push_command!(cmd, flag, jl_option_value(jl_options, key))
     end
     # for better debug, let's not make a tmp file which would get lost!
     file = sysimg_folder("run_julia_code.jl")

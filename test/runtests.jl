@@ -1,19 +1,44 @@
 using PackageCompiler, Test
 
-# This is the new compile_package
-syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
-test_code = """
-using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
-"""
-cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-@test read(cmd, String) == "no segfaults, yay\n"
+@testset "compilage_package" begin
+    @testset "FixedPointNumbers" begin
+        sysimage = PackageCompiler.compile_package("FixedPointNumbers", verbose = true)
+        test_code = """
+        using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = sysimage)
+        @test read(cmd, String) == "no segfaults, yay\n"
+    end
+    @testset "FixedPointNumbers ColorTypes" begin
+        sysimage = PackageCompiler.compile_package("FixedPointNumbers", "ColorTypes", verbose = true)
+        test_code = """
+        using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = sysimage)
+        @test read(cmd, String) == "no segfaults, yay\n"
+    end
+end
 
-syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers, :ColorTypes)
-test_code = """
-using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
-"""
-cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-@test read(cmd, String) == "no segfaults, yay\n"
+
+@testset "compile_incremental" begin
+    @testset "FixedPointNumbers" begin
+        # This is the new compile_package
+        syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
+        test_code = """
+        using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+        @test read(cmd, String) == "no segfaults, yay\n"
+    end
+    @testset "FixedPointNumbers ColorTypes" begin
+        syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers, :ColorTypes)
+        test_code = """
+        using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+        @test read(cmd, String) == "no segfaults, yay\n"
+    end
+end
 
 julia = Base.julia_cmd().exec[1]
 
@@ -36,8 +61,10 @@ julia = Base.julia_cmd().exec[1]
     builddir = joinpath(basedir, relativebuilddir)
     @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
     @test isfile(joinpath(builddir, "hello$executable_ext"))
-    @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
+    @test startswith(read(`$(joinpath(builddir, "hello$executable_ext"))`, String), "hello, world")
     for i = 1:100
+        # Windows seems to have problems with removing files - it can error
+        # making this test fail.
         try rm(basedir, recursive = true) catch end
         sleep(1/100)
     end
