@@ -24,7 +24,7 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
 
     # let's use a file in the PackageCompiler dir,
     # so it doesn't get lost if later steps fail
-    tmp_file = sysimg_folder("precompile_tmp.jl")
+    tmp_file = package_folder("precompile_tmp.jl")
     if !reuse
         run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     end
@@ -38,15 +38,15 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     line_idx = 0; missed = 0
     open(outputfile, "w") do io
         println(io, """
-            # We need to use all used packages in the precompile file for maximum
-            # usage of the precompile statements.
-            # Since this can be any recursive dependency of the package we AOT compile,
-            # we decided to just use them without installing them. An added
-            # benefit is, that we can call __init__ this way more easily, since
-            # incremental sysimage compilation won't call __init__ on `using`
-            # https://github.com/JuliaLang/julia/issues/22910
-            using PackageCompiler
-            PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
+        # We need to use all used packages in the precompile file for maximum
+        # usage of the precompile statements.
+        # Since this can be any recursive dependency of the package we AOT compile,
+        # we decided to just use them without installing them. An added
+        # benefit is, that we can call __init__ this way more easily, since
+        # incremental sysimage compilation won't call __init__ on `using`
+        # https://github.com/JuliaLang/julia/issues/22910
+        using PackageCompiler
+        PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
         """)
         for line in eachline(tmp_file)
             line_idx += 1
@@ -85,38 +85,23 @@ end
 function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_packages = Symbol[])
     snooped_precompiles = map(packages) do package_snoopfile
         package, snoopfile = package_snoopfile
-        module_file = ""
-        abs_package_path = if ispath(package)
-            path = normpath(abspath(package))
-            module_file = joinpath(path, "src", basename(path) * ".jl")
-            path
+        module_name = Symbol(package)
+        toml, runtests = package_toml(module_name)
+        pkg_root = normpath(joinpath(dirname(runtests), ".."))
+        file2snoop = if isfile(pkg_root, snoopfile)
+            joinpath(pkg_root, snoopfile)
         else
-            module_file = Base.find_package(package)
-            if module_file == nothing
-                error("Package $package not installed. Please install before precompiling!")
-            end
-            normpath(module_file, "..", "..")
+            joinpath(pkg_root, snoopfile)
         end
-        module_name = Symbol(splitext(basename(module_file))[1])
-        file2snoop = normpath(abspath(joinpath(abs_package_path, snoopfile)))
-        package = package_folder(get_root_dir(abs_package_path))
-        isdir(package) || mkpath(package)
-        precompile_file = joinpath(package, "precompile.jl")
-        snoop(nothing, file2snoop, precompile_file)
+        precompile_file = package_folder(package, "precompile.jl")
+        snoop(toml, file2snoop, precompile_file)
         return precompile_file
     end
     # merge all of the temporary files into a single output
     open(userimg, "w") do output
-        # Prevent this from being put into the Main namespace
-        println(output, "module CompilationModule")
-        for (pkg, _) in packages
-            println(output, "import $pkg")
-        end
         for path in snooped_precompiles
             open(input -> write(output, input), path)
-            println(output)
         end
-        println(output, "end # CompilationModule")
     end
     nothing
 end

@@ -111,7 +111,7 @@ use a toml instead.
 function compile_package(
         packages::Tuple{String, String}...;
         force = false, reuse = false, debug = false, cpu_target = nothing,
-        additional_packages = Symbol[]
+        additional_packages = Symbol[], verbose = false
     )
     userimg = sysimg_folder("precompile.jl")
     if !reuse
@@ -119,7 +119,7 @@ function compile_package(
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
-    build_sysimg(image_path, userimg, cpu_target=cpu_target)
+    build_sysimg(image_path, userimg, cpu_target=cpu_target, verbose = verbose)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     syspath = joinpath(default_sysimg_path(debug), "sys.$(Libdl.dlext)")
     if force

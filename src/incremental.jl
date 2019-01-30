@@ -4,6 +4,7 @@ Init basic C libraries
 function InitBase()
   """
   Base.__init__()
+  Sys.__init__() #fix https://github.com/JuliaLang/julia/issues/30479
   """
 end
 
@@ -15,17 +16,6 @@ function InitREPL()
   using REPL
   Base.REPL_MODULE_REF[] = REPL
   """
-end
-
-"""
-Fix for https://github.com/JuliaLang/julia/issues/30479
-"""
-function Fix30479()
-    """
-    _bindir = ccall(:jl_get_julia_bindir, Any, ())::String
-    @eval(Sys, BINDIR = \$(_bindir))
-    @eval(Sys, STDLIB = joinpath(\$_bindir, "..", "share", "julia", "stdlib", string('v', (VERSION.major), '.', VERSION.minor)))
-    """
 end
 
 function Include(path)
@@ -61,7 +51,7 @@ end
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
-    ExitHooksStart() * InitBase() * Fix30479() * InitREPL() * Include(path) * ExitHooksEnd()
+    ExitHooksStart() * InitBase() * InitREPL() * Include(path) * ExitHooksEnd()
 end
 
 
@@ -138,19 +128,18 @@ function compile_incremental(packages::Symbol...; kw...)
         "compat" => Dict(),
     )
     precompiles_all = package_folder("incremental_precompile.jl")
-    open(precompiles_all, "w") do io
-        println(io, "# Precompile file for $(join(packages, " "))")
-    end
-    for package in packages
-        precompiles = package_folder(string(package), "incremental_precompile.jl")
-        toml, testfile = package_toml(package)
-        snoop(toml, testfile, precompiles)
-        pkg_toml = TOML.parsefile(toml)
-        merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
-        merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
-        open(precompiles_all, "a") do io
-            println(io)
-            write(io, read(precompiles))
+    open(precompiles_all, "w") do compile_io
+        println(compile_io, "# Precompile file for $(join(packages, " "))")
+        for package in packages
+            precompiles = package_folder(string(package), "incremental_precompile.jl")
+            toml, testfile = package_toml(package)
+            snoop(toml, testfile, precompiles)
+            pkg_toml = TOML.parsefile(toml)
+            merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
+            merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
+
+            println(compile_io)
+            write(compile_io, read(precompiles))
         end
     end
     toml = package_folder("Project.toml")
