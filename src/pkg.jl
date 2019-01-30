@@ -25,54 +25,6 @@ function in_manifest(name::AbstractString, manifest::Dict = current_manifest())
 end
 
 
-"""
-    require_uninstalled(name::AbstractString, mod = Main)
-
-Loads a package, even if it isn't installed.
-Call this only in a precompile file used for incremental compilation!
-"""
-function require_uninstalled(name::AbstractString, mod = Main)
-    pkg = Base.PkgId(package_uuid(name), name)
-    psym = Symbol(name)
-    @eval mod begin
-        if !isdefined($mod, $(QuoteNode(psym)))
-            const $psym = Base.require($pkg)
-            # we need to call the __init__ because of
-            # https://github.com/JuliaLang/julia/issues/22910
-            if isdefined($psym, :__init__)
-                $psym.__init__()
-            end
-        else
-            @debug(string($name, " already defined"))
-        end
-    end
-end
-
-
-function extract_used_packages(file::String)
-    scope_regex = r"([\u00A0-\uFFFF\w_!´]*@?[\u00A0-\uFFFF\w_!´]+)\."
-    namespaces = unique(getindex.(eachmatch(scope_regex, read(file, String)), 1))
-    # only use names that are also in current manifest
-    return filter(in_manifest, namespaces)
-end
-
-
-"""
-Extracts using statements from a julia file.
-"""
-function extract_using(path, usings = Set{String}())
-    src = read(path, String)
-    regex = r"using ([\u00A0-\uFFFF\w_!´]+)(,[ \u00A0-\uFFFF\w_!´]+)?"
-    for match in eachmatch(regex, src)
-        push!(usings, match[1])
-        if match[2] !== nothing
-            pkgs = strip.(split(match[2], ',', keepempty = false))
-            union!(usings, pkgs)
-        end
-    end
-    return usings
-end
-
 #=
 genfile & create_project_from_require have been taken from the PR
 https://github.com/JuliaLang/PkgDev.jl/pull/144

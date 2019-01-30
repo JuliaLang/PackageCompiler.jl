@@ -77,6 +77,7 @@ function compile_incremental(
         debug = false, cc_flags = nothing
     )
     precompiles = package_folder("incremental_precompile.jl")
+
     if snoopfile == nothing && precompile_file != nothing
         # we directly got a precompile_file
         isfile(precompile_file) || error("Need to pass an existing file to precompile_file. Found: $(repr(precompile_file))")
@@ -86,7 +87,7 @@ function compile_incremental(
     elseif snoopfile == nothing && precompile_file == nothing
         # reuse precompiles
     else
-        snoop(toml_path, snoopfile, precompiles)
+        snoop(nothing, toml_path, snoopfile, precompiles)
     end
     systemp = sysimg_folder("sys.a")
     sysout = sysimg_folder("sys.$(Libdl.dlext)")
@@ -133,11 +134,10 @@ function compile_incremental(packages::Symbol...; kw...)
         for package in packages
             precompiles = package_folder(string(package), "incremental_precompile.jl")
             toml, testfile = package_toml(package)
-            snoop(toml, testfile, precompiles)
+            snoop(package, toml, testfile, precompiles)
             pkg_toml = TOML.parsefile(toml)
             merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
             merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
-
             println(compile_io)
             write(compile_io, read(precompiles))
         end

@@ -1,16 +1,19 @@
 using Pkg, Serialization
 
 
-function snoop(tomlpath, snoopfile, outputfile, reuse = false)
+function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
+
     command = """
     using Pkg, PackageCompiler
     """
+
     if tomlpath != nothing
         command *= """
         Pkg.activate($(repr(tomlpath)))
         Pkg.instantiate()
         """
     end
+
     command *= """
     # let's wrap the snoop file in a try catch...
     # This way we still do some snooping even if there is an error in the tests!
@@ -27,11 +30,25 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
     if !reuse
         run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     end
-    actually_used = extract_used_packages(tmp_file)
+    used_packages = Set{String}() # e.g. from test/REQUIRE
+    if package != nothing
+        push!(used_packages, string(package))
+    end
     if tomlpath != nothing
         # add toml packages, in case extract_used_packages misses a package
         deps = get(TOML.parsefile(tomlpath), "deps", Dict{String, Any}())
-        union!(actually_used, string.(keys(deps)))
+        union!(used_packages, string.(keys(deps)))
+    end
+    usings = if isempty(used_packages)
+        ""
+    else
+        packages = join(used_packages, ", ")
+        """
+        using $packages
+        for Mod in [$packages]
+            isdefined(Mod, :__init__) && Mod.__init__()
+        end
+        """
     end
 
     line_idx = 0; missed = 0
@@ -44,8 +61,13 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
         # benefit is, that we can call __init__ this way more easily, since
         # incremental sysimage compilation won't call __init__ on `using`
         # https://github.com/JuliaLang/julia/issues/22910
-        using PackageCompiler
-        PackageCompiler.require_uninstalled.($(repr(actually_used)), (@__MODULE__,))
+        $usings
+        # bring recursive dependencies of used packages and standard libraries into namespace
+        for Mod in Base.loaded_modules_array()
+            if !Core.isdefined(@__MODULE__, nameof(Mod))
+                Core.eval(@__MODULE__, Expr(:const, Expr(:(=), nameof(Mod), Mod)))
+            end
+        end
         """)
         for line in eachline(tmp_file)
             line_idx += 1
@@ -93,7 +115,7 @@ function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_p
             joinpath(pkg_root, snoopfile)
         end
         precompile_file = package_folder(package, "precompile.jl")
-        snoop(toml, file2snoop, precompile_file)
+        snoop(package, toml, file2snoop, precompile_file)
         return precompile_file
     end
     # merge all of the temporary files into a single output

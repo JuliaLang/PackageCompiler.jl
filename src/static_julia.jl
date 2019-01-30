@@ -148,7 +148,7 @@ function static_julia(
         if snoopfile != nothing
             snoopfile = abspath(snoopfile)
             precompfile = joinpath(builddir, "precompiled.jl")
-            snoop(nothing, snoopfile, precompfile)
+            snoop(nothing, nothing, snoopfile, precompfile)
             jlmain = joinpath(builddir, "julia_main.jl")
             open(jlmain, "w") do io
                 # this file will get included via @eval Module() include(...)

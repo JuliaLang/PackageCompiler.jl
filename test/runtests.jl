@@ -1,6 +1,5 @@
 using PackageCompiler, Test
 
-
 @testset "compilage_package" begin
     @testset "FixedPointNumbers" begin
         sysimage = PackageCompiler.compile_package("FixedPointNumbers", verbose = true)
