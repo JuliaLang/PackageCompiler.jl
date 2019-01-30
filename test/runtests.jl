@@ -24,9 +24,7 @@ end
 @testset "compile_incremental" begin
     @testset "FixedPointNumbers" begin
         # This is the new compile_package
-        file = joinpath(dirname(pathof(PackageCompiler)), "..", "test", "test_pkg.jl")
-        syso, syso_old = PackageCompiler.compile_incremental(nothing, nothing, precompile_file = file)
-
+        syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
         test_code = """
         using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
         """

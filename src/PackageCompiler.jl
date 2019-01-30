@@ -1,6 +1,6 @@
 module PackageCompiler
 
-using Libdl, SnoopCompile
+using Libdl
 
 include("compiler_flags.jl")
 include("static_julia.jl")

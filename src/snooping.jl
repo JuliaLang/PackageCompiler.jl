@@ -61,14 +61,14 @@ function snoop(tomlpath, snoopfile, outputfile, reuse = false)
                 if expr.head != :incomplete
                     # after all this, we still need to wrap into try catch,
                     # since some anonymous symbols won't be found...
-                    println(io, "try;", line, "; catch e; @warn \"couldn't precompile statement $line_idx\" exception = e; end")
+                    println(io, "try;", line, "; catch e; @debug \"couldn't precompile statement $line_idx\" exception = e; end")
                 else
                     missed += 1
-                    @warn "Incomplete line in precompile file: $line"
+                    @debug "Incomplete line in precompile file: $line"
                 end
             catch e
                 missed += 1
-                @warn "Parse error in precompile file: $line" exception=e
+                @debug "Parse error in precompile file: $line" exception=e
             end
         end
     end

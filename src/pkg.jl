@@ -43,7 +43,7 @@ function require_uninstalled(name::AbstractString, mod = Main)
                 $psym.__init__()
             end
         else
-            @warn(string($name, " already defined"))
+            @debug(string($name, " already defined"))
         end
     end
 end
