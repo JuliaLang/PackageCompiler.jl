@@ -2,7 +2,6 @@ using Pkg, Serialization
 
 
 function snoop(tomlpath, snoopfile, outputfile, reuse = false)
-    packages = extract_using(snoopfile)
     command = """
     using Pkg, PackageCompiler
     """
