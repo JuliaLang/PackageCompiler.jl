@@ -110,12 +110,20 @@ use a toml instead.
 """
 function compile_package(
         packages::Tuple{String, String}...;
-        force = false, reuse = false, debug = false, cpu_target = nothing,
-        additional_packages = Symbol[], verbose = false
+        force = false, reuse = false, debug = false,
+        cpu_target = nothing, verbose = false
     )
     userimg = sysimg_folder("precompile.jl")
     if !reuse
-        snoop_userimg(userimg, packages...; additional_packages = additional_packages)
+        # TODO that's a pretty weak way to check that it's not a path...
+        ispackage = all(x-> !occursin(Base.Filesystem.path_separator, x), first.(packages))
+        isruntests = all(x-> x == "test/runtests.jl", last.(packages))
+        if ispackage && isruntests
+            snoop_packages(Symbol.(first.(packages))...; file = userimg)
+        else
+            ispackage || @warn "Giving path to package deprecated. Use Package name!"
+            isruntests || @warn "Giving a snoopfile is deprecated. Use runtests from package!"
+        end
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
@@ -127,10 +135,12 @@ function compile_package(
             backup = syspath * ".packagecompiler_backup"
             isfile(backup) || mv(syspath, backup)
             cp(imgfile, syspath)
-            @info """Replaced system image successfully. Next start of julia will load the newly compiled system image.
-                If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`."""
+            @info """
+            Replaced system image successfully. Next start of julia will load the newly compiled system image.
+            If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`.
+            """
         catch e
-            @warn "An error occured while replacing sysimg files:" error=e
+            @warn "An error occured while replacing sysimg files:" error = e
             @info "Recovering old system image from backup"
             # if any file is missing in default system image, revert!
             if !isfile(syspath)
@@ -139,18 +149,14 @@ function compile_package(
             end
         end
     else
-        @info """Not replacing system image.
-            You can start julia with $(`julia -J $imgfile`) at a posix shell to load the compiled files."""
+        @info """
+        Not replacing system image.
+        You can start julia with $(`julia -J $imgfile`) at a posix shell to load the compiled files.
+        """
     end
     imgfile
 end
 
-function __init__()
-    if Base.julia_cmd().exec[2] != "-Cnative"
-        @warn "Your Julia system image is not compiled natively for this CPU architecture.\n" *
-            "Please run `PackageCompiler.force_native_image!()` for optimal Julia performance."
-    end
-end
 
 export compile_package, revert, force_native_image!, executable_ext, build_executable, build_shared_lib, static_julia, compile_incremental
 

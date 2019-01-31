@@ -72,23 +72,10 @@ end
     To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
 """
 function compile_incremental(
-        toml_path::Union{String, Nothing}, snoopfile::Union{String, Nothing};
-        force = false, precompile_file = nothing, verbose = true,
+        toml_path::Union{String, Nothing}, precompiles::String;
+        force = false, verbose = true,
         debug = false, cc_flags = nothing
     )
-    precompiles = package_folder("incremental_precompile.jl")
-
-    if snoopfile == nothing && precompile_file != nothing
-        # we directly got a precompile_file
-        isfile(precompile_file) || error("Need to pass an existing file to precompile_file. Found: $(repr(precompile_file))")
-        if precompile_file != precompiles
-            cp(precompile_file, precompiles, force = true)
-        end
-    elseif snoopfile == nothing && precompile_file == nothing
-        # reuse precompiles
-    else
-        snoop(nothing, toml_path, snoopfile, precompiles)
-    end
     systemp = sysimg_folder("sys.a")
     sysout = sysimg_folder("sys.$(Libdl.dlext)")
     code = PrecompileCommand(precompiles)
@@ -104,7 +91,7 @@ end
 
 """
     compile_incremental(
-        package::Symbol;
+        packages::Symbol...;
         force = false, reuse = false, verbose = true,
         debug = false, cc_flags = nothing
     )
@@ -117,38 +104,7 @@ end
     For a more explicit version of compile_incremental, see:
     `compile_incremental(toml_path::String, snoopfile::String)`
 """
-function compile_incremental(package::Symbol; kw...)
-    toml, testfile = package_toml(package)
-    compile_incremental(toml, testfile; kw...)
-end
-
-
-function compile_incremental(packages::Symbol...; kw...)
-    finaltoml = Dict{Any, Any}(
-        "deps" => Dict(),
-        "compat" => Dict(),
-    )
-    precompiles_all = package_folder("incremental_precompile.jl")
-    open(precompiles_all, "w") do compile_io
-        println(compile_io, "# Precompile file for $(join(packages, " "))")
-        for package in packages
-            precompiles = package_folder(string(package), "incremental_precompile.jl")
-            toml, testfile = package_toml(package)
-            snoop(package, toml, testfile, precompiles)
-            pkg_toml = TOML.parsefile(toml)
-            merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
-            merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
-            println(compile_io)
-            write(compile_io, read(precompiles))
-        end
-    end
-    toml = package_folder("Project.toml")
-    finaltoml["name"] = "PackagesPrecompile"
-    open(toml, "w") do io
-        TOML.print(
-            io, finaltoml,
-            sorted = true, by = key-> (Types.project_key_order(key), key)
-        )
-    end
-    compile_incremental(toml, nothing; precompile_file = precompiles_all)
+function compile_incremental(pkg::Symbol, packages::Symbol...; kw...)
+    toml, precompile = snoop_packages(pkg, packages...)
+    compile_incremental(toml, precompile; kw...)
 end
