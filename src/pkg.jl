@@ -152,6 +152,7 @@ function package_toml(package::Symbol)
             test_deps = Dict(pkg.name => string(pkg.uuid) for pkg in pkgs)
         end
         cp(toml, precompile_toml, force = true)
+        chmod(precompile_toml, 0o644)
     end
 
     toml = TOML.parsefile(precompile_toml)
