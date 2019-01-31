@@ -17,7 +17,7 @@ function compile_system_image(sysimg_path, cpu_target = nothing; debug = false)
         # At some point, I will need to understand build_object a bit better before doing that move, though!
         julia_cmd = Base.julia_cmd()
         julia = julia_cmd.exec[1]
-        cpu_target = if cpu_target == nothing
+        cpu_target = if cpu_target === nothing
             replace(julia_cmd.exec[2], "-C" => "")
         else
             cpu_target
