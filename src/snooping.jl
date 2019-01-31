@@ -34,16 +34,21 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
     if package != nothing
         push!(used_packages, string(package))
     end
+    usings = ""
     if tomlpath != nothing
         # add toml packages, in case extract_used_packages misses a package
         deps = get(TOML.parsefile(tomlpath), "deps", Dict{String, Any}())
         union!(used_packages, string.(keys(deps)))
-    end
-    usings = if isempty(used_packages)
-        ""
-    else
-        packages = join(used_packages, ", ")
+        # make sure we have all packages from toml installed
+        usings *= """
+        using Pkg
+        Pkg.activate($(repr(tomlpath)))
+        Pkg.instantiate()
         """
+    end
+    if !isempty(used_packages)
+        packages = join(used_packages, ", ")
+        usings *= """
         using $packages
         for Mod in [$packages]
             isdefined(Mod, :__init__) && Mod.__init__()
