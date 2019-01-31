@@ -39,12 +39,6 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
         # add toml packages, in case extract_used_packages misses a package
         deps = get(TOML.parsefile(tomlpath), "deps", Dict{String, Any}())
         union!(used_packages, string.(keys(deps)))
-        # make sure we have all packages from toml installed
-        usings *= """
-        using Pkg
-        Pkg.activate($(repr(tomlpath)))
-        Pkg.instantiate()
-        """
     end
     if !isempty(used_packages)
         packages = join(used_packages, ", ")
@@ -103,31 +97,37 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
 end
 
 
-"""
-    snoop_userimg(userimg, packages::Tuple{String, String}...)
-
-    Traces all function calls in packages and writes out `precompile` statements into the file `userimg`
-"""
-function snoop_userimg(userimg, packages::Tuple{String, String}...; additional_packages = Symbol[])
-    snooped_precompiles = map(packages) do package_snoopfile
-        package, snoopfile = package_snoopfile
-        module_name = Symbol(package)
-        toml, runtests = package_toml(module_name)
-        pkg_root = normpath(joinpath(dirname(runtests), ".."))
-        file2snoop = if isfile(pkg_root, snoopfile)
-            joinpath(pkg_root, snoopfile)
-        else
-            joinpath(pkg_root, snoopfile)
+function snoop_packages(packages::Symbol...; file = package_folder("incremental_precompile.jl"))
+    finaltoml = Dict{Any, Any}(
+        "deps" => Dict(),
+        "compat" => Dict(),
+    )
+    toml_path = package_folder("Project.toml")
+    open(file, "w") do compile_io
+        println(compile_io, "# Precompile file for $(join(packages, " "))")
+        # make sure we have all packages from toml installed
+        println(compile_io, """
+        using Pkg
+        Pkg.activate($(repr(toml_path)))
+        Pkg.instantiate()
+        """)
+        for package in packages
+            precompiles = package_folder(string(package), "incremental_precompile.jl")
+            toml, testfile = package_toml(package)
+            snoop(package, toml, testfile, precompiles)
+            pkg_toml = TOML.parsefile(toml)
+            merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
+            merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
+            println(compile_io)
+            write(compile_io, read(precompiles))
         end
-        precompile_file = package_folder(package, "precompile.jl")
-        snoop(package, toml, file2snoop, precompile_file)
-        return precompile_file
     end
-    # merge all of the temporary files into a single output
-    open(userimg, "w") do output
-        for path in snooped_precompiles
-            open(input -> write(output, input), path)
-        end
+    finaltoml["name"] = "PackagesPrecompile"
+    open(toml_path, "w") do io
+        TOML.print(
+            io, finaltoml,
+            sorted = true, by = key-> (Types.project_key_order(key), key)
+        )
     end
-    nothing
+    return toml_path, file
 end
