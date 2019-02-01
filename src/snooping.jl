@@ -7,7 +7,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
     using Pkg, PackageCompiler
     """
 
-    if tomlpath != nothing
+    if tomlpath !== nothing
         command *= """
         Pkg.activate($(repr(tomlpath)))
         Pkg.instantiate()
@@ -31,11 +31,11 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
         run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     end
     used_packages = Set{String}() # e.g. from test/REQUIRE
-    if package != nothing
+    if package !== nothing
         push!(used_packages, string(package))
     end
     usings = ""
-    if tomlpath != nothing
+    if tomlpath !== nothing
         # add toml packages, in case extract_used_packages misses a package
         deps = get(TOML.parsefile(tomlpath), "deps", Dict{String, Any}())
         union!(used_packages, string.(keys(deps)))
