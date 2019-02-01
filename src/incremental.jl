@@ -99,7 +99,7 @@ end
     Incrementally compile `package` into the current system image.
     `force = true` will replace the old system image with the new one.
     `compile_incremental` will run the `Package/test/runtests.jl` file to
-    and record the functions getting compiled. The coverage of the Package's tests will
+    record the functions getting compiled. The coverage of the Package's tests will
     thus determine what is getting ahead of time compiled.
     For a more explicit version of compile_incremental, see:
     `compile_incremental(toml_path::String, snoopfile::String)`
