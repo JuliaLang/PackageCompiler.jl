@@ -1,0 +1,3 @@
+using TestPackage
+
+TestPackage.greet()
