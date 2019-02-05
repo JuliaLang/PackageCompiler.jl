@@ -8,25 +8,83 @@
 Remove just-in-time compilation overhead from your package and compile it into a system image.
 
 ## Usage example
-E.g. do:
 
+One can try ahead of time compiled images online with nextjournal!
+Here are some images for a few popular packages:
+
+[dataframes + query](https://nextjournal.com/sdanisch/data-remix)
+
+[plots & gr backend](https://nextjournal.com/sdanisch/plots-remix)
+
+[makie & opengl backend](https://nextjournal.com/sdanisch/glmakie-remix)
+
+[makie & cairo backend](https://nextjournal.com/sdanisch/cairomakie-remix)
+
+If you find a package to be missing, anyone can create these images and share them here! 
+One can also download the docker images for local usage:
+[instructions](https://nextjournal.com/sdanisch/static-cairomakie)
+
+(signup code for nextjournal: `julia1.0`)
+
+
+# compile_package
 ```Julia
 using PackageCompiler
 
-# This command will use the `runtest.jl` of `ArgParse` + `SnoopCompile` to find out what functions to precompile!
+# This command will use the `runtest.jl` of `ColorTypes` + `FixedPointNumbers` to find out what functions to precompile!
 # `force = false` to not force overwriting Julia's current system image
-compile_package("ArgParse", "SnoopCompile", force = false, reuse = false)
+compile_package("ColorTypes", "FixedPointNumbers", force = false) 
 
-# Build again, reusing the snoop file
-compile_package("ArgParse", "SnoopCompile", force = false, reuse = true)
-
-# You can define a file that will get run for snooping explicitly like this:
-# this makes sure, that binary gets cached for all functions called in `for_snooping.jl`
-compile_package(("ArgParse", "relative/path/for_snooping.jl"))
+# force = false is the default and recommended, since overwriting your standard system image can make Julia unusable.
 
 # If you used force and want your old system image back (force will overwrite the default system image Julia uses) you can run:
 revert()
 
+```
+
+# compile_incremental
+
+This function works like the above, but incrementally adds the newly cached binary to your old system image.
+That means that all precompiled code in the system image (e.g. REPL code) is preserved and therefore one gets a lag free start of the Julia REPL.
+Also, the compilation times are much faster:
+
+help?> compile_incremental
+```
+compile_incremental(
+    toml_path::String, snoopfile::String;
+    force = false, precompile_file = nothing, verbose = true,
+    debug = false, cc_flags = nothing
+)
+
+Extract all calls from `snoopfile` and ahead of time compiles them
+incrementally into the current system image.
+`force = true` will replace the old system image with the new one.
+The argument `toml_path` should contain a project file of the packages that `snoopfile` explicitly uses.
+Implicitly used packages & modules don't need to be contained!
+
+To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
+```
+
+```
+compile_incremental(
+    packages::Symbol...;
+    force = false, reuse = false, verbose = true,
+    debug = false, cc_flags = nothing
+)
+
+Incrementally compile `package` into the current system image.
+`force = true` will replace the old system image with the new one.
+`compile_incremental` will run the `Package/test/runtests.jl` file to
+record the functions getting compiled. The coverage of the Package's tests will
+thus determine what is getting ahead of time compiled.
+For a more explicit version of compile_incremental, see:
+`compile_incremental(toml_path::String, snoopfile::String)`
+```
+  
+
+# more functionality
+
+```julia
 # Or if you simply want to get a native system image e.g. when you have downloaded the generic Julia install:
 force_native_image!()
 
@@ -40,39 +98,6 @@ build_executable(
 # Build a shared library
 build_shared_lib("hello.jl")
 ```
-
-## Troubleshooting:
-
-- You might need to tweak your runtest, since `SnoopCompile` can have problems
-with some statements. Please open issues about concrete problems! This is also
-why there is a way to point to a file different from `runtests.jl`, for the case
-it becomes impossible to combine testing and snoop compiling, just pass
-`("package", "snoopfile.jl")`!
-
-- Non constant globals and globals defined in functions are problematic.
-Removing those got me to 95% of making the package safe for static compilation.
-
-- Type unstable code had some inference issues (around 2 occurrence, where I’m
-still not sure what was happening, and both cases happened with dictionaries).
-The only way to find those was investigating the segfaults with `gdb`, but then
-it was relatively easy to just juggle around the code, since the stacktraces
-accurately pointed to the problem. The non constant globals might be related
-since they introduce type instabilities.
-
-- Some generated functions needed reordering of the functions they call
-(actually, even for normal compilation, all functions that get called in a
-generated function should be defined before it).
-
-- I uncovered one out-of-bounds issue, that somehow was not coming up without
-static compilation.
-
-- I used `julia-debug` to uncover most bugs, but actually the last errors I was
-trying to uncover where due to `julia-debug` itself!
-
-- You’re pretty much on your own and need to use `gdb` to find any issues and I
-still don’t know what the underlying julia issues are and when they will get
-fixed :wink: See: https://github.com/JuliaLang/julia/issues/24533.
-Hopefully we'll look at a better story with Julia 1.0!
 
 
 # Static Julia Compiler
