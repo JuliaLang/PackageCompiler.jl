@@ -1,31 +1,7 @@
 using Pkg
 using Pkg: TOML
-
-const manifest_memoize = Ref{Dict{String, Any}}()
-
-function current_manifest()
-    manifest =
-    if !isassigned(manifest_memoize)
-        manifest_memoize[] = TOML.parsefile(replace(Base.active_project(), "Project.toml" => "Manifest.toml"))
-    end
-    return manifest_memoize[]
-end
-
-"""
-Looks up the UUID of a package from the current manifest file
-"""
-function package_uuid(name::AbstractString, manifest::Dict = Pkg.Types.Context().env.manifest)
-    idx = findall(manifest) do pkg
-        pkg.name == name
-    end
-    isempty(idx) && error("Package $name not found in current manifest")
-    length(idx) > 1 && @warn "There are multiple packages for $name installed. Choosing first!"
-    first(idx)
-end
-function in_manifest(name::AbstractString, manifest::Dict = current_manifest())
-    haskey(manifest, name) || return false
-end
-
+using Pkg: Operations, Types
+using UUIDs
 
 #=
 genfile & create_project_from_require have been taken from the PR
@@ -34,10 +10,6 @@ which was created by https://github.com/KristofferC
 
 THIS IS JUST A TEMPORARY SOLUTION FOR PACKAGES WITHOUT A TOML AND WILL GET MOVED OUT!
 =#
-
-using Pkg: Operations, Types
-using UUIDs
-
 
 function packages_from_require(reqfile::String)
     ctx = Pkg.Types.Context()
