@@ -27,10 +27,10 @@ end
         syso, syso_old = PackageCompiler.compile_incremental(:TestPackage)
         test_code = """
         push!(Base.LOAD_PATH, $(repr(path)))
-        using TestPackage; TestPackage.greet(); println("no segfaults, yay")
+        using TestPackage; TestPackage.greet()
         """
         cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "no segfaults, yay\n"
+        @test read(cmd, String) == "Hello World!"
         pop!(Base.LOAD_PATH)
     end
     @testset "FixedPointNumbers" begin
