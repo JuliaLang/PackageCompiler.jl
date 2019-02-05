@@ -4,6 +4,7 @@ using Pkg: TOML
 const manifest_memoize = Ref{Dict{String, Any}}()
 
 function current_manifest()
+    manifest =
     if !isassigned(manifest_memoize)
         manifest_memoize[] = TOML.parsefile(replace(Base.active_project(), "Project.toml" => "Manifest.toml"))
     end
@@ -13,12 +14,13 @@ end
 """
 Looks up the UUID of a package from the current manifest file
 """
-function package_uuid(name::AbstractString, manifest::Dict = current_manifest())
-    haskey(manifest, name) || error("Package $name not found in current manifest")
-    pkg = manifest[name]
-    isempty(pkg) && error("Package $name exist in manifest, but array is empty - faulty manifest?")
-    length(pkg) > 1 && @warn "There are multiple packages for $name installed. Choosing first!"
-    Base.UUID(first(pkg)["uuid"])
+function package_uuid(name::AbstractString, manifest::Dict = Pkg.Types.Context().env.manifest)
+    idx = findall(manifest) do pkg
+        pkg.name == name
+    end
+    isempty(idx) && error("Package $name not found in current manifest")
+    length(idx) > 1 && @warn "There are multiple packages for $name installed. Choosing first!"
+    first(idx)
 end
 function in_manifest(name::AbstractString, manifest::Dict = current_manifest())
     haskey(manifest, name) || return false
@@ -132,9 +134,8 @@ end
 
 function package_toml(package::Symbol)
     pstr = string(package)
-    pkg = Base.PkgId(package_uuid(pstr), pstr)
     # could use eval using here?! Not sure what is actually better
-    pkg_module = Base.require(pkg)
+    pkg_module = Base.require(Module(), package)
     pkg_root = normpath(joinpath(dirname(pathof(pkg_module)), ".."))
     toml = joinpath(pkg_root, "Project.toml")
     runtests = joinpath(pkg_root, "test", "runtests.jl")
@@ -154,6 +155,16 @@ function package_toml(package::Symbol)
         cp(toml, precompile_toml, force = true)
         chmod(precompile_toml, 0o644)
     end
+    # remove any old manifest
+    if isfile(package_folder(pstr, "Manifest.toml"))
+        rm(package_folder(pstr, "Manifest.toml"))
+    end
+    # add ourselves as dependencies and ensure we have a manifest
+    run_julia("""
+    using Pkg
+    Pkg.instantiate()
+    pkg"add PackageCompiler Pkg"
+    """, project = precompile_toml)
 
     toml = TOML.parsefile(precompile_toml)
 
@@ -161,9 +172,6 @@ function package_toml(package::Symbol)
     # Add the package itself
     deps[toml["name"]] = toml["uuid"]
     # Add the packages we need
-    deps["Pkg"] = string(package_uuid("Pkg"))
-    deps["PackageCompiler"] = string(package_uuid("PackageCompiler"))
-
     test_deps = get(toml, "extras", Dict())
     compile_toml = Dict()
     compile_toml["name"] = string(package, "Precompile")
@@ -171,16 +179,7 @@ function package_toml(package::Symbol)
     if haskey(toml, "compat")
         compile_toml["compat"] = toml["compat"]
     end
-    open(precompile_toml, "w") do io
-        TOML.print(
-            io, compile_toml,
-            sorted = true, by = key-> (Types.project_key_order(key), key)
-        )
-    end
-    # Manifest needs to be newly generated, so rm it to not get stuck with an old one
-    if isfile(package_folder(pstr, "Manifest.toml"))
-        rm(package_folder(pstr, "Manifest.toml"))
-    end
+    write_toml(precompile_toml, compile_toml)
     precompile_toml, runtests
 end
 

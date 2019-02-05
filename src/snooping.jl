@@ -9,10 +9,11 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
 
     if tomlpath !== nothing
         command *= """
+        empty!(Base.LOAD_PATH)
+        # Take LOAD_PATH from parent process
+        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
         Pkg.activate($(repr(tomlpath)))
         Pkg.instantiate()
-        println(Base.load_path())
-        Pkg.status()
         """
     end
 
@@ -111,6 +112,9 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
         # make sure we have all packages from toml installed
         println(compile_io, """
         using Pkg
+        empty!(Base.LOAD_PATH)
+        # Take LOAD_PATH from parent process
+        append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
         Pkg.activate($(repr(toml_path)))
         Pkg.instantiate()
         """)
@@ -135,8 +139,11 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
     end
     finaltoml["name"] = "PackagesPrecompile"
     write_toml(toml_path, finaltoml)
+    manifest_path = package_folder("Manifest.toml")
+    # make sure we don't reuse old manifests
+    isfile(manifest_path) && rm(manifest_path)
     if !isempty(manifest_dict)
-        write_toml(package_folder("Manifest.toml"), manifest_dict)
+        write_toml(manifest_path, manifest_dict)
     end
     return toml_path, file
 end
