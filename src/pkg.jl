@@ -183,3 +183,12 @@ function package_toml(package::Symbol)
     end
     precompile_toml, runtests
 end
+
+function write_toml(path, dict)
+    open(path, "w") do io
+        TOML.print(
+            io, dict,
+            sorted = true, by = key-> (Types.project_key_order(key), key)
+        )
+    end
+end

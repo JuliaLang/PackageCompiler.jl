@@ -11,6 +11,8 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
         command *= """
         Pkg.activate($(repr(tomlpath)))
         Pkg.instantiate()
+        println(Base.load_path())
+        Pkg.status()
         """
     end
 
@@ -103,6 +105,7 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
         "compat" => Dict(),
     )
     toml_path = package_folder("Project.toml")
+    manifest_dict = Dict{String, Vector{Dict{String, Any}}}()
     open(file, "w") do compile_io
         println(compile_io, "# Precompile file for $(join(packages, " "))")
         # make sure we have all packages from toml installed
@@ -116,6 +119,14 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
             toml, testfile = package_toml(package)
             snoop(package, toml, testfile, precompiles)
             pkg_toml = TOML.parsefile(toml)
+            manifest = joinpath(dirname(toml), "Manifest.toml")
+            if isfile(manifest) # not all get a manifest (only if pkg operations are executed I suppose)
+                pkg_manifest = TOML.parsefile(manifest)
+                for (name, pkgs) in pkg_manifest
+                    pkg_vec = get!(()-> Dict{String, Any}[], manifest_dict, name)
+                    append!(pkg_vec, pkgs); unique!(pkg_vec)
+                end
+            end
             merge!(finaltoml["deps"], get(pkg_toml, "deps", Dict()))
             merge!(finaltoml["compat"], get(pkg_toml, "compat", Dict()))
             println(compile_io)
@@ -123,11 +134,9 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
         end
     end
     finaltoml["name"] = "PackagesPrecompile"
-    open(toml_path, "w") do io
-        TOML.print(
-            io, finaltoml,
-            sorted = true, by = key-> (Types.project_key_order(key), key)
-        )
+    write_toml(toml_path, finaltoml)
+    if !isempty(manifest_dict)
+        write_toml(package_folder("Manifest.toml"), manifest_dict)
     end
     return toml_path, file
 end
