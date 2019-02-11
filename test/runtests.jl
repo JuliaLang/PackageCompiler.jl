@@ -33,6 +33,19 @@ end
         @test read(cmd, String) == "Hello World!"
         pop!(Base.LOAD_PATH)
     end
+    @testset "unregistered package, user snoop file" begin
+        path = joinpath(@__DIR__, "TestPackage")
+        snoopfile = joinpath(@__DIR__, "TestPackage/test/runtests.jl")
+        push!(Base.LOAD_PATH, path)
+        syso, syso_old = PackageCompiler.compile_incremental((:TestPackage,snoopfile))
+        test_code = """
+        push!(Base.LOAD_PATH, $(repr(path)))
+        using TestPackage; TestPackage.greet()
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+        @test read(cmd, String) == "Hello World!"
+        pop!(Base.LOAD_PATH)
+    end
     @testset "FixedPointNumbers" begin
         # This is the new compile_package
         syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)

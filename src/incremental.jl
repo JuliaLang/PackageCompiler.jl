@@ -74,14 +74,16 @@ end
 function compile_incremental(
         toml_path::Union{String, Nothing}, precompiles::String;
         force = false, verbose = true,
-        debug = false, cc_flags = nothing
+        debug = false, cc_flags = nothing,
+        kw...
     )
     systemp = sysimg_folder("sys.a")
     sysout = sysimg_folder("sys.$(Libdl.dlext)")
     code = PrecompileCommand(precompiles)
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
-        track_allocation = "none", startup_file = "no", code_coverage = "none"
+        track_allocation = "none", startup_file = "no", code_coverage = "none";
+        kw...
     )
     build_shared(sysout, systemp, false, sysimg_folder(), verbose, "3", debug, system_compiler, cc_flags)
     curr_syso = current_systemimage()
@@ -104,7 +106,12 @@ end
     For a more explicit version of compile_incremental, see:
     `compile_incremental(toml_path::String, snoopfile::String)`
 """
-function compile_incremental(pkg::Symbol, packages::Symbol...; kw...)
-    toml, precompile = snoop_packages(pkg, packages...)
+function compile_incremental(package::Symbol, packages::Symbol...; kw...)
+    toml, precompile = snoop_packages(package, packages...)
+    compile_incremental(toml, precompile; kw...)
+end
+
+function compile_incremental(packages::Tuple{Symbol,String}...; kw...)
+    toml, precompile = snoop_packages(packages...)
     compile_incremental(toml, precompile; kw...)
 end
