@@ -21,13 +21,25 @@ end
 
 
 @testset "compile_incremental" begin
-    @testset "unregistered package" begin
+    @testset "unregistered package with runtests.jl" begin
         path = joinpath(@__DIR__, "TestPackage")
         push!(Base.LOAD_PATH, path)
         syso, syso_old = PackageCompiler.compile_incremental(:TestPackage)
         test_code = """
         push!(Base.LOAD_PATH, $(repr(path)))
         using TestPackage; TestPackage.greet()
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+        @test read(cmd, String) == "Hello World!"
+        pop!(Base.LOAD_PATH)
+    end
+    @testset "unregistered package with snoopfile.jl" begin
+        path = joinpath(@__DIR__, "TestPackage2")
+        push!(Base.LOAD_PATH, path)
+        syso, syso_old = PackageCompiler.compile_incremental(:TestPackage2)
+        test_code = """
+        push!(Base.LOAD_PATH, $(repr(path)))
+        using TestPackage2; TestPackage2.greet()
         """
         cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
         @test read(cmd, String) == "Hello World!"
@@ -50,7 +62,18 @@ end
         cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
         @test read(cmd, String) == "no segfaults, yay\n"
     end
-
+    @testset "JSON with Distributed blacklisted" begin
+        # This is the new compile_package
+        syso, syso_old = PackageCompiler.compile_incremental(:JSON, blacklist=[:Distributed])
+        test_code = """
+        using JSON 
+        s = \"{\\"a_number\\" : 5.0, \\"an_array\\" : [\\"string\\", 9]}\"
+        j = JSON.parse(s)
+        println(\"no segfaults, yay\")
+        """
+        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
+        @test read(cmd, String) == "no segfaults, yay\n"
+    end
 end
 
 julia = Base.julia_cmd().exec[1]
