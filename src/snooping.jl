@@ -1,7 +1,7 @@
 using Pkg, Serialization
 
 
-function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
+function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklist = [])
 
     command = """
     using Pkg, PackageCompiler
@@ -44,7 +44,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
         union!(used_packages, string.(keys(deps)))
     end
     if !isempty(used_packages)
-        packages = join(used_packages, ", ")
+        packages = join(setdiff(used_packages,string.(blacklist)), ", ")
         usings *= """
         using $packages
         for Mod in [$packages]
@@ -100,7 +100,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false)
 end
 
 
-function snoop_packages(packages::Symbol...; file = package_folder("incremental_precompile.jl"))
+function snoop_packages(packages::Symbol...; blacklist = [], file = package_folder("incremental_precompile.jl"))
     finaltoml = Dict{Any, Any}(
         "deps" => Dict(),
         "compat" => Dict(),
@@ -120,8 +120,8 @@ function snoop_packages(packages::Symbol...; file = package_folder("incremental_
         """)
         for package in packages
             precompiles = package_folder(string(package), "incremental_precompile.jl")
-            toml, testfile = package_toml(package)
-            snoop(package, toml, testfile, precompiles)
+            toml, snoopfile = package_toml(package)
+            snoop(package, toml, snoopfile, precompiles, false, blacklist)
             pkg_toml = TOML.parsefile(toml)
             manifest = joinpath(dirname(toml), "Manifest.toml")
             if isfile(manifest) # not all get a manifest (only if pkg operations are executed I suppose)

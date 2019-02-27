@@ -1,3 +1,6 @@
 ColorTypes
 FixedPointNumbers
 UnicodePlots
+JSON
+DataStructures
+OffsetArrays

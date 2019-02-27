@@ -93,18 +93,31 @@ end
     compile_incremental(
         packages::Symbol...;
         force = false, reuse = false, verbose = true,
-        debug = false, cc_flags = nothing
+        debug = false, cc_flags = nothing,
+        blacklist::Vector = []
     )
 
     Incrementally compile `package` into the current system image.
     `force = true` will replace the old system image with the new one.
-    `compile_incremental` will run the `Package/test/runtests.jl` file to
-    record the functions getting compiled. The coverage of the Package's tests will
-    thus determine what is getting ahead of time compiled.
-    For a more explicit version of compile_incremental, see:
-    `compile_incremental(toml_path::String, snoopfile::String)`
+    This process requires a script that julia will run in order to determine 
+    which functions to compile. A package may define a script called `snoopfile.jl` 
+    for this purpose. If this file cannot be found the package's test script
+    `Package/test/runtests.jl` will be used. `compile_incremental` will search 
+    for `snoopfile.jl` in the package's root directory and in the folders
+    `Package/src` and `Package/snoop`. For a more explicit version of compile_incremental, 
+    see: `compile_incremental(toml_path::String, snoopfile::String)`
+
+    Not all packages can currently be compiled into the system image. By default,
+    `compile_incremental(:Package) will also compile all of Package's dependencies.
+    It can still be desirable to compile packages with dependencies that cannot be
+    compiled. For this reason `compile_incremental` offers
+    the ability for the user to pass a list of blacklisted packages
+    that will be ignored during the compilation process. These are passed as a 
+    vector of package names (defined as either strings or symbols) using the
+    `blacklist keyword argument`    
 """
-function compile_incremental(pkg::Symbol, packages::Symbol...; kw...)
-    toml, precompile = snoop_packages(pkg, packages...)
+function compile_incremental(pkg::Symbol, packages::Symbol...;
+                             blacklist::Vector=[], kw...)
+    toml, precompile = snoop_packages(pkg, packages...; blacklist=blacklist)
     compile_incremental(toml, precompile; kw...)
 end

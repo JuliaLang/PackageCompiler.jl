@@ -110,7 +110,9 @@ function package_toml(package::Symbol)
     pkg_module = Base.require(Module(), package)
     pkg_root = normpath(joinpath(dirname(pathof(pkg_module)), ".."))
     toml = joinpath(pkg_root, "Project.toml")
-    runtests = joinpath(pkg_root, "test", "runtests.jl")
+    # Check for snoopfile and fall back to runtests.jl
+    # if it can't be found
+    snoopfile = get_snoopfile(pkg_root)
     # We will create a new toml, based that will include all test dependencies etc
     # We're also using the precompile toml as a temp toml for packages not having a toml
     precompile_toml = package_folder(pstr, "Project.toml")
@@ -152,7 +154,7 @@ function package_toml(package::Symbol)
         compile_toml["compat"] = toml["compat"]
     end
     write_toml(precompile_toml, compile_toml)
-    precompile_toml, runtests
+    precompile_toml, snoopfile
 end
 
 function write_toml(path, dict)
@@ -162,4 +164,20 @@ function write_toml(path, dict)
             sorted = true, by = key-> (Types.project_key_order(key), key)
         )
     end
+end
+
+function get_snoopfile(pkg_root)
+    snoopfileroot = joinpath(pkg_root,"snoopfile.jl")
+    snoopfilesnoopdir = joinpath(pkg_root, "snoop", "snoopfile.jl") 
+    snoopfilesrc = joinpath(pkg_root, "src", "snoopfile.jl")
+    if isfile(snoopfileroot)
+        snoopfile = snoopfileroot
+    elseif isfile(snoopfilesnoopdir)
+        snoopfile = snoopfilesnoopdir
+    elseif isfile(snoopfilesrc)
+        snoopfile = snoopfilesrc
+    else
+        snoopfile = joinpath(pkg_root, "test", "runtests.jl")
+    end
+    return snoopfile
 end

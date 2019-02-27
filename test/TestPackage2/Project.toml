@@ -1,0 +1,4 @@
+name = "TestPackage2"
+uuid = "886979a0-3551-11e9-32b6-2991215e940c"
+authors = ["Patrick Belliveau <patrick@compgeoinc.com>"]
+version = "0.1.0"
