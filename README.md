@@ -300,3 +300,7 @@ preprocessor macro `JULIAC_PROGRAM_LIBNAME`.
 
 For more information on static Julia compilation see:\
 https://juliacomputing.com/blog/2016/02/09/static-julia.html
+
+## Side effects
+
+1.  Using `PackageCompiler` makes it impossible to load changed package code automatically - it must be `eval`'ed in from the current session.  This becomes a problem when developing packages.
