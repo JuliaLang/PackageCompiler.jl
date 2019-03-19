@@ -1,6 +1,6 @@
 using Pkg
 using Pkg: TOML
-using Pkg: Operations, Types
+using Pkg: Operations, Types, API
 using UUIDs
 
 #=
@@ -40,144 +40,117 @@ function packages_from_require(reqfile::String)
     Operations.ensure_resolved(ctx.env, pkgs)
     pkgs
 end
-function create_project_from_require(pkgname::String, path::String, toml_path::String)
-    ctx = Pkg.Types.Context()
-    # Package data
-    path = abspath(path)
-    mainpkg = Types.PackageSpec(pkgname)
-    Pkg.Operations.registry_resolve!(ctx.env, [mainpkg])
-    if !Operations.has_uuid(mainpkg)
-        uuid = UUIDs.uuid1()
-        @info "Unregistered package $pkgname, giving it a new UUID: $uuid"
-        mainpkg.version = v"0.1.0"
-    else
-        uuid = mainpkg.uuid
-        @info "Registered package $pkgname, using already given UUID: $(mainpkg.uuid)"
-        Pkg.Operations.set_maximum_version_registry!(ctx.env, mainpkg)
-        v = mainpkg.version
-        # Remove the build
-        mainpkg.version = VersionNumber(v.major, v.minor, v.patch)
-    end
-    # Dependency data
-    dep_pkgs = Types.PackageSpec[]
-    test_pkgs = Types.PackageSpec[]
-    compatibility = Pair{String, String}[]
 
-    reqfiles = [joinpath(path, "REQUIRE"), joinpath(path, "test", "REQUIRE")]
-    for (reqfile, pkgs) in zip(reqfiles, [dep_pkgs, test_pkgs])
-        if isfile(reqfile)
-            append!(pkgs, packages_from_require(reqfile))
-        end
-    end
+function isinstalled(pkg::Types.PackageSpec, installed = Pkg.installed())
+    root_path(pkg) === nothing && return false
+    return haskey(installed, pkg.name)
+end
 
-    stdlib_deps = Pkg.Operations.find_stdlib_deps(ctx, path)
-    for (stdlib_uuid, stdlib) in stdlib_deps
-        pkg = Types.PackageSpec(stdlib, stdlib_uuid)
-        if stdlib == "Test"
-            push!(test_pkgs, pkg)
-        else
-            push!(dep_pkgs, pkg)
-        end
-    end
+function only_installed(pkgs::Vector{Types.PackageSpec})
+    installed = Pkg.installed()
+    filter(p-> isinstalled(p, installed), pkgs)
+end
+function not_installed(pkgs::Vector{Types.PackageSpec})
+    installed = Pkg.installed()
+    filter(p-> !isinstalled(p, installed), pkgs)
+end
 
-    # Write project
+function root_path(pkg::Types.PackageSpec)
+    path = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name))
+    path === nothing && return nothing
+    return abspath(joinpath(dirname(path)), "..")
+end
 
-    project = Dict(
-        "name" => pkgname,
-        "uuid" => string(uuid),
-        "version" => string(mainpkg.version),
-        "deps" => Dict(pkg.name => string(pkg.uuid) for pkg in dep_pkgs)
-    )
-
-    if !isempty(compatibility)
-        project["compat"] =
-            Dict(name => ver for (name, ver) in compatibility)
-    end
-
-    if !isempty(test_pkgs)
-        project["extras"] = Dict(pkg.name => string(pkg.uuid) for pkg in test_pkgs)
-        project["targets"] = Dict("test" => [pkg.name for pkg in test_pkgs])
-    end
-
-    open(toml_path, "w") do io
-        Pkg.TOML.print(io, project, sorted=true, by=key -> (Types.project_key_order(key), key))
+function test_dependencies!(pkgs::Vector{Types.PackageSpec}, result = Set{Types.PackageSpec}())
+    for pkg in pkgs
+        test_dependencies!(root_path(pkg), result)
     end
 end
 
-function package_toml(package::Symbol)
-    pstr = string(package)
-    # could use eval using here?! Not sure what is actually better
-    pkg_module = Base.require(Module(), package)
-    pkg_root = normpath(joinpath(dirname(pathof(pkg_module)), ".."))
+function test_dependencies!(pkg_root, result = Set{Types.PackageSpec}())
+    testreq = joinpath(pkg_root, "test", "REQUIRE")
     toml = joinpath(pkg_root, "Project.toml")
-    # Check for snoopfile and fall back to runtests.jl
-    # if it can't be found
-    snoopfile = get_snoopfile(pkg_root)
-    # We will create a new toml, based that will include all test dependencies etc
-    # We're also using the precompile toml as a temp toml for packages not having a toml
-    precompile_toml = package_folder(pstr, "Project.toml")
-    isdir(dirname(precompile_toml)) || mkpath(dirname(precompile_toml))
-    test_deps = Dict()
-    if !isfile(toml)
-        create_project_from_require(pstr, pkg_root, precompile_toml)
-    else
-        testreq = joinpath(pkg_root, "test", "REQUIRE")
-        if isfile(testreq)
-            pkgs = packages_from_require(testreq)
-            test_deps = Dict(pkg.name => string(pkg.uuid) for pkg in pkgs)
+    if isfile(toml)
+        pkgs = get(TOML.parsefile(toml), "extras", nothing)
+        if pkgs !== nothing
+            union!(result, (PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs))
         end
-        cp(toml, precompile_toml, force = true)
-        chmod(precompile_toml, 0o644)
     end
-    # remove any old manifest
-    if isfile(package_folder(pstr, "Manifest.toml"))
-        rm(package_folder(pstr, "Manifest.toml"))
+    if isfile(testreq)
+        union!(result, packages_from_require(testreq))
     end
-    # add ourselves as dependencies and ensure we have a manifest
-    run_julia("""
-    using Pkg
-    Pkg.instantiate()
-    pkg"add PackageCompiler Pkg"
-    """, project = precompile_toml)
-
-    toml = TOML.parsefile(precompile_toml)
-
-    deps = merge(get(toml, "deps", Dict()), test_deps)
-    # Add the package itself
-    deps[toml["name"]] = toml["uuid"]
-    # Add the packages we need
-    test_deps = get(toml, "extras", Dict())
-    compile_toml = Dict()
-    compile_toml["name"] = string(package, "Precompile")
-    compile_toml["deps"] = merge(test_deps, deps)
-    if haskey(toml, "compat")
-        compile_toml["compat"] = toml["compat"]
-    end
-    write_toml(precompile_toml, compile_toml)
-    precompile_toml, snoopfile
+    result
 end
 
-function write_toml(path, dict)
-    open(path, "w") do io
-        TOML.print(
-            io, dict,
-            sorted = true, by = key-> (Types.project_key_order(key), key)
-        )
-    end
+get_snoopfile(pkg::Types.PackageSpec) = get_snoopfile(root_path(pkg))
+
+function get_snoopfile(pkg_root::String)
+    paths = (
+        joinpath(pkg_root,"snoopfile.jl"),
+        joinpath(pkg_root, "snoop", "snoopfile.jl"),
+        joinpath(pkg_root, "src", "snoopfile.jl"),
+        joinpath(pkg_root, "test", "runtests.jl")
+    )
+    idx = findfirst(isfile, paths)
+    idx === nothing && error("No snoopfile or testfile found for package $pkg_root")
+    return paths[idx]
 end
 
-function get_snoopfile(pkg_root)
-    snoopfileroot = joinpath(pkg_root,"snoopfile.jl")
-    snoopfilesnoopdir = joinpath(pkg_root, "snoop", "snoopfile.jl") 
-    snoopfilesrc = joinpath(pkg_root, "src", "snoopfile.jl")
-    if isfile(snoopfileroot)
-        snoopfile = snoopfileroot
-    elseif isfile(snoopfilesnoopdir)
-        snoopfile = snoopfilesnoopdir
-    elseif isfile(snoopfilesrc)
-        snoopfile = snoopfilesrc
+function package_fullspec(ctx, uuid)
+    if Types.is_project_uuid(ctx.env, uuid)
+        path = dirname(ctx.env.project_file)
+        hash_or_path = path
+        name = ctx.env.pkg.name
     else
-        snoopfile = joinpath(pkg_root, "test", "runtests.jl")
+        entry = API.manifest_info(ctx.env, uuid)
+        name = entry.name
     end
-    return snoopfile
+    return PackageSpec(name = name, uuid = uuid)
+end
+
+function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Set{Types.PackageSpec}())
+    for pkg in pkgs
+        pkg.uuid in keys(ctx.stdlibs) && continue
+        pkg in deps && continue
+        push!(deps, pkg)
+        if Types.is_project(ctx.env, pkg)
+            pkgs = [PackageSpec(name, uuid) for (name, uuid) in ctx.env.project.deps]
+        else
+            info = API.manifest_info(ctx.env, pkg.uuid)
+            if info === nothing
+                pkgerror("could not find manifest info for package with uuid: $(pkg.uuid)")
+            end
+            pkgs = [PackageSpec(name, uuid) for (name, uuid) in info.deps]
+        end
+        direct_dependencies!(ctx, pkgs, deps)
+    end
+    return deps
+end
+
+function resolve_packages!(ctx, pkgs)
+    for pkg in pkgs
+        pkg.mode = PKGMODE_MANIFEST
+    end
+    API.project_resolve!(ctx.env, pkgs)
+    API.manifest_resolve!(ctx.env, pkgs)
+    API.ensure_resolved(ctx.env, pkgs)
+end
+
+
+"""
+Resolves all dependencies of a list of packages, including test and recursive
+Dependencies.
+"""
+function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.Context())
+    # Hm the set is bugged due to it not having the right hashing function
+    # I'll leave it as a set for now, and just do some tricks in the end to make
+    # elements unique
+    deps = Set{Types.PackageSpec}()
+    test_dependencies!(pkgs, deps)
+    union!(pkgs, deps) # add to pkgs, so we get also their recursive deps
+    empty!(deps)
+    direct_dependencies!(ctx, pkgs, deps)
+    union!(pkgs, deps)
+    deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
+    collect(values(deps_unique))
 end
