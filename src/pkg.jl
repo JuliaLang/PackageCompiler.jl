@@ -61,23 +61,25 @@ function root_path(pkg::Types.PackageSpec)
     return abspath(joinpath(dirname(path)), "..")
 end
 
-function test_dependencies!(pkgs::Vector{Types.PackageSpec}, result = Set{Types.PackageSpec}())
+function test_dependencies!(pkgs::Vector{Types.PackageSpec}, result = Dict{Base.UUID, Types.PackageSpec}())
     for pkg in pkgs
         test_dependencies!(root_path(pkg), result)
     end
+    return result
 end
 
-function test_dependencies!(pkg_root, result = Set{Types.PackageSpec}())
+function test_dependencies!(pkg_root, result = Dict{Base.UUID, Types.PackageSpec}())
     testreq = joinpath(pkg_root, "test", "REQUIRE")
     toml = joinpath(pkg_root, "Project.toml")
     if isfile(toml)
         pkgs = get(TOML.parsefile(toml), "extras", nothing)
         if pkgs !== nothing
-            union!(result, (PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs))
+            return Dict((uuid => PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs))
         end
     end
     if isfile(testreq)
-        union!(result, packages_from_require(testreq))
+        deps = packages_from_require(testreq)
+        return Dict((d.uuid => d for d in deps))
     end
     result
 end
@@ -108,12 +110,12 @@ function package_fullspec(ctx, uuid)
     return PackageSpec(name = name, uuid = uuid)
 end
 
-function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Set{Types.PackageSpec}())
+function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Dict{Base.UUID, Types.PackageSpec}())
     resolve_packages!(ctx, pkgs)
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
-        pkg in deps && continue
-        push!(deps, pkg)
+        haskey(deps, pkg.uuid) && continue
+        deps[pkg.uuid] = pkg
         if Types.is_project(ctx.env, pkg)
             pkgs = [PackageSpec(name, uuid) for (name, uuid) in ctx.env.project.deps]
         else
@@ -146,12 +148,10 @@ function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.
     # Hm the set is bugged due to it not having the right hashing function
     # I'll leave it as a set for now, and just do some tricks in the end to make
     # elements unique
-    deps = Set{Types.PackageSpec}()
-    test_dependencies!(pkgs, deps)
-    union!(pkgs, deps) # add to pkgs, so we get also their recursive deps
-    empty!(deps)
-    direct_dependencies!(ctx, pkgs, deps)
-    union!(pkgs, deps)
+    tdeps = test_dependencies!(pkgs)
+    union!(pkgs, values(tdeps)) # add to pkgs, so we get also their recursive deps
+    ddeps = direct_dependencies!(ctx, pkgs)
+    union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
     collect(values(deps_unique))
 end
