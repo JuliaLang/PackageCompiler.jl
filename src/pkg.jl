@@ -121,7 +121,9 @@ function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec
         else
             info = API.manifest_info(ctx.env, pkg.uuid)
             if info === nothing
-                API.pkgerror("could not find manifest info for package $(pkg.name) with uuid: $(pkg.uuid)")
+                # Not installed
+                Pkg.add(pkg)
+                info = API.manifest_info(ctx.env, pkg.uuid)
             end
             pkgs = [PackageSpec(name, uuid) for (name, uuid) in info.deps]
         end
