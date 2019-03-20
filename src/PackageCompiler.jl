@@ -119,7 +119,7 @@ function compile_package(
         ispackage = all(x-> !occursin(Base.Filesystem.path_separator, x), first.(packages))
         isruntests = all(x-> x == "test/runtests.jl", last.(packages))
         if ispackage && isruntests
-            snoop_packages(Symbol.(first.(packages))...; file = userimg)
+            snoop_packages([first.(packages)...], userimg)
         else
             ispackage || @warn "Giving path to package deprecated. Use Package name!"
             isruntests || @warn "Giving a snoopfile is deprecated. Use runtests from package!"
@@ -127,7 +127,7 @@ function compile_package(
     end
     !isfile(userimg) && reuse && error("Nothing to reuse. Please run `compile_package(reuse = true)`")
     image_path = sysimg_folder()
-    build_sysimg(image_path, userimg, cpu_target=cpu_target, verbose = verbose)
+    build_sysimg(image_path, userimg, cpu_target = cpu_target, verbose = verbose)
     imgfile = joinpath(image_path, "sys.$(Libdl.dlext)")
     syspath = joinpath(default_sysimg_path(debug), "sys.$(Libdl.dlext)")
     if force

@@ -42,22 +42,40 @@ function snoop(snoopfile::String, output_io::IO)
     @info "used $(line_idx - missed) out of $line_idx precompile statements"
 end
 
-
 function snoop_packages(
-        packages::Vector{String};
-        file = package_folder("incremental_precompile.jl")
+        packages::Vector{String}, file::String;
+        blacklist::Vector{Symbol} = Symbol[],
+        blacklist_init::Vector{Symbol} = Symbol[],
+        install_dependencies::Bool = false
     )
     pkgs = PackageSpec.(packages)
     ctx = Types.Context()
     resolve_packages!(ctx, pkgs)
     snoopfiles = get_snoopfile.(pkgs)
     packages = resolve_full_dependencies(pkgs, ctx)
-    package_names = getfield.(packages, :name)
+    uninstalled = not_installed(packages)
+    if !isempty(uninstalled)
+        if install_dependencies
+            Pkg.add(uninstalled)
+        else
+            error("""Not all dependencies of this project are installed.
+            Please add them manually or set `install_dependencies = true`.
+            If you want to install them manually, please execute:
+                using Pkg
+                pkg"add $(join(getfield.(uninstalled, :name), " "))"
+            """)
+        end
+    end
+    # remove blacklisted packages from full list of packages
+    package_names = setdiff(getfield.(packages, :name), string.(blacklist))
+
+    inits = setdiff(package_names, string.(blacklist_init))
     usings = join(package_names, ", ")
+    inits = join(inits, ", ")
     open(file, "w") do io
         println(io, """
         using $usings
-        for Mod in [$usings]
+        for Mod in [$inits]
             isdefined(Mod, :__init__) && Mod.__init__()
         end
         """)
