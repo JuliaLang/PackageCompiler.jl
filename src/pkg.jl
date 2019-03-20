@@ -109,6 +109,7 @@ function package_fullspec(ctx, uuid)
 end
 
 function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Set{Types.PackageSpec}())
+    resolve_packages!(ctx, pkgs)
     for pkg in pkgs
         pkg.uuid in keys(ctx.stdlibs) && continue
         pkg in deps && continue
