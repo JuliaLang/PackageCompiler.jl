@@ -74,7 +74,7 @@ function test_dependencies!(pkg_root, result = Dict{Base.UUID, Types.PackageSpec
     if isfile(toml)
         pkgs = get(TOML.parsefile(toml), "extras", nothing)
         if pkgs !== nothing
-            merge!(result, Dict((uuid => PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs)))
+            merge!(result, Dict((Base.UUID(uuid) => PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs)))
         end
     end
     if isfile(testreq)
