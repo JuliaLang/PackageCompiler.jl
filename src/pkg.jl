@@ -140,20 +140,41 @@ function resolve_packages!(ctx, pkgs)
 end
 
 
+function ensure_installed(packages::Vector{Types.PackageSpec}, install_dependencies::Bool)
+    uninstalled = not_installed(packages)
+    if !isempty(uninstalled)
+        pkgs = join(getfield.(uninstalled, :name), " ")
+        if install_dependencies
+            @info "installing dependencies: $pkgs"
+            Pkg.add(uninstalled)
+        else
+            error("""Not all dependencies of this project are installed.
+            Please add them manually or set `install_dependencies = true`.
+            If you want to install them manually, please execute:
+                using Pkg
+                pkg"add $pkgs"
+            """)
+        end
+    end
+end
+
 """
 Resolves all dependencies of a list of packages, including test and recursive
 Dependencies.
 """
-function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.Context())
+function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.Context(); install_dependencies = false)
     # Hm the set is bugged due to it not having the right hashing function
     # I'll leave it as a set for now, and just do some tricks in the end to make
     # elements unique
     tdeps = collect(values(test_dependencies!(pkgs)))
     union!(pkgs, tdeps) # add to pkgs, so we get also their recursive deps
     ninstalled = not_installed(pkgs)
-    isempty(ninstalled) || Pkg.add(ninstalled)
+    # If we don't ensure here, direct_dependencies might not find all packages
+    ensure_installed(pkgs, install_dependencies)
     ddeps = direct_dependencies!(ctx, pkgs)
     union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
-    collect(values(deps_unique))
+    packages = collect(values(deps_unique))
+    ensure_installed(packages, install_dependencies)
+    packages
 end

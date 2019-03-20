@@ -52,20 +52,8 @@ function snoop_packages(
     ctx = Types.Context()
     resolve_packages!(ctx, pkgs)
     snoopfiles = get_snoopfile.(pkgs)
-    packages = resolve_full_dependencies(pkgs, ctx)
-    uninstalled = not_installed(packages)
-    if !isempty(uninstalled)
-        if install_dependencies
-            Pkg.add(uninstalled)
-        else
-            error("""Not all dependencies of this project are installed.
-            Please add them manually or set `install_dependencies = true`.
-            If you want to install them manually, please execute:
-                using Pkg
-                pkg"add $(join(getfield.(uninstalled, :name), " "))"
-            """)
-        end
-    end
+    packages = resolve_full_dependencies(pkgs, ctx, install_dependencies = install_dependencies)
+
     # remove blacklisted packages from full list of packages
     package_names = setdiff(getfield.(packages, :name), string.(blacklist))
 
