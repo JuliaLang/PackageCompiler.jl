@@ -121,9 +121,7 @@ function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec
         else
             info = API.manifest_info(ctx.env, pkg.uuid)
             if info === nothing
-                # Not installed
-                Pkg.add(pkg)
-                info = API.manifest_info(ctx.env, pkg.uuid)
+                API.pkgerror("could not find manifest info for package $(pkg.name) with uuid: $(pkg.uuid)")
             end
             pkgs = [PackageSpec(name, uuid) for (name, uuid) in info.deps]
         end
@@ -150,8 +148,10 @@ function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.
     # Hm the set is bugged due to it not having the right hashing function
     # I'll leave it as a set for now, and just do some tricks in the end to make
     # elements unique
-    tdeps = test_dependencies!(pkgs)
-    union!(pkgs, values(tdeps)) # add to pkgs, so we get also their recursive deps
+    tdeps = collect(values(test_dependencies!(pkgs)))
+    union!(pkgs, tdeps) # add to pkgs, so we get also their recursive deps
+    ninstalled = not_installed(pkgs)
+    isempty(ninstalled) || Pkg.add(ninstalled)
     ddeps = direct_dependencies!(ctx, pkgs)
     union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
