@@ -74,7 +74,7 @@ function snoop_packages(
     inits = join(inits, ", ")
     open(file, "w") do io
         println(io, """
-        using $usings
+        import $usings
         for Mod in [$inits]
             isdefined(Mod, :__init__) && Mod.__init__()
         end

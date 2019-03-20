@@ -66,7 +66,7 @@ end
         # This is the new compile_package
         syso, syso_old = PackageCompiler.compile_incremental(:JSON, blacklist=[:Distributed])
         test_code = """
-        using JSON 
+        using JSON
         s = \"{\\"a_number\\" : 5.0, \\"an_array\\" : [\\"string\\", 9]}\"
         j = JSON.parse(s)
         println(\"no segfaults, yay\")
