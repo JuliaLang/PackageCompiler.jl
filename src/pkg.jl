@@ -74,12 +74,12 @@ function test_dependencies!(pkg_root, result = Dict{Base.UUID, Types.PackageSpec
     if isfile(toml)
         pkgs = get(TOML.parsefile(toml), "extras", nothing)
         if pkgs !== nothing
-            return Dict((uuid => PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs))
+            merge!(result, Dict((uuid => PackageSpec(name = n, uuid = uuid) for (n, uuid) in pkgs)))
         end
     end
     if isfile(testreq)
         deps = packages_from_require(testreq)
-        return Dict((d.uuid => d for d in deps))
+        merge!(result, Dict((d.uuid => d for d in deps)))
     end
     result
 end
