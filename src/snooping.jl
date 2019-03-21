@@ -66,11 +66,11 @@ function snoop_packages(
         packages::Vector{String}, file::String;
         blacklist::Vector{Symbol} = known_blacklisted_packages,
         init_blacklist::Vector{Symbol} = known_uninitializable_libs,
-        install_dependencies::Bool = false, verbose = false
+        install::Bool = false, verbose = false
     )
     pkgs = PackageSpec.(packages)
     snoopfiles = get_snoopfile.(pkgs)
-    packages = resolve_full_dependencies(pkgs, install_dependencies = install_dependencies)
+    packages = resolve_full_dependencies(pkgs, install = install)
 
     # remove blacklisted packages from full list of packages
     package_names = setdiff(getfield.(packages, :name), string.(blacklist))
