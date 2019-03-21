@@ -111,8 +111,6 @@ function package_fullspec(ctx, uuid)
 end
 
 function direct_dependencies!(pkg::Types.PackageSpec, deps = Dict{Base.UUID, Types.PackageSpec}())
-    ctx = Types.Context()
-    resolve_packages!(ctx, [pkg])
     haskey(deps, pkg.uuid) && return deps
     deps[pkg.uuid] = pkg
     if Types.is_project(ctx.env, pkg)
@@ -141,6 +139,7 @@ function recursive_dependencies!(
 end
 function recursive_dependencies!(pkg, deps = Dict{Base.UUID, Types.PackageSpec}(); install = false)
     haskey(deps, pkg.uuid) && return deps
+    resolve_packages!(Types.Context(), [pkg])
     deps[pkg.uuid] = pkg
     new_deps = direct_dependencies!(pkg)
     packages = collect(values(new_deps))
