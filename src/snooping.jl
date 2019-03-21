@@ -36,6 +36,9 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
         # Is this ridicilous? Yes, it is! But we need a unique symbol to replace `_`,
         # which otherwise ends up as an uncatchable syntax error
         line = replace(line, r"\b_\b" => "🐃")
+        # replace ##symbols
+        #line = replace(line, r"(?!\")(##.*?#\d+?)(?!\")" => s"eval(Symbol(\"\1\"))")
+
         try
             expr = Meta.parse(line, raise = true)
             if expr.head != :incomplete

@@ -110,22 +110,30 @@ function package_fullspec(ctx, uuid)
     return PackageSpec(name = name, uuid = uuid)
 end
 
-function direct_dependencies!(pkgs::Vector{Types.PackageSpec}, deps = Dict{Base.UUID, Types.PackageSpec}())
+function direct_dependencies!(pkg::Types.PackageSpec, deps = Dict{Base.UUID, Types.PackageSpec}())
     ctx = Types.Context()
-    resolve_packages!(ctx, pkgs)
-    for pkg in pkgs
-        haskey(deps, pkg.uuid) && continue
-        deps[pkg.uuid] = pkg
-        if Types.is_project(ctx.env, pkg)
-            pkgs = [PackageSpec(name, uuid) for (name, uuid) in ctx.env.project.deps]
-        else
-            info = API.manifest_info(ctx.env, pkg.uuid)
-            if info === nothing
-                API.pkgerror("could not find manifest info for package $(pkg.name) with uuid: $(pkg.uuid)")
-            end
-            pkgs = [PackageSpec(name, uuid) for (name, uuid) in info.deps]
+    resolve_packages!(ctx, [pkg])
+    haskey(deps, pkg.uuid) && return deps
+    deps[pkg.uuid] = pkg
+    if Types.is_project(ctx.env, pkg)
+        pkgs = (uuid => PackageSpec(name, uuid) for (name, uuid) in ctx.env.project.deps)
+    else
+        info = API.manifest_info(ctx.env, pkg.uuid)
+        if info === nothing
+            API.pkgerror("could not find manifest info for package $(pkg.name) with uuid: $(pkg.uuid)")
         end
-        direct_dependencies!(pkgs, deps)
+        pkgs = (uuid => PackageSpec(name, uuid) for (name, uuid) in info.deps)
+    end
+    merge!(deps, Dict(pkgs))
+    return deps
+end
+
+function recursive_dependencies!(pkg, deps = Dict{Base.UUID, Types.PackageSpec}(); install_dependencies = false)
+    direct_dependencies!(pkg, deps)
+    packages = collect(values(deps))
+    ensure_installed(packages, install_dependencies)
+    for pkg in packages
+        haskey(deps, pkg.uuid) || recursive_dependencies!(pkg, deps)
     end
     return deps
 end
@@ -168,10 +176,12 @@ function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}; install_depe
     # elements unique
     tdeps = collect(values(test_dependencies!(pkgs)))
     union!(pkgs, tdeps) # add to pkgs, so we get also their recursive deps
-    ninstalled = not_installed(pkgs)
     # If we don't ensure here, direct_dependencies might not find all packages
     ensure_installed(pkgs, install_dependencies)
-    ddeps = direct_dependencies!(pkgs)
+    ddeps = Dict{Base.UUID, Types.PackageSpec}()
+    for pkg in pkgs
+        recursive_dependencies!(pkg, ddeps)
+    end
     union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
     packages = collect(values(deps_unique))
