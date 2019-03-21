@@ -2,9 +2,10 @@ using Pkg, Serialization
 
 
 const known_uninitializable_libs = [
-    :Distributed
+    :Distributed, :SpecialFunctions
 ]
 const known_blacklisted_packages = Symbol[]
+
 if !Sys.isapple()
     push!(known_blacklisted_packages, :QuartzImageIO)
 end
