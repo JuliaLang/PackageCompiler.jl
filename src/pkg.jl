@@ -133,7 +133,7 @@ function recursive_dependencies!(pkg, deps = Dict{Base.UUID, Types.PackageSpec}(
     packages = collect(values(deps))
     ensure_installed(packages, install_dependencies)
     for pkg in packages
-        haskey(deps, pkg.uuid) || recursive_dependencies!(pkg, deps)
+        haskey(deps, pkg.uuid) || recursive_dependencies!(pkg, deps, install_dependencies = install_dependencies)
     end
     return deps
 end
@@ -180,7 +180,7 @@ function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}; install_depe
     ensure_installed(pkgs, install_dependencies)
     ddeps = Dict{Base.UUID, Types.PackageSpec}()
     for pkg in pkgs
-        recursive_dependencies!(pkg, ddeps)
+        recursive_dependencies!(pkg, ddeps, install_dependencies = install_dependencies)
     end
     union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
