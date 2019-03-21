@@ -73,12 +73,17 @@ function snoop_packages(
     package_names = setdiff(getfield.(packages, :name), string.(blacklist))
 
     inits = setdiff(package_names, string.(init_blacklist))
-    usings = join(package_names, ", ")
-    inits = join(inits, ", ")
+    usings = join("import " .* package_names, "\n")
+    inits = join("    " .* inits, ",\n")
     open(file, "w") do io
         println(io, """
-        import $usings
-        for Mod in [$inits]
+        $usings
+
+        __init_modules = [
+        $inits
+        ]
+
+        for Mod in __init_modules
             isdefined(Mod, :__init__) && Mod.__init__()
         end
         """)

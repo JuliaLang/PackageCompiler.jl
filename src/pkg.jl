@@ -110,7 +110,8 @@ function package_fullspec(ctx, uuid)
     return PackageSpec(name = name, uuid = uuid)
 end
 
-function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Dict{Base.UUID, Types.PackageSpec}())
+function direct_dependencies!(pkgs::Vector{Types.PackageSpec}, deps = Dict{Base.UUID, Types.PackageSpec}())
+    ctx = Types.Context()
     resolve_packages!(ctx, pkgs)
     for pkg in pkgs
         haskey(deps, pkg.uuid) && continue
@@ -124,7 +125,7 @@ function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec
             end
             pkgs = [PackageSpec(name, uuid) for (name, uuid) in info.deps]
         end
-        direct_dependencies!(ctx, pkgs, deps)
+        direct_dependencies!(pkgs, deps)
     end
     return deps
 end
@@ -161,7 +162,7 @@ end
 Resolves all dependencies of a list of packages, including test and recursive
 Dependencies.
 """
-function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.Context(); install_dependencies = false)
+function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}; install_dependencies = false)
     # Hm the set is bugged due to it not having the right hashing function
     # I'll leave it as a set for now, and just do some tricks in the end to make
     # elements unique
@@ -170,7 +171,7 @@ function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}, ctx = Types.
     ninstalled = not_installed(pkgs)
     # If we don't ensure here, direct_dependencies might not find all packages
     ensure_installed(pkgs, install_dependencies)
-    ddeps = direct_dependencies!(ctx, pkgs)
+    ddeps = direct_dependencies!(pkgs)
     union!(pkgs, values(ddeps))
     deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
     packages = collect(values(deps_unique))
