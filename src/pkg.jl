@@ -113,7 +113,6 @@ end
 function direct_dependencies!(ctx::Types.Context, pkgs::Vector{Types.PackageSpec}, deps = Dict{Base.UUID, Types.PackageSpec}())
     resolve_packages!(ctx, pkgs)
     for pkg in pkgs
-        pkg.uuid in keys(ctx.stdlibs) && continue
         haskey(deps, pkg.uuid) && continue
         deps[pkg.uuid] = pkg
         if Types.is_project(ctx.env, pkg)

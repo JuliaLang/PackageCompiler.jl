@@ -1,7 +1,16 @@
 using Pkg, Serialization
 
 
-function snoop(snoopfile::String, output_io::IO)
+const known_uninitializable_libs = [
+    :Distributed
+]
+const known_blacklisted_packages = Symbol[]
+if !Sys.isapple()
+    push!(known_blacklisted_packages, :QuartzImageIO)
+end
+
+function snoop(snoopfile::String, output_io::IO; verbose = false)
+    # make sure our variables don't conflict with any precompile statements
     command = """
     # let's wrap the snoop file in a try catch...
     # This way we still do some snooping even if there is an error in the tests!
@@ -16,6 +25,8 @@ function snoop(snoopfile::String, output_io::IO)
     tmp_file = package_folder("precompile_tmp.jl")
     run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
     line_idx = 0; missed = 0
+    println(output_io, "global _precompiles_actually_executed = 0")
+    debug = verbose ? "@info" : "@debug"
     for line in eachline(tmp_file)
         line_idx += 1
         # replace function instances, which turn up as typeof(func)().
@@ -29,35 +40,38 @@ function snoop(snoopfile::String, output_io::IO)
             if expr.head != :incomplete
                 # after all this, we still need to wrap into try catch,
                 # since some anonymous symbols won't be found...
-                println(output_io, "try;", line, "; catch e; @debug \"couldn't precompile statement $line_idx\" exception = e; end")
+                println(output_io,
+                    "try; global _precompiles_actually_executed; $line;",
+                    "_precompiles_actually_executed += 1 ;catch e;",
+                    "$debug \"couldn't precompile statement $line_idx\" exception = e; end"
+                )
             else
                 missed += 1
-                @debug "Incomplete line in precompile file: $line"
+                verbose && @info "Incomplete line in precompile file: $line"
             end
         catch e
             missed += 1
-            @debug "Parse error in precompile file: $line" exception=e
+            verbose && @info "Parse error in precompile file: $line" exception=e
         end
     end
-    @info "used $(line_idx - missed) out of $line_idx precompile statements"
+    verbose && println(output_io, """@info("successfully executed \$(_precompiles_actually_executed) lines out of $line_idx")""")
+    verbose && @info "used $(line_idx - missed) out of $line_idx precompile statements"
 end
 
 function snoop_packages(
         packages::Vector{String}, file::String;
-        blacklist::Vector{Symbol} = Symbol[],
-        blacklist_init::Vector{Symbol} = Symbol[],
-        install_dependencies::Bool = false
+        blacklist::Vector{Symbol} = known_blacklisted_packages,
+        init_blacklist::Vector{Symbol} = known_uninitializable_libs,
+        install_dependencies::Bool = false, verbose = false
     )
     pkgs = PackageSpec.(packages)
-    ctx = Types.Context()
-    resolve_packages!(ctx, pkgs)
     snoopfiles = get_snoopfile.(pkgs)
-    packages = resolve_full_dependencies(pkgs, ctx, install_dependencies = install_dependencies)
+    packages = resolve_full_dependencies(pkgs, install_dependencies = install_dependencies)
 
     # remove blacklisted packages from full list of packages
     package_names = setdiff(getfield.(packages, :name), string.(blacklist))
 
-    inits = setdiff(package_names, string.(blacklist_init))
+    inits = setdiff(package_names, string.(init_blacklist))
     usings = join(package_names, ", ")
     inits = join(inits, ", ")
     open(file, "w") do io
@@ -68,7 +82,7 @@ function snoop_packages(
         end
         """)
         for file in snoopfiles
-            snoop(file, io)
+            snoop(file, io; verbose = verbose)
         end
     end
 end
