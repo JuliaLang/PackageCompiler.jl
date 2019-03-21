@@ -111,6 +111,7 @@ function package_fullspec(ctx, uuid)
 end
 
 function direct_dependencies!(pkg::Types.PackageSpec, deps = Dict{Base.UUID, Types.PackageSpec}())
+    ctx = Types.Context()
     haskey(deps, pkg.uuid) && return deps
     deps[pkg.uuid] = pkg
     if Types.is_project(ctx.env, pkg)
