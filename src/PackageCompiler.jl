@@ -44,6 +44,7 @@ Reverts a forced compilation of the system image. Calls out to
 `Main.BuildSysImg.build_sysimg(force = true)`.
 """
 function revert(debug = false)
+    include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "build_sysimg.jl"))
     Main.BuildSysImg.build_sysimg(force = true)
 end
 
