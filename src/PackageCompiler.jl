@@ -40,14 +40,11 @@ function julia_cpu_target(::Nothing)
 end
 
 """
-Reverts a forced compilation of the system image.
-This will restore any previously backed up system image files, or
-build a new, clean system image.
+Reverts a forced compilation of the system image. Calls out to 
+`Main.BuildSysImg.build_sysimg(force = true)`.
 """
 function revert(debug = false)
-    syspath = default_sysimg_path(debug)
-    sysimg_backup = dirname(get_backup!(debug))
-    copy_system_image(sysimg_backup, syspath)
+    Main.BuildSysImg.build_sysimg(force = true)
 end
 
 function get_root_dir(path)
