@@ -154,6 +154,13 @@ function package_toml(package::Symbol)
         compile_toml["compat"] = toml["compat"]
     end
     write_toml(precompile_toml, compile_toml)
+    # Resolve the Manifest after adding the new packages to the Project
+    run_julia("""
+    using Pkg
+    Pkg.resolve()
+    Pkg.instantiate()
+    """, project = precompile_toml)
+
     precompile_toml, snoopfile
 end
 
