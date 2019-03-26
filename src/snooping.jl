@@ -12,6 +12,8 @@ method called when ahead of time compiling.
 """
 function init_package!(packages::Symbol...)
     push!(packages_needing_initialization, packages...)
+    # TODO use set?!
+    unique!(packages_needing_initialization)
 end
 
 const known_blacklisted_packages = Symbol[]
@@ -30,6 +32,7 @@ Globally blacklists a package that is known to not ahead of time compile.
 """
 function blacklist!(packages::Symbol...)
     push!(known_blacklisted_packages, packages...)
+    unique!(known_blacklisted_packages)
 end
 
 
