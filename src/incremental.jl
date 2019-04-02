@@ -61,15 +61,31 @@ function PackageCallbacksEnd()
     """
 end
 
+function REPLHooksStart()
+    """
+    repl_hooks_copy = copy(Base.repl_hooks)
+    empty!(Base.repl_hooks)
+    """
+end
+
+function REPLHooksEnd()
+    """
+    empty!(Base.repl_hooks)
+    append!(Base.repl_hooks, repl_hooks_copy)
+    """
+end
+
 """
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
     ExitHooksStart() *
         PackageCallbacksStart() *
+        REPLHooksStart() *
         InitBase() *
         InitREPL() *
         Include(path) *
+        REPLHooksEnd() *
         PackageCallbacksEnd() *
         ExitHooksEnd()
 end
