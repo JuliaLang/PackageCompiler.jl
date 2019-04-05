@@ -75,6 +75,24 @@ function REPLHooksEnd()
     """
 end
 
+function DisableLibraryThreadingHooksStart()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        disable_library_threading_hooks_copy = copy(Base.disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+    end
+    """
+end
+
+function DisableLibraryThreadingHooksEnd()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+        append!(Base.disable_library_threading_hooks, disable_library_threading_hooks_copy)
+    end
+    """
+end
+
 """
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
@@ -82,9 +100,11 @@ function PrecompileCommand(path)
     ExitHooksStart() *
         PackageCallbacksStart() *
         REPLHooksStart() *
+        DisableLibraryThreadingHooksStart() *
         InitBase() *
         InitREPL() *
         Include(path) *
+        DisableLibraryThreadingHooksEnd() *
         REPLHooksEnd() *
         PackageCallbacksEnd() *
         ExitHooksEnd()
