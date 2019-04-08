@@ -47,11 +47,67 @@ function ExitHooksEnd()
     """
 end
 
+function PackageCallbacksStart()
+    """
+    package_callbacks_copy = copy(Base.package_callbacks)
+    empty!(Base.package_callbacks)
+    """
+end
+
+function PackageCallbacksEnd()
+    """
+    empty!(Base.package_callbacks)
+    append!(Base.package_callbacks, package_callbacks_copy)
+    """
+end
+
+function REPLHooksStart()
+    """
+    repl_hooks_copy = copy(Base.repl_hooks)
+    empty!(Base.repl_hooks)
+    """
+end
+
+function REPLHooksEnd()
+    """
+    empty!(Base.repl_hooks)
+    append!(Base.repl_hooks, repl_hooks_copy)
+    """
+end
+
+function DisableLibraryThreadingHooksStart()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        disable_library_threading_hooks_copy = copy(Base.disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+    end
+    """
+end
+
+function DisableLibraryThreadingHooksEnd()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+        append!(Base.disable_library_threading_hooks, disable_library_threading_hooks_copy)
+    end
+    """
+end
+
 """
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
-    ExitHooksStart() * InitBase() * InitREPL() * Include(path) * ExitHooksEnd()
+    ExitHooksStart() *
+        PackageCallbacksStart() *
+        REPLHooksStart() *
+        DisableLibraryThreadingHooksStart() *
+        InitBase() *
+        InitREPL() *
+        Include(path) *
+        DisableLibraryThreadingHooksEnd() *
+        REPLHooksEnd() *
+        PackageCallbacksEnd() *
+        ExitHooksEnd()
 end
 
 
