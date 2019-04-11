@@ -2,28 +2,27 @@
 Init basic C libraries
 """
 function InitBase()
-  """
-  Base.__init__()
-  Sys.__init__() #fix https://github.com/JuliaLang/julia/issues/30479
-  """
+    """
+    Base.__init__()
+    Sys.__init__() #fix https://github.com/JuliaLang/julia/issues/30479
+    """
 end
 
 """
 # Initialize REPL module for Docs
 """
 function InitREPL()
-  """
-  using REPL
-  Base.REPL_MODULE_REF[] = REPL
-  """
+    """
+    using REPL
+    Base.REPL_MODULE_REF[] = REPL
+    """
 end
-
 function Include(path)
-  """
-  M = Module()
-  # Include into anonymous module to not polute namespace
-  @eval(M, (Base.include(\$M, $(repr(path)))))
-  """
+    """
+    Mod = @eval module \$(gensym("anon_module")) end
+    # Include into anonymous module to not polute namespace
+    Mod.include($(repr(path)))
+    """
 end
 
 """
@@ -47,11 +46,67 @@ function ExitHooksEnd()
     """
 end
 
+function PackageCallbacksStart()
+    """
+    package_callbacks_copy = copy(Base.package_callbacks)
+    empty!(Base.package_callbacks)
+    """
+end
+
+function PackageCallbacksEnd()
+    """
+    empty!(Base.package_callbacks)
+    append!(Base.package_callbacks, package_callbacks_copy)
+    """
+end
+
+function REPLHooksStart()
+    """
+    repl_hooks_copy = copy(Base.repl_hooks)
+    empty!(Base.repl_hooks)
+    """
+end
+
+function REPLHooksEnd()
+    """
+    empty!(Base.repl_hooks)
+    append!(Base.repl_hooks, repl_hooks_copy)
+    """
+end
+
+function DisableLibraryThreadingHooksStart()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        disable_library_threading_hooks_copy = copy(Base.disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+    end
+    """
+end
+
+function DisableLibraryThreadingHooksEnd()
+    """
+    if isdefined(Base, :disable_library_threading_hooks)
+        empty!(Base.disable_library_threading_hooks)
+        append!(Base.disable_library_threading_hooks, disable_library_threading_hooks_copy)
+    end
+    """
+end
+
 """
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
-    ExitHooksStart() * InitBase() * InitREPL() * Include(path) * ExitHooksEnd()
+    ExitHooksStart() *
+        PackageCallbacksStart() *
+        REPLHooksStart() *
+        DisableLibraryThreadingHooksStart() *
+        InitBase() *
+        InitREPL() *
+        Include(path) *
+        DisableLibraryThreadingHooksEnd() *
+        REPLHooksEnd() *
+        PackageCallbacksEnd() *
+        ExitHooksEnd()
 end
 
 
@@ -90,6 +145,28 @@ function compile_incremental(
 end
 
 
+"""
+    compile_incremental(packages::Symbol...; kw_args...)
+
+Incrementally compile `packages` into the current system image.
+`force = true` will replace the old system image with the new one.
+This process requires a script that julia will run in order to determine
+which functions to compile. A package may define a script called `snoopfile.jl`
+for this purpose. If this file cannot be found the package's test script
+`Package/test/runtests.jl` will be used. `compile_incremental` will search
+for `snoopfile.jl` in the package's root directory and in the folders
+`Package/src` and `Package/snoop`. For a more explicit version of compile_incremental,
+see: `compile_incremental(toml_path::String, snoopfile::String)`
+
+Not all packages can currently be compiled into the system image. By default,
+`compile_incremental(:Package) will also compile all of Package's dependencies.
+It can still be desirable to compile packages with dependencies that cannot be
+compiled. For this reason `compile_incremental` offers
+the ability for the user to pass a list of blacklisted packages
+that will be ignored during the compilation process. These are passed as a
+vector of package names (defined as either strings or symbols) using the
+    `blacklist keyword argument`
+"""
 function compile_incremental(
         packages::Symbol...;
         kw_args...
