@@ -46,7 +46,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklis
     if !isempty(used_packages)
         packages = join(setdiff(used_packages,string.(blacklist)), ", ")
         usings *= """
-        using $packages
+        import $packages
         for Mod in [$packages]
             isdefined(Mod, :__init__) && Mod.__init__()
         end
