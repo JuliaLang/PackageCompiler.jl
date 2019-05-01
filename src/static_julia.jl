@@ -147,6 +147,7 @@ function static_julia(
     if object
         if snoopfile != nothing
             snoopfile = abspath(snoopfile)
+            verbose && println("Executing snoopfile: \"$snoopfile\"")
             precompfile = joinpath(builddir, "precompiled.jl")
             snoop(nothing, nothing, snoopfile, precompfile)
             jlmain = joinpath(builddir, "julia_main.jl")
