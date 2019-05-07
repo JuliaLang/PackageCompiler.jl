@@ -89,7 +89,7 @@ function test_dependencies(pkgspecs::Vector{Pkg.Types.PackageSpec})
         path = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name))
         test_dependencies!(path, result)
     end
-    return Set(values(result)
+    return Set(values(result))
 end
 
 get_snoopfile(pkg::Types.PackageSpec) = get_snoopfile(root_path(pkg))
