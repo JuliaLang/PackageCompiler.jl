@@ -87,7 +87,7 @@ function test_dependencies(pkgspecs::Vector{Pkg.Types.PackageSpec})
     result = Dict{Base.UUID, Types.PackageSpec}()
     for pkg in pkgspecs
         path = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name))
-        test_dependencies!(path, result)
+        test_dependencies!(joinpath(dirname(path), ".."), result)
     end
     return Set(values(result))
 end
