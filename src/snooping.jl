@@ -91,25 +91,34 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     verbose && @info "used $(line_idx - missed) out of $line_idx precompile statements"
 end
 
+function resolved_blacklist(ctx)
+    specs = PackageSpec.(string.(known_blacklisted_packages))
+    resolve_packages!(ctx, specs)
+    return Set(specs)
+end
+
+function prepr(pspec)
+    "Base.PkgId(Base.$(repr(pspec.uuid)), $(repr(pspec.name)))"
+end
+
 function snoop_packages(
         packages::Vector{String}, file::String;
         install::Bool = false, verbose = false
     )
     pkgs = PackageSpec.(packages)
     snoopfiles = get_snoopfile.(pkgs)
-    packages = resolve_full_dependencies(pkgs, install = install)
+    packages = flat_deps(packages)
+
+    union!(packages, test_dependencies(pkgs))
 
     # remove blacklisted packages from full list of packages
-    package_names = setdiff(getfield.(packages, :name), string.(known_blacklisted_packages))
-
+    imports = setdiff(packages, resolved_blacklist(Pkg.Types.Context()))
     inits = string.(packages_needing_initialization)
-    println(inits)
-    usings = join("import " .* package_names, "\n")
+    usings = join(["const $(x.name) = Base.require($(prepr(x)))" for x in imports], "\n")
     inits = join("    " .* inits, ",\n")
     open(file, "w") do io
         println(io, """
         $usings
-
         __init_modules = [
         $inits
         ]

@@ -83,6 +83,14 @@ function test_dependencies!(pkg_root, result = Dict{Base.UUID, Types.PackageSpec
     end
     result
 end
+function test_dependencies(pkgspecs::Vector{Pkg.Types.PackageSpec})
+    result = Dict{Base.UUID, Types.PackageSpec}()
+    for pkg in pkgspecs
+        path = Base.locate_package(Base.PkgId(pkg.uuid, pkg.name))
+        test_dependencies!(path, result)
+    end
+    return Set(values(result)
+end
 
 get_snoopfile(pkg::Types.PackageSpec) = get_snoopfile(root_path(pkg))
 
@@ -98,57 +106,8 @@ function get_snoopfile(pkg_root::String)
     return paths[idx]
 end
 
-function package_fullspec(ctx, uuid)
-    if Types.is_project_uuid(ctx.env, uuid)
-        path = dirname(ctx.env.project_file)
-        hash_or_path = path
-        name = ctx.env.pkg.name
-    else
-        entry = API.manifest_info(ctx.env, uuid)
-        name = entry.name
-    end
-    return PackageSpec(name = name, uuid = uuid)
-end
-
-function direct_dependencies!(pkg::Types.PackageSpec, deps = Dict{Base.UUID, Types.PackageSpec}())
-    ctx = Types.Context()
-    haskey(deps, pkg.uuid) && return deps
-    deps[pkg.uuid] = pkg
-    if Types.is_project(ctx.env, pkg)
-        pkgs = (uuid => PackageSpec(name, uuid) for (name, uuid) in ctx.env.project.deps)
-    else
-        info = API.manifest_info(ctx.env, pkg.uuid)
-        if info === nothing
-            API.pkgerror("could not find manifest info for package $(pkg.name) with uuid: $(pkg.uuid)")
-        end
-        pkgs = (uuid => PackageSpec(name, uuid) for (name, uuid) in info.deps)
-    end
-    merge!(deps, Dict(pkgs))
-    return deps
-end
 
 
-function recursive_dependencies!(
-        packages::Vector{Types.PackageSpec},
-        deps = Dict{Base.UUID, Types.PackageSpec}();
-        install = false
-    )
-    for pkg in packages
-        recursive_dependencies!(pkg, deps, install = install)
-    end
-    return deps
-end
-function recursive_dependencies!(pkg, deps = Dict{Base.UUID, Types.PackageSpec}(); install = false)
-    haskey(deps, pkg.uuid) && return deps
-    resolve_packages!(Types.Context(), [pkg])
-    deps[pkg.uuid] = pkg
-    new_deps = direct_dependencies!(pkg)
-    packages = collect(values(new_deps))
-    ensure_installed(packages, install)
-    recursive_dependencies!(packages, deps, install = install)
-    merge!(deps, new_deps)
-    return deps
-end
 
 function resolve_packages!(ctx, pkgs)
     for pkg in pkgs
@@ -159,41 +118,43 @@ function resolve_packages!(ctx, pkgs)
     API.ensure_resolved(ctx.env, pkgs)
 end
 
+get_deps(manifest, uuid) = manifest[uuid].deps
 
-function ensure_installed(packages::Vector{Types.PackageSpec}, install::Bool)
-    uninstalled = not_installed(packages)
-    if !isempty(uninstalled)
-        pkgs = join(getfield.(uninstalled, :name), " ")
-        if install
-            @info "installing dependencies: $pkgs"
-            Pkg.add(uninstalled)
-        else
-            error("""Not all dependencies of this project are installed.
-            Please add them manually or set `install = true`.
-            If you want to install them manually, please execute:
-                using Pkg
-                pkg"add $pkgs"
-            """)
+function topo_deps(manifest, uuids::Vector{UUID})
+    result = Dict{UUID, Any}()
+    for uuid in uuids
+        println(uuid)
+        get!(result, uuid) do
+            topo_deps(manifest, uuid)
         end
     end
+    return result
 end
 
-"""
-Resolves all dependencies of a list of packages, including test and recursive
-Dependencies.
-"""
-function resolve_full_dependencies(pkgs::Vector{Types.PackageSpec}; install = false)
-    # Hm the set is bugged due to it not having the right hashing function
-    # I'll leave it as a set for now, and just do some tricks in the end to make
-    # elements unique
-    tdeps = collect(values(test_dependencies!(pkgs)))
-    union!(pkgs, tdeps) # add to pkgs, so we get also their recursive deps
-    # If we don't ensure here, direct_dependencies might not find all packages
-    ensure_installed(pkgs, install)
-    ddeps = recursive_dependencies!(pkgs, install = install)
-    union!(pkgs, values(ddeps))
-    deps_unique = Dict{UUID, Types.PackageSpec}((x.uuid => x for x in pkgs))
-    packages = collect(values(deps_unique))
-    ensure_installed(packages, install)
-    packages
+function topo_deps(manifest, uuid::UUID)
+    result = Dict{UUID, Any}()
+    for (name, uuid) in get_deps(manifest, uuid)
+        get!(result, uuid) do
+            topo_deps(manifest, uuid)
+        end
+    end
+    result
+end
+function flatten_deps(deps, result = Set{UUID}())
+    for (uuid, depdeps) in deps
+        push!(result, uuid)
+        flatten_deps(depdeps, result)
+    end
+    result
+end
+function flat_deps(pkg_names::AbstractVector{String})
+    ctx = Pkg.Types.Context()
+    manifest = ctx.env.manifest
+    pkgs = Pkg.PackageSpec.(pkg_names)
+    PackageCompiler.resolve_packages!(ctx, pkgs)
+    deps = topo_deps(manifest, getfield.(pkgs, :uuid))
+    flat = flatten_deps(deps)
+    specs = [Pkg.PackageSpec(uuid = x) for x in  flat];
+    PackageCompiler.resolve_packages!(ctx, specs)
+    return Set(specs)
 end
