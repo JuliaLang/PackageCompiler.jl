@@ -99,9 +99,21 @@ PackageSpec has bad hashing behavior, so we use PkgId in places
 to_pkgid(pspec::Pkg.Types.PackageSpec) = Base.PkgId(pspec.uuid, pspec.name)
 
 function resolved_blacklist(ctx)
-    specs = PackageSpec.(string.(known_blacklisted_packages))
-    resolve_packages!(ctx, specs)
-    return Set(to_pkgid.(specs))
+    result = Set{Base.PkgId}()
+    for pkg in known_blacklisted_packages
+        pid = resolve_package(ctx, string(pkg))
+        # Don't add unknown packages
+        if pid === nothing
+            if !(pkg in (:QuartzImageIO, :Homebrew))
+                # we added the above packages per default..If they're not resolved it's fine
+                # Otherwise it may indicate user error, so we issue a warning:
+                @warn("Package $pkg could be resolved, so it can't be blacklisted")
+            end
+        else
+            push!(result, pid)
+        end
+    end
+    return result
 end
 
 function prepr(pspec)
@@ -112,16 +124,17 @@ function snoop_packages(
         packages::Vector{String}, file::String;
         install::Bool = false, verbose::Bool = false
     )
+    ctx = Pkg.Types.Context()
     pkgs = PackageSpec.(packages)
     snoopfiles = get_snoopfile.(pkgs)
-    packages = flat_deps(packages)
+    packages = flat_deps(ctx, packages)
     test_deps = test_dependencies(pkgs)
     if install
         Pkg.add(not_installed([test_deps...]))
     end
     union!(packages, test_deps)
     # remove blacklisted packages from full list of packages
-    imports = setdiff(to_pkgid.(packages), resolved_blacklist(Pkg.Types.Context()))
+    imports = setdiff(to_pkgid.(packages), resolved_blacklist(ctx))
     inits = string.(packages_needing_initialization)
     usings = join(["const $(x.name) = Base.require($(prepr(x)))" for x in imports], "\n")
     inits = join("    " .* inits, ",\n")

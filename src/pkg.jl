@@ -101,6 +101,11 @@ const relative_snoop_locations = (
     joinpath("test", "runtests.jl"),
 )
 
+"""
+    get_snoopfile(pkg_root::String) -> snoopfile.jl
+
+Get's the snoopfile for a package in the path `pkg_root`.
+"""
 function get_snoopfile(pkg_root::String)
     paths = joinpath.(pkg_root, relative_snoop_locations)
     idx = findfirst(isfile, paths)
@@ -108,6 +113,12 @@ function get_snoopfile(pkg_root::String)
     return paths[idx]
 end
 
+"""
+    snoop2root(snoopfile) -> pkg_root
+Given a path to a snoopfile, this function returns the package root.
+If the file isn't of a known format it will return nothing.
+reverse of get_snoopfile(pkg_root)
+"""
 function snoop2root(path)
     npath = normpath(path)
     for path_ends in relative_snoop_locations
@@ -116,15 +127,48 @@ function snoop2root(path)
     return nothing
 end
 
-
-
-function resolve_packages!(ctx, pkgs)
-    for pkg in pkgs
-        pkg.mode = PKGMODE_MANIFEST
+function resolve_package(ctx, pkg::String)
+    manifest = ctx.env.manifest
+    for (uuid, pkgspec) in manifest
+        if pkgspec.name == pkg
+            return Base.PkgId(uuid, pkg)
+        end
     end
-    API.project_resolve!(ctx.env, pkgs)
-    API.manifest_resolve!(ctx.env, pkgs)
-    API.ensure_resolved(ctx.env, pkgs)
+    return nothing
+end
+
+function resolve_packages(ctx, pkgs::Vector{String})
+    manifest = ctx.env.manifest
+    result = Set{Pkg.Types.PackageSpec}()
+    pkgs_copy = copy(pkgs)
+    for (uuid, pkgspec) in manifest
+        idx = findfirst(x-> string(pkgspec.name) === x, pkgs_copy)
+        if idx !== nothing
+            push!(result, PackageSpec(name = pkgs_copy[idx], uuid = uuid))
+            splice!(pkgs_copy, idx)
+        end
+    end
+    if !isempty(pkgs_copy)
+        error("Could not resolve the following packages: $(pkgs_copy)")
+    end
+    return result
+end
+
+
+function resolve_packages(ctx, pkgs::Set{Base.UUID})
+    manifest = ctx.env.manifest
+    result = Set{Pkg.Types.PackageSpec}()
+    pkgs_copy = copy(pkgs)
+    for (uuid, pkgspec) in manifest
+        if uuid in pkgs
+            push!(result, PackageSpec(name = pkgspec.name, uuid = uuid))
+            delete!(pkgs_copy, uuid)
+        end
+    end
+    if !isempty(pkgs_copy)
+        error("Could not resolve the following packages: $(pkgs_copy)")
+    end
+    return result
 end
 
 get_deps(manifest, uuid) = manifest[uuid].deps
@@ -148,6 +192,7 @@ function topo_deps(manifest, uuid::UUID)
     end
     result
 end
+
 function flatten_deps(deps, result = Set{UUID}())
     for (uuid, depdeps) in deps
         push!(result, uuid)
@@ -155,14 +200,11 @@ function flatten_deps(deps, result = Set{UUID}())
     end
     result
 end
-function flat_deps(pkg_names::AbstractVector{String})
-    ctx = Pkg.Types.Context()
+
+function flat_deps(ctx::Pkg.Types.Context, pkg_names::AbstractVector{String})
     manifest = ctx.env.manifest
-    pkgs = Pkg.PackageSpec.(pkg_names)
-    PackageCompiler.resolve_packages!(ctx, pkgs)
+    pkgs = resolve_packages(ctx, pkg_names)
     deps = topo_deps(manifest, getfield.(pkgs, :uuid))
     flat = flatten_deps(deps)
-    specs = [Pkg.PackageSpec(uuid = x) for x in  flat];
-    PackageCompiler.resolve_packages!(ctx, specs)
-    return Set(specs)
+    return resolve_packages(ctx, flat)
 end
