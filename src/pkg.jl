@@ -94,18 +94,27 @@ end
 
 get_snoopfile(pkg::Types.PackageSpec) = get_snoopfile(root_path(pkg))
 
+const relative_snoop_locations = (
+    "snoopfile.jl",
+    joinpath("snoop", "snoopfile.jl"),
+    joinpath("test", "snoopfile.jl"),
+    joinpath("test", "runtests.jl"),
+)
+
 function get_snoopfile(pkg_root::String)
-    paths = (
-        joinpath(pkg_root,"snoopfile.jl"),
-        joinpath(pkg_root, "snoop", "snoopfile.jl"),
-        joinpath(pkg_root, "src", "snoopfile.jl"),
-        joinpath(pkg_root, "test", "runtests.jl")
-    )
+    paths = joinpath.(pkg_root, relative_snoop_locations)
     idx = findfirst(isfile, paths)
     idx === nothing && error("No snoopfile or testfile found for package $pkg_root")
     return paths[idx]
 end
 
+function snoop2root(path)
+    npath = normpath(path)
+    for path_ends in relative_snoop_locations
+        endswith(npath, path_ends) && return replace(npath, path_ends => "")
+    end
+    return nothing
+end
 
 
 
@@ -123,7 +132,6 @@ get_deps(manifest, uuid) = manifest[uuid].deps
 function topo_deps(manifest, uuids::Vector{UUID})
     result = Dict{UUID, Any}()
     for uuid in uuids
-        println(uuid)
         get!(result, uuid) do
             topo_deps(manifest, uuid)
         end

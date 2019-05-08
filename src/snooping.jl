@@ -37,6 +37,7 @@ end
 
 
 function snoop(snoopfile::String, output_io::IO; verbose = false)
+
     # make sure our variables don't conflict with any precompile statements
     command = """
     # let's wrap the snoop file in a try catch...
@@ -50,7 +51,9 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     # let's use a file in the PackageCompiler dir,
     # so it doesn't get lost if later steps fail
     tmp_file = package_folder("precompile_tmp.jl")
-    run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
+    project = snoop2root(snoopfile) === nothing ? "" : snoop2root(snoopfile)
+    @show project
+    run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, project = project)
     line_idx = 0; missed = 0
     println(output_io, "global _precompiles_actually_executed = 0")
     debug = verbose ? "@info" : "@debug"
