@@ -52,7 +52,6 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     # so it doesn't get lost if later steps fail
     tmp_file = package_folder("precompile_tmp.jl")
     project = snoop2root(snoopfile) === nothing ? "" : snoop2root(snoopfile)
-    @show project
     run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, project = project)
     line_idx = 0; missed = 0
     println(output_io, "global _precompiles_actually_executed = 0")
@@ -94,10 +93,15 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     verbose && @info "used $(line_idx - missed) out of $line_idx precompile statements"
 end
 
+"""
+PackageSpec has bad hashing behavior, so we use PkgId in places
+"""
+to_pkgid(pspec::Pkg.Types.PackageSpec) = Base.PkgId(pspec.uuid, pspec.name)
+
 function resolved_blacklist(ctx)
     specs = PackageSpec.(string.(known_blacklisted_packages))
     resolve_packages!(ctx, specs)
-    return Set(specs)
+    return Set(to_pkgid.(specs))
 end
 
 function prepr(pspec)
@@ -117,7 +121,7 @@ function snoop_packages(
     end
     union!(packages, test_deps)
     # remove blacklisted packages from full list of packages
-    imports = setdiff(packages, resolved_blacklist(Pkg.Types.Context()))
+    imports = setdiff(to_pkgid.(packages), resolved_blacklist(Pkg.Types.Context()))
     inits = string.(packages_needing_initialization)
     usings = join(["const $(x.name) = Base.require($(prepr(x)))" for x in imports], "\n")
     inits = join("    " .* inits, ",\n")
