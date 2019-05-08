@@ -1,7 +1,7 @@
 using Pkg, Serialization
 
 
-const packages_needing_initialization = Symbol[]
+const packages_needing_initialization = [:GR]
 
 """
     init_package!(packages::Symbol...)
@@ -51,6 +51,8 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     # let's use a file in the PackageCompiler dir,
     # so it doesn't get lost if later steps fail
     tmp_file = package_folder("precompile_tmp.jl")
+    # Get the project root for the snoopfile if there is any
+    # so we can start the tests with all dependencies of the package installed
     project = snoop2root(snoopfile) === nothing ? "" : snoop2root(snoopfile)
     run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, project = project)
     line_idx = 0; missed = 0
@@ -98,9 +100,9 @@ PackageSpec has bad hashing behavior, so we use PkgId in places
 """
 to_pkgid(pspec::Pkg.Types.PackageSpec) = Base.PkgId(pspec.uuid, pspec.name)
 
-function resolved_blacklist(ctx)
+function resolved_list(ctx, list)
     result = Set{Base.PkgId}()
-    for pkg in known_blacklisted_packages
+    for pkg in list
         pid = resolve_package(ctx, string(pkg))
         # Don't add unknown packages
         if pid === nothing
@@ -116,6 +118,13 @@ function resolved_blacklist(ctx)
     return result
 end
 
+function resolved_blacklist(ctx)
+    resolved_list(ctx, known_blacklisted_packages)
+end
+function resolved_inits(ctx)
+    resolved_list(ctx, packages_needing_initialization)
+end
+
 function prepr(pspec)
     "Base.PkgId(Base.$(repr(pspec.uuid)), $(repr(pspec.name)))"
 end
@@ -128,16 +137,17 @@ function snoop_packages(
     pkgs = PackageSpec.(packages)
     snoopfiles = get_snoopfile.(pkgs)
     packages = flat_deps(ctx, packages)
-    test_deps = test_dependencies(pkgs)
+    test_deps = flat_deps(ctx, test_dependencies(pkgs))
     if install
-        Pkg.add(not_installed([test_deps...]))
+        tpkgs = not_installed([test_deps...])
+        Pkg.add(tpkgs)
     end
     union!(packages, test_deps)
     # remove blacklisted packages from full list of packages
     imports = setdiff(to_pkgid.(packages), resolved_blacklist(ctx))
-    inits = string.(packages_needing_initialization)
+    inits = intersect(resolved_inits(ctx), resolved_inits(ctx))
     usings = join(["const $(x.name) = Base.require($(prepr(x)))" for x in imports], "\n")
-    inits = join("    " .* inits, ",\n")
+    inits = join("    " .* getfield.(inits, :name), ",\n")
     open(file, "w") do io
         println(io, """
         $usings

@@ -203,7 +203,11 @@ end
 
 function flat_deps(ctx::Pkg.Types.Context, pkg_names::AbstractVector{String})
     manifest = ctx.env.manifest
-    pkgs = resolve_packages(ctx, pkg_names)
+    return flat_deps(ctx, resolve_packages(ctx, pkg_names))
+end
+
+function flat_deps(ctx::Pkg.Types.Context, pkgs::Set{Pkg.Types.PackageSpec})
+    manifest = ctx.env.manifest
     deps = topo_deps(manifest, getfield.(pkgs, :uuid))
     flat = flatten_deps(deps)
     return resolve_packages(ctx, flat)
