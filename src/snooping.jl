@@ -106,14 +106,16 @@ end
 
 function snoop_packages(
         packages::Vector{String}, file::String;
-        install::Bool = false, verbose = false
+        install::Bool = false, verbose::Bool = false
     )
     pkgs = PackageSpec.(packages)
     snoopfiles = get_snoopfile.(pkgs)
     packages = flat_deps(packages)
-
-    union!(packages, test_dependencies(pkgs))
-
+    test_deps = test_dependencies(pkgs)
+    if install
+        Pkg.add(not_installed([test_deps...]))
+    end
+    union!(packages, test_deps)
     # remove blacklisted packages from full list of packages
     imports = setdiff(packages, resolved_blacklist(Pkg.Types.Context()))
     inits = string.(packages_needing_initialization)
