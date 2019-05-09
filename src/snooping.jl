@@ -140,7 +140,7 @@ function snoop_packages(
     direct_test_deps = test_dependencies(pkgs)
     missing_pkgs = not_installed([direct_test_deps...])
     if install
-        Pkg.add(missing_pkgs)
+        Pkg.add_or_develop(ctx, missing_pkgs, mode = :add)
     else
         @warn("The following test dependencies are not installed: $missing_pkgs.
         Snooping based on test scripts will likely fail.
