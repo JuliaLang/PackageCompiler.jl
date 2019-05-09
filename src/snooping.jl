@@ -150,7 +150,7 @@ function snoop_packages(
     union!(packages, flat_deps(ctx, direct_test_deps))
     # remove blacklisted packages from full list of packages
     imports = setdiff(to_pkgid.(packages), resolved_blacklist(ctx))
-    inits = intersect(resolved_inits(ctx), resolved_inits(ctx))
+    inits = intersect(imports, resolved_inits(ctx))
     usings = join(["const $(x.name) = Base.require($(prepr(x)))" for x in imports], "\n")
     inits = join("    " .* getfield.(inits, :name), ",\n")
     open(file, "w") do io
