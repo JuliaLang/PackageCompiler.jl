@@ -17,14 +17,6 @@ function init_package!(packages::Symbol...)
 end
 
 const known_blacklisted_packages = Symbol[]
-
-# Some packages directly depend on Homebrew/QuartzImageIO, even on non apple systems,
-# Which yields an annoying warning compiled directly into the system image.
-if !Sys.isapple()
-    push!(known_blacklisted_packages, :QuartzImageIO, :Homebrew)
-end
-
-
 """
     blacklist!(packages::Symbol...)
 Globally blacklists a package that is known to not ahead of time compile.
@@ -34,6 +26,15 @@ function blacklist!(packages::Symbol...)
     push!(known_blacklisted_packages, packages...)
     unique!(known_blacklisted_packages)
 end
+
+blacklist!(:WinRPM, :HTTPClient)
+# Some packages directly depend on Homebrew/QuartzImageIO, even on non apple systems,
+# Which yields an annoying warning compiled directly into the system image.
+if !Sys.isapple()
+    blacklist!(:QuartzImageIO, :Homebrew)
+end
+
+
 
 
 function snoop(snoopfile::String, output_io::IO; verbose = false)
@@ -138,8 +139,8 @@ function snoop_packages(
     snoopfiles = get_snoopfile.(pkgs)
     packages = flat_deps(ctx, packages)
     direct_test_deps = test_dependencies(pkgs)
-    missing_pkgs = not_installed([direct_test_deps...])
-    if install
+    missing_pkgs = not_installed(Types.PackageSpec[direct_test_deps...])
+    if install && !isempty(missing_pkgs)
         Pkg.API.add_or_develop(ctx, missing_pkgs, mode = :add)
     else
         @warn("The following test dependencies are not installed: $missing_pkgs.

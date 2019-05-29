@@ -207,6 +207,7 @@ function flat_deps(ctx::Pkg.Types.Context, pkg_names::AbstractVector{String})
 end
 
 function flat_deps(ctx::Pkg.Types.Context, pkgs::Set{Pkg.Types.PackageSpec})
+    isempty(pkgs) && return Set{Pkg.Types.PackageSpec}()
     manifest = ctx.env.manifest
     deps = topo_deps(manifest, getfield.(pkgs, :uuid))
     flat = flatten_deps(deps)
