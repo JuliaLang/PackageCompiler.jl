@@ -1,6 +1,8 @@
 module PackageCompiler
 
-using Libdl
+using Pkg, Serialization, Libdl, UUIDs
+using Pkg: TOML,  Operations, Types
+
 
 include("compiler_flags.jl")
 include("static_julia.jl")
@@ -156,6 +158,7 @@ function compile_package(
     end
     imgfile
 end
+
 
 
 export compile_package, revert, force_native_image!, executable_ext, build_executable, build_shared_lib, static_julia, compile_incremental

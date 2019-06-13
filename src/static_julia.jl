@@ -17,6 +17,10 @@ end
 system_compiler = gcc
 executable_ext = Sys.iswindows() ? ".exe" : ""
 
+function __init__()
+    check_deps()
+end
+
 if Sys.iswindows()
     function run_PATH(cmd)
         bindir = dirname(cmd.exec[1])
