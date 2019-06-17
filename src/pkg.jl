@@ -1,8 +1,3 @@
-using Pkg
-using Pkg: TOML
-using Pkg: Operations, Types
-using UUIDs
-
 #=
 genfile & create_project_from_require have been taken from the PR
 https://github.com/JuliaLang/PkgDev.jl/pull/144
@@ -168,7 +163,7 @@ end
 
 function get_snoopfile(pkg_root)
     snoopfileroot = joinpath(pkg_root,"snoopfile.jl")
-    snoopfilesnoopdir = joinpath(pkg_root, "snoop", "snoopfile.jl") 
+    snoopfilesnoopdir = joinpath(pkg_root, "snoop", "snoopfile.jl")
     snoopfilesrc = joinpath(pkg_root, "src", "snoopfile.jl")
     if isfile(snoopfileroot)
         snoopfile = snoopfileroot

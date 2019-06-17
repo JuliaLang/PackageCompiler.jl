@@ -15,3 +15,6 @@ sysimg
 hello
 hello.exe
 packages
+deps/usr/
+deps/build.log
+Manifest.toml

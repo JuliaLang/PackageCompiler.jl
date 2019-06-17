@@ -1,4 +1,3 @@
-using Pkg, Serialization
 
 
 function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklist = [])
