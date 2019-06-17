@@ -22,6 +22,8 @@ OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+
 
 [targets]
-test = ["OffsetArrays", "JSON", "Pkg", "DataStructures", "ColorTypes", "Test", "UnicodePlots", "FixedPointNumbers"]
+test = ["OffsetArrays", "JSON", "Pkg", "DataStructures", "ColorTypes", "Test", "UnicodePlots", "FixedPointNumbers", "ArgParse"]
