@@ -1,5 +1,5 @@
 """
-    build_sysimg(sysimg_path=default_sysimg_path(), cpu_target="native", userimg_path=nothing; force=false)
+    build_sysimg(sysimg_path=default_sysimg_path(), userimg_path=nothing; cpu_target="native", force=false)
 
 Rebuild the system image. Store it in `sysimg_path`, which defaults to a file named `sys.ji`
 that sits in the same folder as `libjulia.{so,dylib}`, except on Windows where it defaults
@@ -11,7 +11,7 @@ directives such as `using MyPackage` to include that package in the new system i
 system image will not replace an older image unless `force` is set to true.
 """
 function build_sysimg(
-        sysimg_path, userimg_path = nothing;
+        sysimg_path = default_sysimg_path(), userimg_path = nothing;
         verbose = false, quiet = false, release = false,
         home = nothing, startup_file = nothing, handle_signals = nothing,
         sysimage_native_code = nothing, compiled_modules = nothing,
