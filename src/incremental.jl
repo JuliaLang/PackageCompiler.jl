@@ -159,7 +159,7 @@ for `snoopfile.jl` in the package's root directory and in the folders
 see: `compile_incremental(toml_path::String, snoopfile::String)`
 
 Not all packages can currently be compiled into the system image. By default,
-`compile_incremental(:Package) will also compile all of Package's dependencies.
+`compile_incremental(:Package)` will also compile all of Package's dependencies.
 It can still be desirable to compile packages with dependencies that cannot be
 compiled. For this reason `compile_incremental` offers
 the ability for the user to pass a list of blacklisted packages
