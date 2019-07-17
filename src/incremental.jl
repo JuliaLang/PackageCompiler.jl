@@ -131,12 +131,14 @@ function compile_incremental(
         force = false, verbose = true,
         debug = false, cc_flags = nothing
     )
+    project_path = toml_path === nothing ? "" : abspath(expanduser(first(splitdir(toml_path))))
     systemp = sysimg_folder("sys.a")
     sysout = sysimg_folder("sys.$(Libdl.dlext)")
     code = PrecompileCommand(precompiles)
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
-        track_allocation = "none", startup_file = "no", code_coverage = "none"
+        track_allocation = "none", startup_file = "no", code_coverage = "none",
+        project = project_path
     )
     build_shared(sysout, systemp, false, sysimg_folder(), verbose, "3", debug, system_compiler, cc_flags)
     curr_syso = current_systemimage()
