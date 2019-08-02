@@ -113,7 +113,6 @@ function static_julia(
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
-    builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
     if [clean, object, shared, executable, rmtemp, copy_julialibs, copy_files] == [false, false, false, false, false, false, nothing]
