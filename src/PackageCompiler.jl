@@ -136,7 +136,7 @@ function compile_package(
         try
             backup = syspath * ".packagecompiler_backup"
             isfile(backup) || mv(syspath, backup)
-            cp(imgfile, syspath)
+            cp(imgfile, syspath, force=true)
             @info """
             Replaced system image successfully. Next start of julia will load the newly compiled system image.
             If you encounter any errors with the new julia image, try `PackageCompiler.revert([debug = false])`.
