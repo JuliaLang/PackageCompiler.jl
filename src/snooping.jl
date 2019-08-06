@@ -34,8 +34,41 @@ if !Sys.isapple()
     blacklist!(:QuartzImageIO, :Homebrew)
 end
 
+function needs_init(pkg_spec)
+    Symbol(pkg_spec.name) in packages_needing_initialization
+end
+function use_package(io, pkg_spec)
+    name = pkg_spec.name
+    print(io, """
+    if !(@isdefined $name)
+        const $name = Base.require($(prepr(pkg_spec)))
+    """
+    )
+    if needs_init(pkg_spec)
+        println(io, "    isdefined($name, :__init__) && $name.__init__()")
+    end
+    println(io, "end")
+end
 
+function append_usings(io::IO, pkgs)
+    # Remove blacklisted packages
+    filter!(x-> !(Symbol(x.name) in PackageCompiler.known_blacklisted_packages), pkgs)
+    for pkg in pkgs
+        PackageCompiler.use_package(io, pkg)
+    end
+    println(io)
+end
+"""
+    snoop(snoopfile::String, outfile::String; verbose = false)
 
+Runs snoopfile and records all called functions as precompile statements in
+`outfile`.
+"""
+function snoop(snoopfile::String, outfile::String; verbose = false)
+    open(outfile, "w") do io
+        snoop(snoopfile, io; verbose = verbose)
+    end
+end
 
 function snoop(snoopfile::String, output_io::IO; verbose = false)
 
@@ -52,12 +85,12 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     # let's use a file in the PackageCompiler dir,
     # so it doesn't get lost if later steps fail
     tmp_file = package_folder("precompile_tmp.jl")
-    # Get the project root for the snoopfile if there is any
-    # so we can start the tests with all dependencies of the package installed
-    project = snoop2root(snoopfile) === nothing ? "" : snoop2root(snoopfile)
-    run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, project = project)
+    # Use current project for snooping!
+    run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, project = current_project())
     line_idx = 0; missed = 0
-    println(output_io, "global _precompiles_actually_executed = 0")
+    tmp_io = IOBuffer()
+    println(tmp_io, "global _precompiles_actually_executed = 0")
+    packages = Set{String}()
     debug = verbose ? "@info" : "@debug"
     for line in eachline(tmp_file)
         line_idx += 1
@@ -78,8 +111,9 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
             if expr.head != :incomplete
                 # after all this, we still need to wrap into try catch,
                 # since some anonymous symbols won't be found...
-                println(output_io,
-                    "try; global _precompiles_actually_executed; $line;",
+                union!(packages, extract_used_modules(line))
+                println(tmp_io,
+                    "try; global _precompiles_actually_executed; $line || error(\"Failed to precompile\");",
                     "_precompiles_actually_executed += 1 ;catch e;",
                     "$debug \"couldn't precompile statement $line_idx\" exception = e; end"
                 )
@@ -92,7 +126,10 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
             verbose && @info "Parse error in precompile file: $line" exception=e
         end
     end
-    verbose && println(output_io, """@info("successfully executed \$(_precompiles_actually_executed) lines out of $line_idx")""")
+    verbose && println(tmp_io, """@info("successfully executed \$(_precompiles_actually_executed) lines out of $line_idx")""")
+    used_packages = resolve_packages(Pkg.Types.Context(), collect(packages), true)
+    append_usings(output_io, used_packages)
+    write(output_io, take!(tmp_io))
     verbose && @info "used $(line_idx - missed) out of $line_idx precompile statements"
 end
 
@@ -122,6 +159,7 @@ end
 function resolved_blacklist(ctx)
     resolved_list(ctx, known_blacklisted_packages)
 end
+
 function resolved_inits(ctx)
     resolved_list(ctx, packages_needing_initialization)
 end

@@ -113,18 +113,16 @@ end
 
 """
     compile_incremental(
-        toml_path::String, snoopfile::String;
+        precompiles::String;
         force = false, precompile_file = nothing, verbose = true,
         debug = false, cc_flags = nothing
     )
 
-    Extract all calls from `snoopfile` and ahead of time compiles them
-    incrementally into the current system image.
+    Will ahead of time compile all precompile statements in `precompiles`.
+    Will try to make sure, that all used modules in `precompiles` get resolved and loaded.
+    Ignores unresolved modules. Turn on verbose to see what fails.
     `force = true` will replace the old system image with the new one.
-    The argument `toml_path` should contain a project file of the packages that `snoopfile` explicitly uses.
-    Implicitly used packages & modules don't need to be contained!
-
-    To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
+    To compile packages, see the simpler version  `compile_incremental(packages::Symbol...)`:
 """
 function compile_incremental(
         precompiles::String;
@@ -134,9 +132,11 @@ function compile_incremental(
     systemp = sysimg_folder("sys.a")
     sysout = sysimg_folder("sys.$(Libdl.dlext)")
     code = PrecompileCommand(precompiles)
+
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
-        track_allocation = "none", startup_file = "no", code_coverage = "none"
+        track_allocation = "none", startup_file = "no", code_coverage = "none",
+        project = current_project()
     )
     build_shared(sysout, systemp, false, sysimg_folder(), verbose, "3", debug, system_compiler, cc_flags)
     curr_syso = current_systemimage()

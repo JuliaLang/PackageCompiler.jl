@@ -137,7 +137,7 @@ function resolve_package(ctx, pkg::String)
     return nothing
 end
 
-function resolve_packages(ctx, pkgs::Vector{String})
+function resolve_packages(ctx, pkgs::Vector{String}, allow_unresolved = false)
     manifest = ctx.env.manifest
     result = Set{Pkg.Types.PackageSpec}()
     pkgs_copy = copy(pkgs)
@@ -148,7 +148,7 @@ function resolve_packages(ctx, pkgs::Vector{String})
             splice!(pkgs_copy, idx)
         end
     end
-    if !isempty(pkgs_copy)
+    if !isempty(pkgs_copy) && !allow_unresolved
         error("Could not resolve the following packages: $(pkgs_copy)")
     end
     return result
@@ -212,4 +212,24 @@ function flat_deps(ctx::Pkg.Types.Context, pkgs::Set{Pkg.Types.PackageSpec})
     deps = topo_deps(manifest, getfield.(pkgs, :uuid))
     flat = flatten_deps(deps)
     return resolve_packages(ctx, flat)
+end
+
+function extract_used_modules(code::String)
+    scope_regex = r"([\u00A0-\uFFFF\w_!´]*@?[\u00A0-\uFFFF\w_!´]+)\."
+    getfield_regex = r"getfield\(([\u00A0-\uFFFF\w_!´]*@?[\u00A0-\uFFFF\w_!´]+)"
+    return [
+        string.(getindex.(eachmatch(scope_regex, code), 1));
+        string.(getindex.(eachmatch(getfield_regex, code), 1));
+    ]
+end
+
+function extract_used_packages(file::String)
+    namespaces = unique(extract_used_modules(read(file, String)))
+    # only use names that are resolvable
+    return resolve_packages(Pkg.Types.Context(), namespaces, true)
+end
+
+
+function current_project(ctx = Pkg.Types.Context())
+    project = dirname(ctx.env.manifest_file)
 end
