@@ -1,4 +1,5 @@
 """
+    InitBase()
 Init basic C libraries
 """
 function InitBase()
@@ -9,7 +10,8 @@ function InitBase()
 end
 
 """
-# Initialize REPL module for Docs
+    InitRepl()
+Initialize REPL module for Docs
 """
 function InitREPL()
     """
@@ -20,14 +22,15 @@ end
 function Include(path)
     """
     Mod = @eval module \$(gensym("anon_module")) end
-    # Include into anonymous module to not polute namespace
+    # Include into anonymous module, so as not to pollute the namespace.
     Mod.include($(repr(path)))
     """
 end
 
 """
-Exit hooks can get serialized and therefore end up in weird behaviour
-When incrementally compiling
+    ExitHooksStart()
+Exit hooks can get serialized, and therefore end up in weird behaviour
+when incrementally compiling
 """
 function ExitHooksStart()
     """
@@ -93,6 +96,7 @@ function DisableLibraryThreadingHooksEnd()
 end
 
 """
+    PrecompileCommand(path)
 The command to pass to julia --output-o, that runs the julia code in `path` during compilation.
 """
 function PrecompileCommand(path)
