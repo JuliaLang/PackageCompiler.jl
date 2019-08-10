@@ -79,7 +79,7 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     try
         include($(repr(snoopfile)))
     catch e
-        @warn("Snoop file errored. Precompile statements were recorded untill error!", exception = e)
+        @warn("Snoop file errored. Precompile statements were recorded until error!", exception = e)
     end
     """
     # let's use a file in the PackageCompiler dir,
@@ -179,7 +179,7 @@ function snoop_packages(
     direct_test_deps = test_dependencies(pkgs)
     missing_pkgs = not_installed(Types.PackageSpec[direct_test_deps...])
     if install && !isempty(missing_pkgs)
-        Pkg.API.add_or_develop(ctx, missing_pkgs, mode = :add)
+        Pkg.API.add(ctx, missing_pkgs)
     else
         @warn("The following test dependencies are not installed: $missing_pkgs.
         Snooping based on test scripts will likely fail.
