@@ -1,7 +1,7 @@
 using Pkg, Serialization
 
 
-const packages_needing_initialization = [:GR]
+const packages_needing_initialization = [:GR, :Unitful]
 
 """
     init_package!(packages::Symbol...)
