@@ -1,7 +1,7 @@
 using Pkg, Serialization
 
 
-const packages_needing_initialization = [:GR]
+const packages_needing_initialization = [:GR, :Unitful]
 
 """
     init_package!(packages::Symbol...)
@@ -79,7 +79,7 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
     try
         include($(repr(snoopfile)))
     catch e
-        @warn("Snoop file errored. Precompile statements were recorded untill error!", exception = e)
+        @warn("Snoop file errored. Precompile statements were recorded until error!", exception = e)
     end
     """
     # let's use a file in the PackageCompiler dir,
@@ -134,6 +134,7 @@ function snoop(snoopfile::String, output_io::IO; verbose = false)
 end
 
 """
+    to_pkgid(pspec::Pkg.Types.PackageSpec)
 PackageSpec has bad hashing behavior, so we use PkgId in places
 """
 to_pkgid(pspec::Pkg.Types.PackageSpec) = Base.PkgId(pspec.uuid, pspec.name)
@@ -179,8 +180,8 @@ function snoop_packages(
     direct_test_deps = test_dependencies(pkgs)
     missing_pkgs = not_installed(Types.PackageSpec[direct_test_deps...])
     if install && !isempty(missing_pkgs)
-        Pkg.API.add_or_develop(ctx, missing_pkgs, mode = :add)
-    else
+        Pkg.API.add(ctx, missing_pkgs)
+    elseif isempty(missing_pkgs)
         @warn("The following test dependencies are not installed: $missing_pkgs.
         Snooping based on test scripts will likely fail.
         Please use `install = true` or install those packages manually")
