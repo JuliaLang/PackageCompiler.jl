@@ -181,3 +181,25 @@ function compile_incremental(
     snoop_packages(string.([packages...]), file; kw_args...)
     return compile_incremental(file)
 end
+
+
+
+function compile_project_incremental(
+        project_dir::String; kw_args...
+    )
+    snoop = package_folder("project_precompile.jl")
+    PackageCompiler.run_julia("""
+        using Pkg
+        open($(repr(snoop)), "w") do io
+            project_dir = $(repr(abspath(project_dir)))
+            Pkg.activate(project_dir)
+            Pkg.instantiate()
+            println(io, "using Pkg; Pkg.activate(\$(repr(project_dir)))")
+            pkgs = keys(Pkg.installed())
+            if !isempty(pkgs)
+                println(io, "using " * join(pkgs, ", "))
+            end
+        end
+    """)
+    compile_incremental(snoop, kw_args...)
+end
