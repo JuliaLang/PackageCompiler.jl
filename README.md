@@ -304,3 +304,7 @@ https://juliacomputing.com/blog/2016/02/09/static-julia.html
 ## Side effects
 
 1.  Using `PackageCompiler` makes it impossible to load changed package code automatically - it must be `eval`'ed in from the current session.  This becomes a problem when developing packages.
+
+## Packages needing special treatment
+
+There are some packages which need their `__init__` functions explicitly called when AOT compiling them.  There are two packages for which this is known - `GR.jl` and `Unitful.jl`.
