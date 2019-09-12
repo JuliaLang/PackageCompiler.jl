@@ -30,7 +30,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklis
     # so it doesn't get lost if later steps fail
     tmp_file = package_folder("precompile_tmp.jl")
     if !reuse
-        run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file)
+        run_julia(command, compile = "all", O = 0, g = 1, trace_compile = tmp_file, startup_file = "no")
     end
     used_packages = Set{String}() # e.g. from test/REQUIRE
     if package !== nothing

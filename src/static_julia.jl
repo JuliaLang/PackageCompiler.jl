@@ -262,7 +262,7 @@ function build_object(
     cd(builddir) do
         run_julia(
             command; julia_flags...,
-            output_o = o_file, track_allocation = "none", code_coverage = "none"
+            output_o = o_file, track_allocation = "none", code_coverage = "none", startup_file = "no",
         )
     end
 end

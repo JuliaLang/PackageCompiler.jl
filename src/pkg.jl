@@ -133,7 +133,7 @@ function package_toml(package::Symbol)
     using Pkg
     Pkg.instantiate()
     pkg"add PackageCompiler Pkg"
-    """, project = precompile_toml)
+    """, project = precompile_toml, startup_file = "no")
 
     toml = TOML.parsefile(precompile_toml)
 
