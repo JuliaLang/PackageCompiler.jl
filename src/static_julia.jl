@@ -268,23 +268,23 @@ end
 
 function build_shared(s_file, o_file, init_shared, builddir, verbose, optimize, debug, cc, cc_flags)
     if init_shared
-        i_file = joinpath(builddir, "lib_init.c")
+        i_file = joinpath(abspath(builddir), "lib_init.c")
         open(i_file, "w") do io
             print(io, """
-		// Julia headers (for initialization and gc commands)
-		#include "uv.h"
-		#include "julia.h"
-		void init_jl_runtime() // alternate name for jl_init_with_image, with hardcoded library name
-		{
-		    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
-		    const char rel_libname[] = JULIAC_PROGRAM_LIBNAME;
-		    jl_init_with_image(NULL, rel_libname);
-		}
-		void exit_jl_runtime(int retcode) // alternate name for jl_atexit_hook
-		{
-		    jl_atexit_hook(retcode);
-		}
-		"""
+        // Julia headers (for initialization and gc commands)
+        #include "uv.h"
+        #include "julia.h"
+        void init_jl_runtime() // alternate name for jl_init_with_image, with hardcoded library name
+        {
+            // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
+            const char rel_libname[] = JULIAC_PROGRAM_LIBNAME;
+            jl_init_with_image(NULL, rel_libname);
+        }
+        void exit_jl_runtime(int retcode) // alternate name for jl_atexit_hook
+        {
+            jl_atexit_hook(retcode);
+        }
+        """
             )
         end
         i_file = `$i_file`
@@ -297,7 +297,7 @@ function build_shared(s_file, o_file, init_shared, builddir, verbose, optimize, 
     else
         o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
     end
-    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$(joinpath(builddir, s_file))\" -o $s_file $o_file $i_file $(julia_flags(optimize, debug, cc_flags))`
+    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=$(repr(escape_string(joinpath(builddir, s_file)))) -o $s_file $o_file $i_file $(julia_flags(optimize, debug, cc_flags))`
     if Sys.isapple()
         command = `$command -Wl,-install_name,@rpath/$(joinpath(builddir, s_file))`
     elseif Sys.iswindows()
