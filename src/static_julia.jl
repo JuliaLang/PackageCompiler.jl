@@ -113,7 +113,6 @@ function static_julia(
         quiet || println("C program file:\n  \"$cprog\"")
     end
 
-    builddir = abspath(builddir)
     quiet || println("Build directory:\n  \"$builddir\"")
 
     if [clean, object, shared, executable, rmtemp, copy_julialibs, copy_files] == [false, false, false, false, false, false, nothing]
@@ -298,9 +297,9 @@ function build_shared(s_file, o_file, init_shared, builddir, verbose, optimize, 
     else
         o_file = `-Wl,--whole-archive $o_file -Wl,--no-whole-archive`
     end
-    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$s_file\" -o $s_file $o_file $i_file $(julia_flags(optimize, debug, cc_flags))`
+    command = `$cc -shared -DJULIAC_PROGRAM_LIBNAME=\"$(joinpath(builddir, s_file))\" -o $s_file $o_file $i_file $(julia_flags(optimize, debug, cc_flags))`
     if Sys.isapple()
-        command = `$command -Wl,-install_name,@rpath/$s_file`
+        command = `$command -Wl,-install_name,@rpath/$(joinpath(builddir, s_file))`
     elseif Sys.iswindows()
         command = `$command -Wl,--export-all-symbols`
     end
