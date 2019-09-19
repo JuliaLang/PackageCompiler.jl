@@ -12,7 +12,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklis
         # Take LOAD_PATH from parent process
         append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
         Pkg.activate($(repr(tomlpath)))
-        Pkg.instantiate()
+        Pkg.resolve()
         """
     end
 
