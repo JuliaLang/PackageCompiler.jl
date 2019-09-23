@@ -13,6 +13,7 @@ function snoop(package, tomlpath, snoopfile, outputfile, reuse = false, blacklis
         append!(Base.LOAD_PATH, $(repr(Base.LOAD_PATH)))
         Pkg.activate($(repr(tomlpath)))
         Pkg.resolve()
+        Pkg.instantiate()
         """
     end
 
