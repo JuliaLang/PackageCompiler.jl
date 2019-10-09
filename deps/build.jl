@@ -30,7 +30,7 @@ function build()
         @info "Using `$gccpath` as C compiler from environment variable CC"
     end
 
-    @info "Installing GCC"
+    @info "Looking for GCC"
 
     gccargs = ``
     if verify_gcc("cc")
@@ -40,10 +40,11 @@ function build()
         sysroot = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32", "sys-root")
         gccpath = joinpath(sysroot, "mingw", "bin", "gcc.exe")
         if !isfile(gccpath)
+            @info "Could not find GCC, installing using WinRPM"
             WinRPM.install("gcc", yes = true)
         end
         if !isfile(gccpath)
-            error("Couldn't install gcc via winrpm")
+            error("Couldn't install gcc via WinRPM")
         end
         gccargs = `$gccargs --sysroot $sysroot`
         @info "Using `gcc` from WinRPM as C compiler"
@@ -53,7 +54,16 @@ function build()
     end
 
     if isempty(gccpath)
-        error("Please make sure to provide a working gcc in your path!")
+        error("""
+            Please make sure to provide a working gcc in your path!
+            You may need to install GCC.
+            """
+        )
+        Sys.isapple() && @info "You can install GCC using Homebrew by `brew install gcc`"
+        Sys.islinux() && @info """
+                                You can install GCC using `sudo apt-get install gcc` on Debian, 
+                                or use your distro's package manager.
+                                """
     end
     open("deps.jl", "w") do io
         println(io, "const gcc = ", repr(`$gccpath $gccargs`))
