@@ -115,7 +115,9 @@ end
     compile_incremental(
         toml_path::String, snoopfile::String;
         force = false, precompile_file = nothing, verbose = true,
-        debug = false, cc_flags = nothing
+        debug = false, cc_flags = nothing,
+        systemp = sysimg_folder("sys.a"),
+        sysout = sysimg_folder("sys.$(Libdl.dlext)")
     )
 
     Extract all calls from `snoopfile` and ahead of time compiles them
@@ -124,15 +126,16 @@ end
     The argument `toml_path` should contain a project file of the packages that `snoopfile` explicitly uses.
     Implicitly used packages & modules don't need to be contained!
 
-    To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`:
+    To compile just a single package, see the simpler version  `compile_incremental(package::Symbol)`.
 """
 function compile_incremental(
         toml_path::Union{String, Nothing}, precompiles::String;
         force = false, verbose = true,
-        debug = false, cc_flags = nothing
+        debug = false, cc_flags = nothing,
+        systemp = sysimg_folder("sys.a"),
+        sysout = sysimg_folder("sys.$(Libdl.dlext)")
     )
-    systemp = sysimg_folder("sys.a")
-    sysout = sysimg_folder("sys.$(Libdl.dlext)")
+    
     code = PrecompileCommand(precompiles)
     run_julia(
         code, O = 3, output_o = systemp, g = 1,
