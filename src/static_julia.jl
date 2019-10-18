@@ -181,7 +181,7 @@ end
 
 function julia_flags(optimize, debug, cc_flags)
     allflags = Base.shell_split(PackageCompiler.allflags())
-    bitness_flag = Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
+    bitness_flag = Sys.ARCH == :arm ? "-mbe32" : Sys.ARCH == :aarch64 ? `` : Int == Int32 ? "-m32" : "-m64"
     allflags = `$allflags $bitness_flag`
     optimize == nothing || (allflags = `$allflags -O$optimize`)
     debug == 2 && (allflags = `$allflags -g`)
