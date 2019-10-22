@@ -4,7 +4,7 @@ using Libdl
 
 @testset "PackageCompilerX.jl" begin
     # Write your own tests here.
-    PackageCompilerX.create_object(:Example)
+    PackageCompilerX.create_object_file(:Example; precompile_file="precompile.jl")
     sysimg = "sys." * Libdl.dlext
     PackageCompilerX.create_shared_library("sys.o", sysimg)
     run(`$(Base.julia_cmd()) -J $(sysimg) -e 'println(1337)'`)
