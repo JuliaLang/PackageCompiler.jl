@@ -5,6 +5,8 @@ using Libdl
 
 include("juliaconfig.jl")
 
+const CC = `gcc`
+
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     image_file = unsafe_string(Base.JLOptions().image_file)
@@ -64,12 +66,13 @@ function create_shared_library(input_object::String, output_library::String)
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
     # Prevent compiler from stripping all symbols from the shared lib.
+    # TODO: On clang on windows this is called something else
     if Sys.isapple()
         o_file = `-Wl,-all_load $input_object`
     else
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
-    run(`clang -v -shared -L$(julia_libdir) -o $output_library $o_file -ljulia`)
+    run(`$CC -v -shared -L$(julia_libdir) -o $output_library $o_file -ljulia`)
 end
 
 function create_executable()
@@ -84,7 +87,7 @@ function create_executable()
         rpath = `-Wl,-rpath,\$ORIGIN`
     end
     sysimg = "sys." * Libdl.dlext
-    run(`clang -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimg)) -o myapp $(wrapper) $sysimg -O2 $rpath $flags`)
+    run(`$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimg)) -o myapp $(wrapper) $sysimg -O2 $rpath $flags`)
 end
 
 end # module
