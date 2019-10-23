@@ -1,7 +1,8 @@
 module PackageCompilerX
 
 using Base: active_project
-using Libdl
+using Libdl: Libdl
+using Pkg: Pkg
 
 include("juliaconfig.jl")
 
@@ -21,7 +22,8 @@ function run_precompilation_script(project::String, precompile_file::String)
     return tracefile
 end
 
-function create_object_file(object_file::String, packages::Union{Symbol, Vector{Symbol}}, project::String=active_project(); 
+function create_object_file(object_file::String, packages::Union{Symbol, Vector{Symbol}};
+                            project::String=active_project(),
                             precompile_execution_file::Union{String, Nothing}=nothing,
                             precompile_statements_file::Union{String, Nothing}=nothing)
     # include all packages into the sysimage
@@ -35,12 +37,6 @@ function create_object_file(object_file::String, packages::Union{Symbol, Vector{
     for package in packages
         julia_code *= "using $package\n"
     end
-
-    # include the "App file" containing julia_main
-    example = joinpath(@__DIR__, "..", "examples", "hello.jl")
-    julia_code *= """
-        include($(repr(example)))
-        """
     
     # handle precompilation
     if precompile_execution_file !== nothing || precompile_statements_file !== nothing
@@ -101,7 +97,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     end
 
     object_file = tempname() * ".o"
-    create_object_file(object_file, packages, project; precompile_execution_file=precompile_execution_file,
+    create_object_file(object_file, packages; project=project, precompile_execution_file=precompile_execution_file,
                        precompile_statements_file=precompile_statements_file)
     @show sysimage_path
     create_sysimage_from_object_file(object_file, sysimage_path)
@@ -159,6 +155,20 @@ function create_executable_from_sysimage(;sysimage_path::String,
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
     run(`$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $sysimage_path -O2 $rpath $flags $extra`)
     return nothing
+end
+
+function create_app(app_dir::String,
+                    precompile_execution_file::Union{String, Nothing}=nothing,
+                    precompile_statements_file::Union{String, Nothing}=nothing)
+
+    project_path = Pkg.Types.projectfile_path(app_dir; strict=true)
+    project_toml = Pkg.TOML.parsefile(project_path)
+    app_name = get(() -> error("expected package to have a name entry"), project_toml, "name")
+    sysimage_file = app_name * "." * Libdl.dlext
+    cd(app_dir) do
+        create_sysimage(Symbol(app_name); sysimage_path=sysimage_file, project = app_dir)
+        create_executable_from_sysimage(;sysimage_path=sysimage_file, executable_path=app_name)
+    end
 end
 
 end # module

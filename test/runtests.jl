@@ -9,10 +9,11 @@ using Libdl
                                      precompile_execution_file="precompile_execution.jl",
                                      precompile_statements_file="precompile_statements.jl")
     run(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(1337)'`)
-    PackageCompilerX.create_executable_from_sysimage(sysimage_path=sysimage_path,
-                                                     executable_path="myapp")
 
-    appname = abspath("myapp" * (Sys.iswindows() ? ".exe" : ""))
-    output = read(`$(appname)`, String)
-    @test occursin("hello, world", output)
+    # Test creating an app without bundling
+    app_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+    PackageCompilerX.create_app(app_dir)
+    app_path = abspath(app_dir, "MyApp" * (Sys.iswindows() ? ".exe" : ""))
+    app_output = read(`$app_path`, String)
+    @test occursin("Example.domath", app_output)
 end
