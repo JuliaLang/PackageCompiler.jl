@@ -5,7 +5,7 @@ using Libdl
 
 include("juliaconfig.jl")
 
-const CC = `gcc`
+const CC = (Sys.iswindows() ? `x86_64-w64-mingw32-gcc` : `gcc`)
 
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -126,7 +126,8 @@ function create_sysimage_from_object_file(input_object::String, sysimage_path::S
     else
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
-    run(`$CC -v -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia`)
+    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
+    run(`$CC -v -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`)
     return nothing
 end
 
@@ -155,7 +156,8 @@ function create_executable_from_sysimage(;sysimage_path::String,
     else
         rpath = `-Wl,-rpath,\$ORIGIN`
     end
-    run(`$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $sysimage_path -O2 $rpath $flags`)
+    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
+    run(`$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $sysimage_path -O2 $rpath $flags $extra`)
     return nothing
 end
 

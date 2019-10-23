@@ -4,8 +4,9 @@
 [![Codecov](https://codecov.io/gh/KristofferC/PackageCompilerX.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/KristofferC/PackageCompilerX.jl)
 [![][docs-stable-img]][docs-stable-url]
 
-This package requires `gcc` to be installed and on the `PATH`.
-On Windows, we recommend installing `gcc` via [MinGW](http://www.mingw.org/).
+On Linux or Mac this package requires `gcc` to be installed and be on the `PATH`.
+On Windows, a cygwin setup needs to be installed as decribed [here](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling) and Julia need to be run in the cygwin environement.
+
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://kristofferc.github.io/PackageCompilerX.jl/stable
+[docs-stable-url]: https://kristofferc.github.io/PackageCompilerX.jl/dev
