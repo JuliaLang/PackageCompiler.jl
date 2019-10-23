@@ -29,6 +29,7 @@ function ldflags()
     fl = "-L$(shell_escape(julia_libdir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
+        fl = fl * " -Wl,--export-all-symbols"
     elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
