@@ -4,11 +4,15 @@ using Libdl
 
 @testset "PackageCompilerX.jl" begin
     # Write your own tests here.
-    PackageCompilerX.create_object_file(:Example; precompile_file="precompile.jl")
-    sysimg = "sys." * Libdl.dlext
-    PackageCompilerX.create_shared_library("sys.o", sysimg)
-    run(`$(Base.julia_cmd()) -J $(sysimg) -e 'println(1337)'`)
-    PackageCompilerX.create_executable()
-    output = read(`./myapp`, String)
+    sysimage_path = "sys." * Libdl.dlext
+    PackageCompilerX.create_sysimage(:Example; sysimage_path=sysimage_path,
+                                     precompile_execution_file="precompile_execution.jl",
+                                     precompile_statements_file="precompile_statements.jl")
+    run(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(1337)'`)
+    PackageCompilerX.create_executable_from_sysimage(sysimage_path=sysimage_path,
+                                                     executable_path="myapp")
+
+    appname = abspath("myapp" * (Sys.iswindows() ? ".exe" : ""))
+    output = read(`$(appname)`, String)
     @test occursin("hello, world", output)
 end
