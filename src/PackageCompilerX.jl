@@ -21,15 +21,18 @@ function run_precompilation_script(project::String, precompile_file::String)
     return tracefile
 end
 
-function create_object_file(package::Symbol, project::String=active_project(); 
+function create_object_file(packages::Union{Symbol, Vector{Symbol}}, project::String=active_project(); 
                             precompile_file::Union{String, Nothing}=nothing)
+    packages = vcat(packages)
     julia_code = """
         if !isdefined(Base, :uv_eventloop)
             Base.reinit_stdio()
         end
         Base.__init__(); 
-        using $package
         """
+    for package in packages
+        julia_code *= "using $package\n"
+    end
     example = joinpath(@__DIR__, "..", "examples", "hello.jl")
     julia_code *= """
     include($(repr(example)))
