@@ -10,7 +10,7 @@ const CC = `gcc`
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     image_file = unsafe_string(Base.JLOptions().image_file)
-    cmd = `$julia_path -J$image_file --color=yes --startup-file=no`
+    cmd = `$julia_path -J$image_file --color=yes --startup-file=no -Cnative`
 end
 
 # Returns a vector of precompile statemenets
