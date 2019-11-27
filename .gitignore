@@ -3,6 +3,7 @@
 *.jl.mem
 .DS_Store
 /Manifest.toml
+/examples/MyApp/MyApp
 /dev/
 *.so
 *.dll

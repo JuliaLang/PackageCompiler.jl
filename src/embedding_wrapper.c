@@ -3,6 +3,7 @@
 // Standard headers
 #include <string.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // Julia headers (for initialization and gc commands)
 #include "uv.h"
@@ -10,20 +11,33 @@
 
 JULIA_DEFINE_FAST_TLS()
 
+// TODO: Windows wmain handling as in repl.c
+
 // Declare C prototype of a function defined in Julia
-extern int julia_main(jl_array_t*);
+int julia_main(jl_array_t*);
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
 {
-    int retcode;
-    int i;
     uv_setup_args(argc, argv); // no-op on Windows
 
     // initialization
     libsupport_init();
 
-    // jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
+    // Get the current exe path so we can compute a relative depot path
+    char *free_path = (char*)malloc(PATH_MAX);
+    size_t path_size = PATH_MAX;
+    if (!free_path)
+       jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+    if (uv_exepath(free_path, &path_size)) {
+       jl_error("fatal error: unexpected error while retrieving exepath");
+    }
+ 
+    char buf[PATH_MAX];
+    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/../", free_path);
+    putenv(buf);
+    putenv("JULIA_LOAD_PATH=@");
+
     // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
     jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
@@ -38,13 +52,13 @@ int main(int argc, char *argv[])
     // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
     jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
     jl_array_grow_end(ARGS, argc - 1);
-    for (i = 1; i < argc; i++) {
+    for (int i = 1; i < argc; i++) {
         jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
         jl_arrayset(ARGS, s, i - 1);
     }
 
     // call the work function, and get back a value
-    retcode = julia_main(ARGS);
+    int retcode = julia_main(ARGS);
 
     // Cleanup and gracefully exit
     jl_atexit_hook(retcode);
