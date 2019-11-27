@@ -12,6 +12,7 @@ using Libdl
 
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+    @test_logs PackageCompilerX.audit_app(app_source_dir)
     app_exe_dir = joinpath(tmp, "MyApp")
     PackageCompilerX.create_app(app_source_dir, app_exe_dir)
     app_path = abspath(app_exe_dir, "bin", "MyApp" * (Sys.iswindows() ? ".exe" : ""))

@@ -5,6 +5,7 @@ module PackageCompilerX
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
+using UUIDs: UUID
 
 if isdefined(Pkg, :Artifacts)
     const SUPPORTS_ARTIFACTS = true
@@ -155,25 +156,39 @@ function restore_default_sysimage()
     return nothing
 end
 
-# This requires that the sysimage have been built so that there is a ccallable `julia_main`
-# in Main.
-function create_executable_from_sysimage(;sysimage_path::String,
-                                         executable_path::String)
-    flags = join((cflags(), ldflags(), ldlibs()), " ")
-    flags = Base.shell_split(flags)
-    wrapper = joinpath(@__DIR__, "embedding_wrapper.c")
-     if Sys.iswindows()
-        rpath = ``
-    elseif Sys.isapple()
-        # TODO: Only add `../julia` when bundling
-        rpath = `-Wl,-rpath,@executable_path:@executable_path/../lib`
-    else
-        rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+const REQUIRES = "Requires" => UUID("ae029012-a4dd-5104-9daa-d747884805df")
+
+# Check for things that might indicate that the app or dependencies 
+function audit_app(package_dir::String)
+    project_toml_path = abspath(Pkg.Types.projectfile_path(package_dir; strict=true))
+    ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
+    return audit_app(ctx)
+end
+function audit_app(ctx::Pkg.Types.Context)
+    # Check for Requires.jl usage
+    if REQUIRES in ctx.env.project.deps
+        @warn "Project has a dependency on Requires.jl, code in `@require` will not be run"
     end
-    cmd = `$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
-    @debug "running $cmd"
-    run(cmd)
-    return nothing
+    for (uuid, pkg) in ctx.env.manifest
+        if REQUIRES in pkg.deps
+            @warn "$(pkg.name) has a dependency on Requires.jl, code in `@require` will not be run"
+        end
+    end
+
+    # Check for build script usage
+    if isfile(joinpath(dirname(ctx.env.project_file), "deps", "build.jl"))
+        @warn "Project has a build script, this might indicate that it is not relocatable"
+    end
+    pkgs = Pkg.Types.PackageSpec[]
+    Pkg.Operations.load_all_deps!(ctx, pkgs)
+    for pkg in pkgs
+        pkg_source = Pkg.Operations.source_path(pkg)
+        pkg_source === nothing && continue
+        if isfile(joinpath(pkg_source, "deps", "build.jl"))
+            @warn "Package $(pkg.name) has a build script, this might indicate that it is not relocatable"
+        end
+    end
+    return
 end
 
 function create_app(package_dir::String,
@@ -181,7 +196,7 @@ function create_app(package_dir::String,
                     precompile_execution_file::Union{String,Nothing}=nothing,
                     precompile_statements_file::Union{String,Nothing}=nothing,
                     # sysimage_path::Union{String,Nothing}=nothing, # optional sysimage
-                    bundle=true,
+                    audit=true,
                     force=false)
     project_toml_path = abspath(Pkg.Types.projectfile_path(package_dir; strict=true))
     manifest_toml_path = abspath(Pkg.Types.manifestfile_path(package_dir))
@@ -206,16 +221,17 @@ function create_app(package_dir::String,
         end
         rm(app_dir; force=true, recursive=true)
     end
+
+    audit && audit_app(ctx)
    
     mkpath(app_dir)
 
-    if bundle
-        bundle_julia_libraries(app_dir)
-        if SUPPORTS_ARTIFACTS
-            bundle_artifacts(ctx, app_dir)
-        end
+    bundle_julia_libraries(app_dir)
+    if SUPPORTS_ARTIFACTS
+        bundle_artifacts(ctx, app_dir)
     end
 
+    # TODO: Create in a temp dir and then move it into place?
     # TODO: Maybe avoid this cd?
     cd(app_dir) do
         create_sysimage(Symbol(app_name); sysimage_path=sysimage_file, project=project_path)
@@ -224,6 +240,26 @@ function create_app(package_dir::String,
         mv(sysimage_file, joinpath("bin", sysimage_file))
     end
     return
+end
+
+# This requires that the sysimage have been built so that there is a ccallable `julia_main`
+# in Main.
+function create_executable_from_sysimage(;sysimage_path::String,
+                                         executable_path::String)
+    flags = join((cflags(), ldflags(), ldlibs()), " ")
+    flags = Base.shell_split(flags)
+    wrapper = joinpath(@__DIR__, "embedding_wrapper.c")
+    if Sys.iswindows()
+        rpath = ``
+    elseif Sys.isapple()
+        rpath = `-Wl,-rpath,@executable_path:@executable_path/../lib`
+    else
+        rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+    end
+    cmd = `$CC -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
+    @debug "running $cmd"
+    run(cmd)
+    return nothing
 end
 
 function bundle_julia_libraries(app_dir)
