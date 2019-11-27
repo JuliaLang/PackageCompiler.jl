@@ -1,11 +1,14 @@
 module PackageCompilerX
 
 # TODO: Add good debugging statements
+# TODO: sysimage or sysimg...
 
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID
+
+export create_sysimage, create_app
 
 if isdefined(Pkg, :Artifacts)
     const SUPPORTS_ARTIFACTS = true
@@ -18,28 +21,59 @@ include("juliaconfig.jl")
 # TODO: Check more carefully how to just use mingw on windows without using cygwin.
 const CC = (Sys.iswindows() ? `x86_64-w64-mingw32-gcc` : `gcc`)
 
+# TODO: Be able to set target for -C?
+# TODO: Change to commented default ?
+# const DEFAULT_TARGET = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
+const DEFAULT_TARGET = "generic"
+current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
+
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
-    image_file = unsafe_string(Base.JLOptions().image_file)
-    cmd = `$julia_path -J$image_file --color=yes --startup-file=no -Cnative`
+    cmd = `$julia_path --color=yes --startup-file=no --cpu-target=$DEFAULT_TARGET`
 end
 
 # TODO: Add output file?
-# Returns a vector of precompile statemenets
 function run_precompilation_script(project::String, precompile_file::String)
     tracefile = tempname()
     julia_code = """Base.__init__(); include($(repr(precompile_file)))"""
-    cmd = `$(get_julia_cmd()) --project=$project --trace-compile=$tracefile -e $julia_code`
+    cmd = `$(get_julia_cmd()) --sysimage=$(current_process_sysimage_path()) --project=$project
+           --compile=all --trace-compile=$tracefile -e $julia_code`
     @debug "run_precompilation_script: running $cmd"
     run(cmd)
     return tracefile
 end
 
-function create_object_file(object_file::String, packages::Union{Symbol, Vector{Symbol}};
-                            project::String=active_project(),
-                            precompile_execution_file::Union{String, Nothing}=nothing,
-                            precompile_statements_file::Union{String, Nothing}=nothing)
-    # include all packages into the sysimage
+
+function bootstrap_sys()
+    tmp = mktempdir()
+    sysimg_source_path = Base.find_source_file("sysimg.jl")
+    base_dir = dirname(sysimg_source_path)
+    tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
+    tmp_sys_ji = joinpath(tmp, "sys.ji")
+    compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
+
+    @info "PackageCompilerX: creating base system image (incremental=false), this might take a while..."
+    cd(base_dir) do
+        # Create corecompiler.ji
+        cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji -g0 -O0 $compiler_source_path`
+        @debug "running $cmd"
+        read(cmd)
+
+        # Use that to create sys.ji
+        cmd = `$(get_julia_cmd()) --sysimage=$tmp_corecompiler_ji --output-ji=$tmp_sys_ji $sysimg_source_path`
+        @debug "running $cmd"
+        read(cmd)
+    end
+
+    return tmp_sys_ji
+end
+
+function create_sysimg_object_file(object_file::String, packages::Union{Symbol, Vector{Symbol}};
+                            project::String,
+                            base_sysimg::String,
+                            precompile_execution_file::Union{String, Nothing},
+                            precompile_statements_file::Union{String, Nothing})
+    # include all packages into the sysimg
     packages = vcat(packages)
     julia_code = """
         if !isdefined(Base, :uv_eventloop)
@@ -90,48 +124,57 @@ function create_object_file(object_file::String, packages::Union{Symbol, Vector{
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
-    @info "PackageCompilerX: creating object file, this might take a while..."
-    cmd = `$(get_julia_cmd()) --project=$project --output-o=$(object_file) -e $julia_code`
+    @info "PackageCompilerX: creating system image object file, this might take a while..."
+    cmd = `$(get_julia_cmd()) --sysimage=$base_sysimg --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
     run(cmd)
 end
 
-default_sysimage_path() = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
-default_sysimage_name() = basename(default_sysimage_path())
-backup_default_sysimage_path() = default_sysimage_path() * ".backup"
-backup_default_sysimage_name() = basename(backup_default_sysimage_path())
+default_sysimg_path() = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
+default_sysimg_name() = basename(default_sysimg_path())
+backup_default_sysimg_path() = default_sysimg_path() * ".backup"
+backup_default_sysimg_name() = basename(backup_default_sysimg_path())
 
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          sysimage_path::Union{String,Nothing}=nothing,
                          project::String=active_project(),
                          precompile_execution_file::Union{String, Nothing}=nothing,
                          precompile_statements_file::Union{String, Nothing}=nothing,
-                         replace_default_sysimage::Bool=false)
-    if sysimage_path === nothing && replace_default_sysimage == false
-        error("`sysimage_path` cannot be `nothing` if `replace_default_sysimage` is `false`")
+                         incremental=true,
+                         replace_default_sysimg::Bool=false)
+    if sysimage_path === nothing && replace_default_sysimg == false
+        error("`sysimage_path` cannot be `nothing` if `replace_default_sysimg` is `false`")
     end
     if sysimage_path === nothing
-        sysimage_path = string(tempname(), ".", Libdl.dlext)
+        tmp = mktempdir()
+        sysimage_path = joinpath(tmp, string("sys.", Libdl.dlext))
+    end
+
+    if !incremental
+        base_sysimg = bootstrap_sys()
+    else
+        base_sysimg = current_process_sysimage_path()
     end
 
     object_file = tempname() * ".o"
-    create_object_file(object_file, packages;
-                       project=project, 
-                       precompile_execution_file=precompile_execution_file,
-                       precompile_statements_file=precompile_statements_file)
-    create_sysimage_from_object_file(object_file, sysimage_path)
-    if replace_default_sysimage
-        if !isfile(backup_default_sysimage_path())
-            @debug "making a backup of default sysimage"
-            cp(default_sysimage_path(), backup_default_sysimage_path())
+    create_sysimg_object_file(object_file, packages;
+                              project=project,
+                              base_sysimg=base_sysimg,
+                              precompile_execution_file=precompile_execution_file,
+                              precompile_statements_file=precompile_statements_file)
+    create_sysimg_from_object_file(object_file, sysimage_path)
+    if replace_default_sysimg
+        if !isfile(backup_default_sysimg_path())
+            @debug "making a backup of default sysimg"
+            cp(default_sysimg_path(), backup_default_sysimg_path())
         end
-        @info "PackageCompilerX: default sysimage replaced, restart Julia for the new sysimage to be in effect"
-        cp(sysimage_path, default_sysimage_path(); force=true)
+        @info "PackageCompilerX: default sysimg replaced, restart Julia for the new sysimg to be in effect"
+        mv(sysimage_path, default_sysimg_path(); force=true)
     end
     # TODO: Remove object file
 end
 
-function create_sysimage_from_object_file(input_object::String, sysimage_path::String)
+function create_sysimg_from_object_file(input_object::String, sysimage_path::String)
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
     # Prevent compiler from stripping all symbols from the shared lib.
@@ -146,13 +189,13 @@ function create_sysimage_from_object_file(input_object::String, sysimage_path::S
     return nothing
 end
 
-function restore_default_sysimage()
-    if !isfile(backup_default_sysimage_path())
-        error("did not find a backup sysimage")
+function restore_default_sysimg()
+    if !isfile(backup_default_sysimg_path())
+        error("did not find a backup sysimg")
     end
-    cp(backup_default_sysimage_path(), default_sysimage_path(); force=true)
-    rm(backup_default_sysimage_path())
-    @info "PackageCompilerX: default sysimage restored, restart Julia for the new sysimage to be in effect"
+    cp(backup_default_sysimg_path(), default_sysimg_path(); force=true)
+    rm(backup_default_sysimg_path())
+    @info "PackageCompilerX: default sysimg restored, restart Julia for the new sysimg to be in effect"
     return nothing
 end
 
@@ -192,10 +235,10 @@ function audit_app(ctx::Pkg.Types.Context)
 end
 
 function create_app(package_dir::String,
-                    app_dir::String,
+                    app_dir::String;
                     precompile_execution_file::Union{String,Nothing}=nothing,
                     precompile_statements_file::Union{String,Nothing}=nothing,
-                    # sysimage_path::Union{String,Nothing}=nothing, # optional sysimage
+                    incremental=false,
                     audit=true,
                     force=false)
     project_toml_path = abspath(Pkg.Types.projectfile_path(package_dir; strict=true))
@@ -208,7 +251,7 @@ function create_app(package_dir::String,
     app_name = get(project_toml, "name") do
         error("expected package to have a `name`-entry")
     end
-    sysimage_file = app_name * "." * Libdl.dlext
+    sysimg_file = app_name * "." * Libdl.dlext
 
     ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
     @debug "instantiating project at \"$project_toml_path\""
@@ -234,18 +277,18 @@ function create_app(package_dir::String,
     # TODO: Create in a temp dir and then move it into place?
     # TODO: Maybe avoid this cd?
     cd(app_dir) do
-        create_sysimage(Symbol(app_name); sysimage_path=sysimage_file, project=project_path)
+        create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=project_path, incremental=incremental)
         mkpath("bin")
-        create_executable_from_sysimage(; sysimage_path=sysimage_file, executable_path=joinpath("bin", app_name))
-        mv(sysimage_file, joinpath("bin", sysimage_file))
+        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=joinpath("bin", app_name))
+        mv(sysimg_file, joinpath("bin", sysimg_file))
     end
     return
 end
 
-# This requires that the sysimage have been built so that there is a ccallable `julia_main`
+# This requires that the sysimg have been built so that there is a ccallable `julia_main`
 # in Main.
-function create_executable_from_sysimage(;sysimage_path::String,
-                                         executable_path::String)
+function create_executable_from_sysimg(;sysimage_path::String,
+                                        executable_path::String)
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = joinpath(@__DIR__, "embedding_wrapper.c")
@@ -265,9 +308,9 @@ end
 function bundle_julia_libraries(app_dir)
     app_libdir = joinpath(app_dir, Sys.isunix() ? "lib" : "bin")
     cp(julia_libdir(), app_libdir; force=true)
-    # We do not want to bundle the sysimage (nor the backup):
-    rm(joinpath(app_libdir, "julia", default_sysimage_name()); force=true)
-    rm(joinpath(app_libdir, "julia", backup_default_sysimage_name()); force=true)
+    # We do not want to bundle the sysimg (nor the backup):
+    rm(joinpath(app_libdir, "julia", default_sysimg_name()); force=true)
+    rm(joinpath(app_libdir, "julia", backup_default_sysimg_name()); force=true)
     return
 end
 
