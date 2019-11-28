@@ -23,9 +23,12 @@ function real_main()
     @show LOAD_PATH
     @show pwd()
     @show Base.active_project()
+    @show Threads.nthreads()
     @show Sys.BINDIR
-    @info "Running an artifact:"
+    display(Base.loaded_modules)
+    println("Running an artifact:")
     run(`$socrates`)
+    println()
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
     @show sin(0.0)

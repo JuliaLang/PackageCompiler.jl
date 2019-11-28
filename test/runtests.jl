@@ -17,10 +17,22 @@ using Libdl
     @test_logs PackageCompilerX.audit_app(app_source_dir)
     app_exe_dir = joinpath(tmp, "MyApp")
     for incremental in (true, false)
-        create_app(app_source_dir, app_exe_dir; incremental=incremental, force=true)
-        app_path = abspath(app_exe_dir, "bin", "MyApp" * (Sys.iswindows() ? ".exe" : ""))
-        app_output = read(`$app_path`, String)
-        @test occursin("Example.domath", app_output)
-        @test occursin("ἔοικα γοῦν τούτου", app_output)
+        if incremental == false
+            filter_stdlibs = (true, false)
+        else
+            filter_stdlibs = (false,)
+        end
+        for filter in filter_stdlibs
+            create_app(app_source_dir, app_exe_dir; incremental=incremental, force=true, filter_stdlibs=filter)
+            app_path = abspath(app_exe_dir, "bin", "MyApp" * (Sys.iswindows() ? ".exe" : ""))
+            app_output = read(`$app_path`, String)
+            if filter == true
+                @test !(occursin("LinearAlgebra", app_output))
+            else
+                @test occursin("LinearAlgebra", app_output)
+            end
+            @test occursin("Example.domath", app_output)
+            @test occursin("ἔοικα γοῦν τούτου", app_output)
+        end
     end
 end
