@@ -281,6 +281,13 @@ function create_app(package_dir::String,
         mkpath("bin")
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=joinpath("bin", app_name))
         mv(sysimg_file, joinpath("bin", sysimg_file))
+        if Sys.isapple()
+            cd("bin") do
+                cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
+                @debug "running $cmd"
+                run(cmd)
+            end
+        end
     end
     return
 end
@@ -295,7 +302,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     if Sys.iswindows()
         rpath = ``
     elseif Sys.isapple()
-        rpath = `-Wl,-rpath,@executable_path:@executable_path/../lib`
+        rpath = `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
     else
         rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
     end
