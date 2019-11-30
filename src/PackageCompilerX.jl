@@ -144,6 +144,7 @@ function create_sysimg_object_file(object_file::String, packages::Union{Symbol, 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
     @info "PackageCompilerX: creating system image object file, this might take a while..."
+
     cmd = `$(get_julia_cmd()) --sysimage=$base_sysimg --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
     run(cmd)
@@ -321,18 +322,16 @@ function create_app(package_dir::String,
 
     # TODO: Create in a temp dir and then move it into place?
     # TODO: Maybe avoid this cd?
-    cd(app_dir) do
-        create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=project_path, 
+    binpath = joinpath(app_dir, "bin")
+    mkpath(binpath)
+    cd(binpath) do
+                create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=project_path, 
                         incremental=incremental, filter_stdlibs=filter_stdlibs)
-        mkpath("bin")
-        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=joinpath("bin", app_name))
-        mv(sysimg_file, joinpath("bin", sysimg_file))
+        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
         if Sys.isapple()
-            cd("bin") do
-                cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
-                @debug "running $cmd"
-                run(cmd)
-            end
+            cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
+            @debug "running $cmd"
+            run(cmd)
         end
     end
     return

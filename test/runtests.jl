@@ -2,6 +2,8 @@ using PackageCompilerX: PackageCompilerX, create_sysimage, create_app
 using Test
 using Libdl
 
+ENV["JULIA_DEBUG"] = "PackageCompilerX"
+
 @testset "PackageCompilerX.jl" begin
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)

@@ -41,11 +41,12 @@ function ldlibs(relative_path=nothing)
     else
         "julia"
     end
-    if Sys.isunix()
-        # TODO, these should not be needed since it adds an rpath to the current julia process libraries.
-        return "-Wl,-rpath,$(shell_escape(julia_libdir())) -Wl,-rpath,$(shell_escape(julia_private_libdir())) -l$libname"
-    else
+    if Sys.islinux()
+        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) -l$libname"
+    elseif Sys.iswindows()
         return "-l$libname -lopenlibm"
+    else
+        return "-l$libname"
     end
 end
 
