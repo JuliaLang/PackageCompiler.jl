@@ -276,14 +276,14 @@ const REQUIRES = "Requires" => UUID("ae029012-a4dd-5104-9daa-d747884805df")
     $SIGNATURES
 
 Check for possible problems with regfards to relocatability at 
-the project at `project_dir`.
+the project at `app_dir`.
 
 !!! warning
     This cannot guarantee that the project is free of relocatability problems,
     it can only detect some known bad cases and warn about those.
 """
-function audit_app(project_dir::String)
-    project_toml_path = abspath(Pkg.Types.projectfile_path(project_dir; strict=true))
+function audit_app(app_dir::String)
+    project_toml_path = abspath(Pkg.Types.projectfile_path(app_dir; strict=true))
     ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
     return audit_app(ctx)
 end

@@ -10,18 +10,4 @@ PackageCompilerX is a Julia package with two main purposes:
 
 The manual contains some uses of Linux commands like `ls` (`dir` in Windows)
 and `cat` but hopefully these commands are common enough that the points still
-come across).
-
-
-## Manual Outline
-
-```@contents
-Pages = [
-    "prereq.md",
-    "sysimages.md",
-    "apps.md",
-    "examples/ohmyrepl.md",
-]
-Depth = 1
-```
-
+come across.
