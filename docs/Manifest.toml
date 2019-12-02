@@ -25,11 +25,6 @@ repo-url = "https://github.com/JuliaDocs/Documenter.jl.git"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "0.24.0-DEV"
 
-[[Example]]
-git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
-uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
-version = "0.5.3"
-
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -57,16 +52,16 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[PackageCompilerX]]
-deps = ["Example", "Libdl"]
+deps = ["DocStringExtensions", "Libdl", "Pkg", "UUIDs"]
 path = ".."
 uuid = "dffaa6cc-da53-48e5-b007-4292dfcc27f1"
 version = "0.1.0"
 
 [[Parsers]]
 deps = ["Dates", "Test"]
-git-tree-sha1 = "ef0af6c8601db18c282d092ccbd2f01f3f0cd70b"
+git-tree-sha1 = "0139ba59ce9bc680e2925aec5b7db79065d60556"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "0.3.7"
+version = "0.3.10"
 
 [[Pkg]]
 deps = ["Dates", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]

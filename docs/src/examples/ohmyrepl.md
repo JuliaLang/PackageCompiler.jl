@@ -1,4 +1,4 @@
-# Creating a sysimage with OhMyREPL 
+# Creating a sysimage with OhMyREPL
 
 [OhMyREPL.jl](https://github.com/KristofferC/OhMyREPL.jl) is a package that enhances the REPL with, for example, syntax highlighting.
 It does, however, come with a bit of a startup time increase
@@ -35,7 +35,7 @@ This are functions that Julia compile. We now just tell `create_sysimage` to use
 when creating the system image:
 
 ```jl
-PackageCompilerX.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_precompile", replace_default_sysimage=true)
+PackageCompilerX.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_precompile", replace_default=true)
 ```
 
 Restart julia and start typing something. If everything went well you should see the type text become highlighted with a significantly smaller delay than before creating the new system image
