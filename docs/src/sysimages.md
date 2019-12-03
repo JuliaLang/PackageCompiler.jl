@@ -147,7 +147,7 @@ Example.hello("friend")
 ```
 
 We now create a new system image called `ExampleSysimagePrecompile.so` where
-the `precompile_statements_file` keyword argument has been giving, pointing to
+the `precompile_execution_file` keyword argument has been giving, pointing to
 the file just shown above:
 
 ```
@@ -160,7 +160,7 @@ julia> using PackageCompilerX
 Activating environment at `~/NewSysImageEnv/Project.toml`
 
 julia> PackageCompilerX.create_sysimage(:Example; sysimage_path="ExampleSysimagePrecompile.so",
-                                         precompile_statements_file="precompile_example.jl")
+                                         precompile_execution_file="precompile_example.jl")
 [ Info: PackageCompilerX: creating system image object file, this might take a while...
 
 julia> exit()
