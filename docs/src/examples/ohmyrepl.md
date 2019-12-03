@@ -31,7 +31,7 @@ precompile(Tuple{typeof(OhMyREPL.Prompt.insert_keybindings), Any})
 precompile(Tuple{typeof(OhMyREPL.__init__)})
 ``` 
 
-This are functions that Julia compile. We now just tell `create_sysimage` to use these precompile statements
+These are functions that Julia compiled. We now just tell `create_sysimage` to use these precompile statements
 when creating the system image:
 
 ```jl
