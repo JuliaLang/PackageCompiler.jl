@@ -191,10 +191,10 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          precompile_statements_file::Union{String, Vector{String}, Nothing}=nothing,
                          incremental::Bool=true,
                          filter_stdlibs=false,
-                         replace_defaut::Bool=false)
+                         replace_default::Bool=false)
     if sysimage_path === nothing
-        if replace_defaut == false
-            error("`sysimage_path` cannot be `nothing` if `replace_defaut` is `false`")
+        if replace_default == false
+            error("`sysimage_path` cannot be `nothing` if `replace_default` is `false`")
         end
         # We will replace the default sysimage so just put it somewhere for now
         tmp = mktempdir()
@@ -228,7 +228,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                               precompile_execution_file=precompile_execution_file,
                               precompile_statements_file=precompile_statements_file)
     create_sysimg_from_object_file(object_file, sysimage_path)
-    if replace_defaut
+    if replace_default
         if !isfile(backup_default_sysimg_path())
             @debug "making a backup of default sysimg"
             cp(default_sysimg_path(), backup_default_sysimg_path())
