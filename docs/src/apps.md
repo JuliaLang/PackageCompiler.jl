@@ -60,9 +60,10 @@ app.
 Some packages do need to call into external libraries and use external binaries
 so how are these packages supposed to do this in a relocatable way?  The answer
 is to use the "artifact system" which was described in the following [blog
-post][artifact-blog-url]. The artifact system is a declarative way of
-downloading and using "external files" like binaries and libraries.  How this
-is used in practice is described a bit later in this document.
+post](https://julialang.org/blog/2019/11/artifacts). The artifact system is a
+declarative way of downloading and using "external files" like binaries and
+libraries.  How this is used in practice is described a bit later in this
+document.
 
 
 ## Creating an app
@@ -161,9 +162,9 @@ app with the resulting sysimage.
 ### Artifacts
 
 The way to depend on external libraries or binaries when creating apps is by
-using the [artifact system][artifact-pkg-url]. PackageCompilerX will bundle all
-artifacts needed by the project, and set up things so that they can be found
-during runtime on other machines.
+using the [artifact system](https://julialang.github.io/Pkg.jl/v1/artifacts/).
+PackageCompilerX will bundle all artifacts needed by the project, and set up
+things so that they can be found during runtime on other machines.
 
 The example app uses the artifact system to depend on a very simple toy binary
 that prints some greek text. It is instructive to see how the [artifact
@@ -241,7 +242,4 @@ CodeInfo(
 │         value@_3
 │   %11 = MyApp.DEPOT_PATH
 ```
-
-[artifact-blog-url]: https://julialang.org/blog/2019/11/artifacts
-[artifact-pkg-url]: https://julialang.github.io/Pkg.jl/v1/artifacts/
 

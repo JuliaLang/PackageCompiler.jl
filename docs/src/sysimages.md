@@ -186,6 +186,7 @@ statements can be used when creating a sysimage by passing the keyword argument
 `precompile_statements_file`. See the OhMyREPL.jl example in the docs for more
 details on how to use `--trace-compile` with PackageCompilerX.
 
-It is also possible to use [SnoopCompile.jl][snoop-url] to create files with precompilation statements.
+It is also possible to use
+[SnoopCompile.jl](https://timholy.github.io/SnoopCompile.jl/stable/snoopi/#auto-1)
+to create files with precompilation statements.
 
-[snoop-url]: https://timholy.github.io/SnoopCompile.jl/stable/snoopi/#auto-1
