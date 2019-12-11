@@ -1,12 +1,27 @@
-# Example Artifacts.toml file
-[socrates]
-git-tree-sha1 = "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
-lazy = false
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "98d93024ca384050c59d554415b75d61e467fd8c"
+libc = "glibc"
+os = "linux"
 
-    [[socrates.download]]
-    url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.gz"
-    sha256 = "e65d2f13f2085f2c279830e863292312a72930fee5ba3c792b14c33ce5c5cc58"
+    [[fooifier.download]]
+    sha256 = "5208c63a9d07e592c78f541fc13caa8cd191b11e7e77b31d407237c2b13ec391"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-linux-gnu.tar.gz"
 
-    [[socrates.download]]
-    url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.bz2"
-    sha256 = "13fc17b97be41763b02cbb80e9d048302cec3bd3d446c2ed6e8210bddcd3ac76"
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "f413ff2438a4e9e9dd69b23c35ca30de6af069cc"
+os = "macos"
+
+    [[fooifier.download]]
+    sha256 = "fcc268772d6f21d65b45fcf3854a3142679b78e53c7673dac26c95d6ccc89a24"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-apple-darwin14.tar.gz"
+
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "d61f806c76b57e54f343634c5219d00d4c81b077" # FIX!
+os = "windows"
+
+    [[fooifier.download]]
+    sha256 = "7f8939e9529835b83810d3ae7e2556f6e002d571f619894e54ece42ea5262b7f"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-w64-mingw32.tar.gz"

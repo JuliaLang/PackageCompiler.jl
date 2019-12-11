@@ -1,10 +1,11 @@
 module MyApp
 
 using Example
+using HelloWorldC_jll
 using Pkg.Artifacts
 
-socrates = joinpath(ensure_artifact_installed("socrates", joinpath(@__DIR__, "..", "Artifacts.toml")), 
-                    "bin", "socrates")
+const fooifier = joinpath(ensure_artifact_installed("fooifier", joinpath(@__DIR__, "..", "Artifacts.toml")), 
+    "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
 Base.@ccallable function julia_main()::Cint
     try
@@ -26,8 +27,18 @@ function real_main()
     @show Threads.nthreads()
     @show Sys.BINDIR
     display(Base.loaded_modules)
-    println("Running an artifact:")
-    run(`$socrates`)
+
+    println("Running a jll package:")
+    HelloWorldC_jll.hello_world() do x
+        println("HelloWorld artifact at $(realpath(x))")
+        run(`$x`)
+    end
+    println()
+
+    println("Running the artifact")
+    res = read(`$fooifier 5 10`, String)
+    println("The result of 2*5^2 - 10 == $res")
+
     println()
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)

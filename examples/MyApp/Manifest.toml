@@ -12,6 +12,14 @@ git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
 uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
 version = "0.5.3"
 
+[[HelloWorldC_jll]]
+deps = ["Libdl", "Pkg"]
+git-tree-sha1 = "8912dbb81d8c8bd7117426a9072068d58c38d1f4"
+repo-rev = "master"
+repo-url = "https://github.com/JuliaBinaryWrappers/HelloWorldC_jll.jl"
+uuid = "dca1746e-5efc-54fc-8249-22745bc95a49"
+version = "1.0.6+1"
+
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
