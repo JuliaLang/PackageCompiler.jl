@@ -4,11 +4,13 @@
 [![Codecov](https://codecov.io/gh/KristofferC/PackageCompilerX.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/KristofferC/PackageCompilerX.jl)
 [![][docs-stable-img]][docs-stable-url]
 
-**This package is a work in progress. Its current state of functionality / docs should not be indicative of the quality of the finished package**
+PackageCompilerX is a Julia package with two main purposes:
 
-On Linux or Mac this package requires `gcc` to be installed and be on the `PATH`.
-On Windows, a cygwin setup needs to be installed as decribed [here](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling) and Julia need to be run in the cygwin environement.
+  1. Creating custom sysimages for reduced latency when working locally with packages that has a high startup time.
 
+  2. Creating "apps" which are a bundle of files including an executable that can be sent and run on other machines without Julia being installed on that machine.
+
+For installation and usage instructions, see the [documentation][docs-stable-url].
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
 [docs-stable-url]: https://kristofferc.github.io/PackageCompilerX.jl/dev
