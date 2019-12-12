@@ -11,3 +11,20 @@ PackageCompilerX is a Julia package with two main purposes:
 The manual contains some uses of Linux commands like `ls` (`dir` in Windows)
 and `cat` but hopefully these commands are common enough that the points still
 come across.
+
+## Installation instructions
+
+To use PackageCompilerX, a C compiler need to be available:
+
+### macOS, Linux
+
+Having a recently modern `gcc` or `clang` available should be enough to use PackageCompilerX on Linux or macOS.
+For macOS, using something like `homebrew` and for Linux the system package manager should work fine.
+
+### Windows
+
+For Windows, the minGW compiler toolchain is needed. It can be downloaded from e.g.
+https://sourceforge.net/projects/mingw-w64/files/ or by following the 
+instructions for setting up a toolchain capable of compiling Julia itself on Windows at
+https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling.
+and running PackageCompilerX from the cygwin terminal.

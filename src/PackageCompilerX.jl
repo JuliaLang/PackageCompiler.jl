@@ -1,15 +1,11 @@
 module PackageCompilerX
 
-# TODO: Add good debugging statements
-# TODO: sysimage or sysimg...
-
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID
-using DocStringExtensions: SIGNATURES, TYPEDEF
 
-export create_sysimage, create_app, audit_app, restore_default_sysimg
+export create_sysimage, create_app, audit_app, restore_default_sysimage
 
 include("juliaconfig.jl")
 
@@ -87,9 +83,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     return tmp_sys_ji
 end
 
-# TODO: Add output file?
 function run_precompilation_script(project::String, precompile_file::Union{String, Nothing})
-    # TODO: Audit tempname usage
     tracefile = tempname()
     if precompile_file == nothing
         arg = `-e ''`
@@ -107,8 +101,8 @@ end
 function create_sysimg_object_file(object_file::String, packages::Vector{Symbol};
                             project::String,
                             base_sysimage::String,
-                            precompile_execution_file::Union{Vector{String}, Nothing},
-                            precompile_statements_file::Union{Vector{String}, Nothing},
+                            precompile_execution_file::Vector{String},
+                            precompile_statements_file::Vector{String},
                             cpu_target::String,
                             compiled_modules::Bool)
     # include all packages into the sysimg
@@ -126,15 +120,13 @@ function create_sysimg_object_file(object_file::String, packages::Vector{Symbol}
     precompile_statements = ""
     @debug "running precompilation execution script..."
     tracefiles = String[]
-    for file in (precompile_execution_file === nothing ? (nothing,) : precompile_execution_file)
+    for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, file)
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
     end
-    if precompile_statements_file != nothing
-        for file in precompile_statements_file
-            precompile_statements *= 
-                "    append!(precompile_statements, readlines($(repr(file))))\n"
-        end
+    for file in precompile_statements_file
+        precompile_statements *=
+            "    append!(precompile_statements, readlines($(repr(file))))\n"
     end
 
     precompile_code = """
@@ -192,13 +184,41 @@ function gather_stdlibs_project(project::String)
 end
 
 """
-    SIGNATURES
+    create_sysimage(packages::Union{Symbol, Vector{Symbol}}; kwargs...)
+
+Create a system image that includes the package(s) in `packages`.  An attempt
+to automatically find a compiler will be done but can also be given explicitly
+by setting the envirnment variable `JULIA_CC` to a path to a compiler
+
+### Keyword arguments:
+
+- `sysimage_path::Union{String,Nothing}`: The path to where
+   the resulting sysimage should be saved. If set to `nothing` the keyword argument
+   `replace_defalt` needs to be set to `true`.
+
+- `project::String`: The project that should be active when the sysmage is created,
+   defaults to the current active project.
+
+- `precompile_execution_file::Union{String, Vector{String}}`: A file or list of 
+   files that contain code which precompilation statements should be recorded from.
+
+- `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
+   files that contains precompilation statements that should be included in the sysimage.
+
+- `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
+   of the current process otherwise build a new sysimage from scratch. Defaults to `true`.
+
+- `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
+   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+
+- `replace_default::Bool`: If `true`, replaces the default system image which is automatically
+   used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
 """
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          sysimage_path::Union{String,Nothing}=nothing,
                          project::String=active_project(),
-                         precompile_execution_file::Union{String, Vector{String}, Nothing}=nothing,
-                         precompile_statements_file::Union{String, Vector{String}, Nothing}=nothing,
+                         precompile_execution_file::Union{String, Vector{String}}=String[],
+                         precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
                          filter_stdlibs=false,
                          replace_default::Bool=false,
@@ -213,15 +233,20 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
         tmp = mktempdir()
         sysimage_path = joinpath(tmp, string("sys.", Libdl.dlext))
     end
+    if replace_default==true
+        if sysimage_path !== nothing
+            error("cannot specify `sysimage_path` when `replace_default` is `true`")
+        end
+    end
 
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
 
-    # Functions lower down handles precompilation file as arrays so convert here
+    # Functions lower down handles `packages` and precompilation file as arrays so convert here
     packages = vcat(packages)
-    precompile_execution_file !== nothing && (precompile_execution_file = vcat(precompile_execution_file))
-    precompile_statements_file !== nothing && (precompile_statements = vcat(precompile_statements_file))
+    precompile_execution_file  = vcat(precompile_execution_file)
+    precompile_statements_file = vcat(precompile_statements_file)
 
     if !incremental
         if base_sysimage !== nothing
@@ -270,16 +295,19 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
-    run(`$(get_compiler()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`)
+    cmd = `$(get_compiler()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    @debug "running $cmd"
+    run(cmd)
     return nothing
 end
 
 """
-    $SIGNATURES
+    restore_default_sysimage()
 
-lalala
+Restores the default system image to the one that Julia shipped with.
+Useful after running [`create_sysimage`](@ref) with `replace_default=true`.
 """
-function restore_default_sysimg()
+function restore_default_sysimage()
     if !isfile(backup_default_sysimg_path())
         error("did not find a backup sysimg")
     end
@@ -291,11 +319,10 @@ end
 
 const REQUIRES = "Requires" => UUID("ae029012-a4dd-5104-9daa-d747884805df")
 
-# Check for things that might indicate that the app or dependencies 
 """
-    $SIGNATURES
+    audit_app(app_dir::String)
 
-Check for possible problems with regfards to relocatability at 
+Check for possible problems with regards to relocatability for
 the project at `app_dir`.
 
 !!! warning
@@ -335,18 +362,58 @@ function audit_app(ctx::Pkg.Types.Context)
 end
 
 """
-    $SIGNATURES
+    create_app(app_source::String, compiled_app::String)
+
+Compile an app with the source in `app_source` to the folder `compiled_app`.
+The folder `app_source` needs to contain a package where the package include a
+function with the signature
+
+```
+Base.@ccallable julia_main()::Cint
+    # Perhaps do something based on ARGS
+    ...
+end
+```
+
+The executable will be placed in a folder called `bin` in `compiled_app` and
+when the executabl run the `julia_main` function is called.
+
+An attempt to automatically find a compiler will be done but can also be given
+explicitly by setting the envirnment variable `JULIA_CC` to a path to a
+compiler.
+
+### Keyword arguments:
+
+- `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
+   files that contain code which precompilation statements should be recorded from.
+
+- `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
+   files that contains precompilation statements that should be included in the sysimage
+   for the app.
+
+- `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
+   of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
+
+- `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
+   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+
+- `audit::Bool`: Warn about eventual relocatability problems with the app, defaults
+   to `true`.
+
+- `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 """
 function create_app(package_dir::String,
                     app_dir::String;
-                    precompile_execution_file::Union{String, Vector{String}, Nothing}=nothing,
-                    precompile_statements_file::Union{String, Vector{String}, Nothing}=nothing,
+                    precompile_execution_file::Union{String, Vector{String}}=String[],
+                    precompile_statements_file::Union{String, Vector{String}}=String[],
                     incremental=false,
                     filter_stdlibs=false,
                     audit=true,
                     force=false)
-    # Need to check if nothing was returned below
     project_toml_path = abspath(Pkg.Types.projectfile_path(package_dir; strict=true))
+    if project_toml_path === nothing
+        error("no project found in $(repr(package_dir))")
+    end
     manifest_toml_path = abspath(Pkg.Types.manifestfile_path(package_dir))
     if manifest_toml_path === nothing
         @warn "it is not recommended to create an app without a preexisting manifest"
@@ -406,7 +473,6 @@ function create_app(package_dir::String,
                                               cpu_target=APP_CPU_TARGET,
                                               compiled_modules=false #= workaround julia#34076=#)
         end
-
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
         if Sys.isapple()
             cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`

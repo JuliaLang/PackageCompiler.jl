@@ -105,7 +105,7 @@ create_sysimage([:Debugger, :OhMyREPL]; replace_default=true)
 
 If this is the first time `create_sysimage` is called with `replace_default`, a
 backup of the default sysimage is created. The default sysimage can then be
-restored with [`restore_default_sysimg()`](@ref).
+restored with [`restore_default_sysimage()`](@ref).
 
 Note that sysimages are created "incrementally" in the sense that they add to
 the sysimage of the process running PackageCompilerX. If the default sysimage

@@ -4,13 +4,11 @@ authors = ["KristofferC <kcarlsson89@gmail.com>"]
 version = "0.1.0"
 
 [deps]
-DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
-DocStringExtensions = "0.8"
 julia = "1.3"
 
 [extras]
