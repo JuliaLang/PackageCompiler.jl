@@ -1,13 +1,12 @@
 # Introduction
 
-This part of the documentation contains a set of tutorial to teach how
-PackageCompilerX works internally by going through the steps for the f. By knowing the internals of
-PackageCompilerX you can more easily figure out root causes of problems and
-help other.
-
-The inner functionality of PackageCompilerX is actually quite simple.
-There are a few julia commands and compiler invocations that everything
-is built around, the rest is just scaffolding.
+This part of the documentation contains a set of tutorials aimed to teach how
+PackageCompilerX works internally. This is done by going through some examples
+of manually creating sysimages and apps mostly from the command line.
+By knowing the internals of PackageCompilerX you can more easily figure out
+root causes of problems and help others. The inner functionality of PackageCompilerX
+is actually quite simple. There are a few julia commands and compiler invocations
+that everything is built around, the rest is mostly scaffolding.
 
 [Part 1](@ref man-tutorial-sysimage) focuses on how to build a local system
 image to reduce package load times and reduce the latency that can occur when
