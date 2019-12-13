@@ -225,6 +225,11 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          cpu_target::String=NATIVE_CPU_TARGET,
                          base_sysimage::Union{Nothing, String}=nothing,
                          compiled_modules=true)
+    if replace_default==true
+        if sysimage_path !== nothing
+            error("cannot specify `sysimage_path` when `replace_default` is `true`")
+        end
+    end
     if sysimage_path === nothing
         if replace_default == false
             error("`sysimage_path` cannot be `nothing` if `replace_default` is `false`")
@@ -233,12 +238,6 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
         tmp = mktempdir()
         sysimage_path = joinpath(tmp, string("sys.", Libdl.dlext))
     end
-    if replace_default==true
-        if sysimage_path !== nothing
-            error("cannot specify `sysimage_path` when `replace_default` is `true`")
-        end
-    end
-
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
