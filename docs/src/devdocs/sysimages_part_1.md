@@ -21,11 +21,11 @@ can immediately be used, without requiring any compilation.
 ## Custom sysimages
 
 There are cases where one wants to generate a custom sysimage for a similar
-reason as to why Julia bundles one, to reduce time from Julia start until the
+reason as to why Julia bundles one: to reduce time from Julia start until the
 program is executing. The time from startup to execution is here denoted as
 "latency" and we want to minimize the latency of our program.  A drawback of
 putting a package inside the sysimage is that it becomes "frozen" at the
-particular version it was when it got put into the sysimage. In addition, all
+particular version it was, when it got put into the sysimage. In addition, all
 the dependencies of the package put into the sysimage will be frozen in the
 same manner.  In particular, it will no longer be updated like normal packages
 when using the package manager. In some cases, other ways of reducing latency
@@ -63,7 +63,7 @@ The term "precompiled" can be a bit misleading since there is no native
 compiled code cached in the precompilation file. Julia is dynamically typed so
 it is not obvious what types to compile the different methods for.
 
-Even with `CSV` "precompiled", there is a still some loading time but it is
+Even with `CSV` "precompiled", there is a still some loading time, but it is
 significantly lower:
 
 ```jl-repl
@@ -95,11 +95,11 @@ function is still in memory.
 
 However, since the end goal of this blog series is to create an executable that
 can be distributed we want to try to avoid as much runtime compilation
-(latency) as possible
+(latency) as possible.
 
 ## Creating a custom sysimage
 
-If we time the loading of a standard library it is clear that it is "cached"
+If we time the loading of a standard library, it is clear that it is "cached"
 somehow since the time to load it is so short:
 
 ```jl-repl
@@ -108,7 +108,7 @@ julia> @time using Dates
 ``` 
 
 Since `Dates` is a standard library it comes bundled in the system image.  In
-fact, `Dates` is already "loaded" when starting Julia, the effect of running
+fact, `Dates` is already "loaded" when starting Julia. The effect of running
 `using Dates` just makes the module available in the `Main` module namespace
 which is what the REPL evaluates in. 
 
@@ -125,9 +125,9 @@ Dict{Base.PkgId,Module} with 33 entries:
 ...
 ```
 
-and we can here see the `Dates` module is there even after restarting Julia
-and not explicitly loading `Dates`, showing that `Dates` is loaded together with
-the start-up of Julia.
+and we can here see the `Dates` module is there, even after restarting Julia.
+This means that `Dates` is in the sysimage itself and does not have to be loaded
+from amywhere external.
 
 Creating and using a custom sysimage is done in three steps:
 
@@ -159,9 +159,9 @@ julia --startup-file=no --output-o=sys.o -- custom_sysimage.jl
 ERROR: could not open file boot.jl
 ```
 
-That didn't work well. It turns out that when using the `--output-o` option one
+That did not work well. It turns out that when using the `--output-o` option one
 has to explicitly give a sysimage path ([due to this
-line](https://github.com/JuliaLang/julia/blob/49fb7924498e9fe813444cc684a24002e75b2ac9/src/jloptions.c#L533)).  Since we don't have a custom sysimage yet we
+line](https://github.com/JuliaLang/julia/blob/49fb7924498e9fe813444cc684a24002e75b2ac9/src/jloptions.c#L533)).  Since we do not have a custom sysimage yet we
 just want to give the path to the default sysimage which we can get the path to
 via:
 
@@ -184,12 +184,12 @@ uv_write at ./stream.jl:924
 ```
 
 Failure again! Another caveat when using `--output-o` is that modules
-`__init__()` functions do not end up getting called which is what normally
+`__init__()` functions do not end up getting called, which is what normally
 happens when a module is loaded. The reason for this is that often the state
 that gets defined in `__init__` is not something that you want to serialize to
-a file. In this particular case, some parts of the IO system has not been
+a file. In this particular case, some parts of the IO system have not been
 initialized so Julia crashes while trying to print an error. The magic
-incantation to make IO work properly is `Base.reinit_stdio()` so to figure out
+incantation to make IO work properly is `Base.reinit_stdio()`. To figure out
 the actual problem we modify the `custom_sysimage.jl` file to look like:
 
 ```
@@ -215,7 +215,7 @@ Stacktrace:
 in expression starting at /home/kc/custom_sysimage.jl:2
 ```
 
-Okay, now we can see the error. Julia can for some reason not find the `CSV`
+Okay, now we can see the error. Julia can not find the `CSV`
 package.  Package-loading in Julia is based on the two arrays `LOAD_PATH` and
 `DEPOT_PATH`. Adding `@show LOAD_PATH` and `@show DEPOT_PATH` to the
 `custom_sysimage.jl` file and rerunning the command above prints:
@@ -225,9 +225,9 @@ LOAD_PATH = String[]
 DEPOT_PATH = String[]
 ```
 
-So again, we have an initialization problem. Looking at [what Julia itself does
-before including the standard libraries][sysimage-path-init], we can see that
-the functions initializing these variables are explicitly called. Let's do the
+Again, we have an initialization problem. Looking at [what Julia itself does
+before including the standard libraries](https://github.com/JuliaLang/julia/blob/88c34fc51d962aaef973935942b2e073e2e2f398/base/sysimg.jl#L13-L14), we can see that
+the functions initializing these variables are explicitly called. Let us do the
 same by updating the `custom_sysimage.jl` file to:
 
 ```jl
@@ -273,7 +273,7 @@ gcc -shared -o sys.so -Wl,--whole-archive sys.o -Wl,--no-whole-archive -L"/home/
 
 which creates the sysimage `sys.so`.
 
-We can compare the size of the new sysimage vs the default one and see that the
+We can compare the size of the new sysimage versus the default one and see that the
 new is a bit larger due to the extra packages it contains:
 
 ```

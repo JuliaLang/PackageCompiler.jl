@@ -18,7 +18,7 @@ To use PackageCompilerX a C-compiler needs to be available:
 
 ### macOS, Linux
 
-Having a recently modern `gcc` or `clang` available should be enough to use PackageCompilerX on Linux or macOS.
+Having a decently modern `gcc` or `clang` available should be enough to use PackageCompilerX on Linux or macOS.
 For macOS, using something like `homebrew` and for Linux the system package manager should work fine.
 
 ### Windows
@@ -27,4 +27,5 @@ For Windows, the minGW compiler toolchain is needed. It can be downloaded from e
 [https://sourceforge.net/projects/mingw-w64/files/](https://sourceforge.net/projects/mingw-w64/files/) or by following the 
 instructions for setting up a toolchain capable of compiling Julia itself on Windows at
 [https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling)
-and then run PackageCompilerX from the cygwin terminal.
+and then run PackageCompilerX from the cygwin terminal. Alternatively, the package manager
+[chocolatey](https://chocolatey.org/) can be used to get mingw on Windows.

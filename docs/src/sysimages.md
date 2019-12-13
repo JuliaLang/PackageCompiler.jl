@@ -3,7 +3,7 @@
 ## What is a sysimage
 
 A sysimage is a file which, in a loose sense, contains a Julia session
-serialized to a file.  A "Julia session" include things like loaded packages,
+serialized to a file.  A "Julia session" includes things like loaded packages,
 global variables, inferred and compiled code, etc.  By starting Julia with a
 sysimage, the stored Julia session is deserialized and loaded. The idea behind
 the sysimage is that this deserialization is faster than having to reload
@@ -11,14 +11,14 @@ packages and recompile code from scratch.
 
 Julia ships with a sysimage that is used by default when Julia is started. That
 sysimage contains the Julia compiler itself, the standard libraries and also
-compiled code (precompile statements) that has been put there to reduce the
-time required to do common operations, like working in the REPL.
+compiled code that has been put there to reduce the time required to do common
+operations, like working in the REPL.
 
-Sometimes, it is desirable to create a custom sysimage with custom precompile
-statements. This is the case if one has some dependencies that take a
-significant time to load or where the compilation time for the first call is
-uncomfortably long. This section of the documentation is intended to document
-how to use PackageCompilerX to create such sysimages.
+Sometimes it is desirable to create a custom sysimage with custom precompiled
+code. This is the case if one has some dependencies that take a significant
+time to load or where the compilation time for the first call is uncomfortably
+long. This section of the documentation is intended to document how to use
+PackageCompilerX to create such sysimages.
 
 ### Drawbacks to custom sysimages
 
@@ -26,16 +26,16 @@ It should be clearly stated that there are some drawbacks to using a custom
 sysimage, thereby sidestepping the standard Julia package precompilation
 system.  The biggest drawback is that packages that are compiled into a
 sysimage (including their dependencies!) are "locked" to the version they where
-at when the sysimage was ( created.  This means that no matter what package
+at when the sysimage was created. This means that no matter what package
 version you have installed in your current project, the one in the sysimage
 will take precedence. This can lead to bugs where you start with a project that
 needs a specific version of a package, but you have another one compiled into
 the sysimage. 
 
 Putting packages in the sysimage is therefore only recommended if the load time
-of the packages getting put in there is a significant problem and that these
+of those packages is a significant problem and when these packages
 are not frequently updated. In addition, compiling "workflow packages" like
-Revise.jl and OhMyREPL.jl might make sense.
+Revise.jl and OhMyREPL.jl and using that as a default sysimage might make sense.
 
 ## Creating a sysimage using PackageCompilerX
 
@@ -48,12 +48,13 @@ sysimage is given by the `sysimage_path` keyword.  After the sysimage is
 created, giving the command flag `-Jpath/to/sysimage` will start Julia with the
 given sysimage.
 
-As an example, below, a new sysimage in a separate project is created with the
-package Example.jl in it. Using `Base.loaded_modules` it can be seen that the
-package is loaded without having to explicitly `import` it. 
+Below is an example of a new sysimage, from a separate project, being created
+with the package Example.jl in it. Using `Base.loaded_modules` it can be seen
+that the package is loaded without having to explicitly `import` it.
+
 ```
 ~
-❯ mkdir NewSysImageEnv
+❯mkdir NewSysImageEnv
 
 ~
 ❯ cd NewSysImageEnv
@@ -112,11 +113,11 @@ the sysimage of the process running PackageCompilerX. If the default sysimage
 has been replaced, the next `create_sysimage` call will create a new sysimage
 based on the replaced sysimage. It is possible to create a sysimage
 non-incrementally by passing the `incremental=false` keyword. This will create
-a new system image from scratch, however, it will lose the special
+a new system image from scratch. However, it will lose the special
 precompilation that the Julia bundled sysimage provides which is what make the
-REPL and package manager snappy. It is therefore unlikely that
-`incremental=false` is of much use unless in special cases for sysimage
-creation (for apps it is a different story though).
+REPL and package manager not require compilation after a Julia restart.. It is
+therefore unlikely that `incremental=false` is of much use unless in special
+cases for sysimage creation (for apps it is a different story though).
 
 ### Precompilation
 
@@ -146,11 +147,11 @@ using Example
 Example.hello("friend")
 ```
 
-We now create a new system image called `ExampleSysimagePrecompile.so` where
-the `precompile_execution_file` keyword argument has been giving, pointing to
+We now create a new system image called `ExampleSysimagePrecompile.so`, where
+the `precompile_execution_file` keyword argument has been given, pointing to
 the file just shown above:
 
-```
+```julia-repl
 ~/NewSysImageEnv
 ❯ julia-q
 
@@ -166,7 +167,7 @@ julia> PackageCompilerX.create_sysimage(:Example; sysimage_path="ExampleSysimage
 julia> exit()
 ```
 
-Using the just created system image, we can see that the `hello` function no longer needs to get compiled_:
+Using the just created system image, we can see that the `hello` function no longer needs to get compiled:
 
 ```
 ~/NewSysImageEnv
@@ -183,7 +184,7 @@ statements to `file.jl` for the duration of the started Julia process.  This
 can be useful in cases where it is difficult to give a script that executes the
 code (like with interactive use). A file with a list of such precompile
 statements can be used when creating a sysimage by passing the keyword argument
-`precompile_statements_file`. See the OhMyREPL.jl example in the docs for more
+`precompile_statements_file`. See the [OhMyREPL.jl example](@ref manual-omr) in the docs for more
 details on how to use `--trace-compile` with PackageCompilerX.
 
 It is also possible to use

@@ -10,7 +10,6 @@ makedocs(
         "Home" => "index.md",
 
         "Manual" => [
-            "prereq.md"
             "sysimages.md"
             "apps.md"
         ],

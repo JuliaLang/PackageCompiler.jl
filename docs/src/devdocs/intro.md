@@ -2,7 +2,7 @@
 
 This part of the documentation contains a set of tutorials aimed to teach how
 PackageCompilerX works internally. This is done by going through some examples
-of manually creating sysimages and apps mostly from the command line.
+of manually creating sysimages and apps, mostly from the command line.
 By knowing the internals of PackageCompilerX you can more easily figure out
 root causes of problems and help others. The inner functionality of PackageCompilerX
 is actually quite simple. There are a few julia commands and compiler invocations
@@ -20,5 +20,5 @@ from PackageCompilerX as [`create_sysimage`](@ref) and [`create_app`](@ref).
 
 It should be noted that there is some usage of non-documented Julia functions
 and flags.  They have not been changed for quite a long time (and are unlikely
-to change too much in the future) but some care should be taken.
+to change too much in the future), but some care should be taken.
 
