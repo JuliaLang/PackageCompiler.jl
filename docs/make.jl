@@ -2,8 +2,7 @@ using Documenter, PackageCompilerX
 
 makedocs(
     format = Documenter.HTML(
-        # prettyurls on travis
-        prettyurls = haskey(ENV, "HAS_JOSH_K_SEAL_OF_APPROVAL"),
+        prettyurls = "deploy" in ARGS,
     ),
     sitename = "PackageCompilerX",
     pages = [
