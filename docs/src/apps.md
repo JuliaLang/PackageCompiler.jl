@@ -145,7 +145,7 @@ scratch. For sysimages, it makes sense to use an incremental sysimage built on
 top of Julia's default sysimage since we wanted the benefit of having a responsive
 REPL that it provides.  For apps, this is no longer the case, the sysimage is
 not meant to be used when working interactively, it only needs to be
-specialized for the specific app.  Therefore, by default, `incremental=true` is
+specialized for the specific app.  Therefore, by default, `incremental=false` is
 used for `create_app`. If, for some reason, one wants an incremental sysimage,
 `incremental=true` could be passed to `create_app`.  With the example app, a
 non-incremental sysimage is about 70MB smaller than the default sysimage.
@@ -160,7 +160,7 @@ this is not the default is that it is possible to "accidentally" depend on a
 standard library without it being reflected in the Project file.  For example,
 it is possible to call `rand()` from a package without depending on Random,
 even though that is where the method is defined. If Random was excluded from
-the sysimage that call would then error. The aame thing is true for e.g. matrix
+the sysimage that call would then error. The same thing is true for e.g. matrix
 multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
 `LinearAlgebra` and `Random` This is because these standard libraries do
 "type-piracy" so just loading those packages can cause code to change behavior.
