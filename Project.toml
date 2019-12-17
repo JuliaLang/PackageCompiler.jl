@@ -1,6 +1,6 @@
 name = "PackageCompiler"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
-version = "0.6.4"
+version = "0.6.5"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -11,7 +11,7 @@ UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 WinRPM = "c17dfb99-b4f7-5aad-8812-456da1ad7187"
 
 [compat]
-julia = "≥ 0.7.0"
+julia = "1"
 WinRPM = "0.4.3"
 
 [extras]
