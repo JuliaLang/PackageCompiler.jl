@@ -319,7 +319,8 @@ function build_exec(e_file, cprog, s_file, builddir, verbose, optimize, debug, c
     else
         command = `$command -Wl,-rpath,\$ORIGIN`
     end
-    if Int == Int32
+    # line below breaking ARM arch 32bit as can be Int32 as well - so make check more specific
+    if Int == Int32  && Sys.iswindows()
         # TODO: this was added because of an error with julia on win32 that suggested this line, it seems to work but I'm not sure if it's correct
         command = `$command -march=pentium4`
     end
