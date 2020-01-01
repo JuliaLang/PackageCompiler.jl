@@ -27,12 +27,12 @@ another machine.
 For something to be relocatable, everything that it depends on must also be
 relocatable.  In the case of an app, the app itself and all the Julia packages
 it depends on must also relocatable. This is a bit of an issue because the
-Julia package ecosystem has not rarely given much thought to relocatability
+Julia package ecosystem has rarely given much thought to relocatability
 since creating "apps" has not been common. 
 
 The main problem with relocatability of Julia packages is that many packages
-are encoding fundamentally non-relocatable *into the source code*.  As an
-example, many packages tend to use a `build.jl` file (which runs when the
+are encoding fundamentally non-relocatable information *into the source code*.
+As an example, many packages tend to use a `build.jl` file (which runs when the
 package is first installed) that looks something like:
 
 ```jl
@@ -66,9 +66,9 @@ being installed which is a concept that does not make sense when distributing
 an app.
 
 Some packages do need to call into external libraries and use external binaries
-so the question then aris: "how are these packages supposed to do this in a
-relocatable way?  The answer is to use the "artifact system" which is
-described in the following [blog
+so the question then arises: "how are these packages supposed to do this in a
+relocatable way?"  The answer is to use the "artifact system" introduced in
+Julia 1.3, and described in the following [blog
 post](https://julialang.org/blog/2019/11/artifacts). The artifact system is a
 declarative way of downloading and using "external files" like binaries and
 libraries.  How this is used in practice is described later.
