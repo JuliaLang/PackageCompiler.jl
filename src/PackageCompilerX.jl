@@ -169,9 +169,8 @@ backup_default_sysimg_path() = default_sysimg_path() * ".backup"
 backup_default_sysimg_name() = basename(backup_default_sysimg_path())
 
 # TODO: Also check UUIDs for stdlibs, not only names
-function gather_stdlibs_project(project::String)
-    project_toml_path = abspath(Pkg.Types.projectfile_path(project; strict=true))
-    ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
+gather_stdlibs_project(project::String) = gather_stdlibs_project(create_pkg_context(project))
+function gather_stdlibs_project(ctx)
     @assert ctx.env.manifest !== nothing
     stdlibs = all_stdlibs()
     stdlibs_project = String[]
@@ -216,7 +215,7 @@ by setting the envirnment variable `JULIA_CC` to a path to a compiler
 """
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          sysimage_path::Union{String,Nothing}=nothing,
-                         project::String=active_project(),
+                         project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
                          precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
@@ -247,12 +246,17 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
+    # Instantiate the project
+    ctx = create_pkg_context(project)
+    @debug "instantiating project at $(repr(project))"
+    Pkg.instantiate(ctx)
+
     if !incremental
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         if filter_stdlibs
-            stdlibs = gather_stdlibs_project(project)
+            stdlibs = gather_stdlibs_project(ctx)
         else
             stdlibs= all_stdlibs()
         end
@@ -318,6 +322,14 @@ end
 
 const REQUIRES = "Requires" => UUID("ae029012-a4dd-5104-9daa-d747884805df")
 
+function create_pkg_context(project)
+    project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
+    if project_toml_path === nothing
+        error("could not find project at $(repr(project))")
+    end
+    return Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
+end
+
 """
     audit_app(app_dir::String)
 
@@ -328,11 +340,7 @@ the project at `app_dir`.
     This cannot guarantee that the project is free of relocatability problems,
     it can only detect some known bad cases and warn about those.
 """
-function audit_app(app_dir::String)
-    project_toml_path = abspath(Pkg.Types.projectfile_path(app_dir; strict=true))
-    ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
-    return audit_app(ctx)
-end
+audit_app(app_dir::String) = audit_app(create_pkg_context(app_dir))
 function audit_app(ctx::Pkg.Types.Context)
     # Check for Requires.jl usage
     if REQUIRES in ctx.env.project.deps
@@ -409,25 +417,16 @@ function create_app(package_dir::String,
                     filter_stdlibs=false,
                     audit=true,
                     force=false)
-    project_toml_path = abspath(Pkg.Types.projectfile_path(package_dir; strict=true))
-    if project_toml_path === nothing
-        error("no project found in $(repr(package_dir))")
-    end
-    manifest_toml_path = abspath(Pkg.Types.manifestfile_path(package_dir))
-    if manifest_toml_path === nothing
+    package_dir = abspath(package_dir)
+    ctx = create_pkg_context(package_dir)
+    if isempty(ctx.env.manifest)
         @warn "it is not recommended to create an app without a preexisting manifest"
     end
-    project_toml = Pkg.TOML.parsefile(project_toml_path)
-    project_path = abspath(package_dir)
-    app_name = get(project_toml, "name") do
+    if ctx.env.pkg === nothing
         error("expected package to have a `name`-entry")
     end
+    app_name = ctx.env.pkg.name
     sysimg_file = app_name * "." * Libdl.dlext
-
-    ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
-    @debug "instantiating project at \"$project_toml_path\""
-    Pkg.instantiate(ctx)
-    
     if isdir(app_dir)
         if !force
             error("directory $(repr(app_dir)) already exists, use `force=true` to overwrite (will completely",
@@ -453,11 +452,11 @@ function create_app(package_dir::String,
             # by first creating a normal "empty" sysimage and then use that to finally create the one
             # with the @ccallable function
             tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
-            create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=project_path,
+            create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs=filter_stdlibs,
                             cpu_target=APP_CPU_TARGET)
 
-            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=project_path,
+            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file=precompile_execution_file,
                             precompile_statements_file=precompile_statements_file,
@@ -465,7 +464,7 @@ function create_app(package_dir::String,
                             base_sysimage=tmp_base_sysimage,
                             compiled_modules=false #= workaround julia#34076=#)
         else
-            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=project_path,
+            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
@@ -518,11 +517,10 @@ function bundle_artifacts(ctx, app_dir)
     Pkg.Operations.load_all_deps!(ctx, pkgs)
 
     # Also want artifacts for the project itself
-    if ctx.env.pkg !== nothing
-        # This is kinda ugly...
-        ctx.env.pkg.path = dirname(ctx.env.project_file)
-        push!(pkgs, ctx.env.pkg)
-    end
+    @assert ctx.env.pkg !== nothing
+    # This is kinda ugly...
+    ctx.env.pkg.path = dirname(ctx.env.project_file)
+    push!(pkgs, ctx.env.pkg)
 
     # Collect all artifacts needed for the project
     artifact_paths = String[]
