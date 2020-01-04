@@ -534,6 +534,8 @@ function bundle_artifacts(ctx, app_dir)
                 @debug "bundling artifacts for $(pkg.name)"
                 artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
                 for name in keys(artifact_dict)
+                    meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
+                    meta == nothing && continue
                     @debug "  \"$name\""
                     push!(artifact_paths, Pkg.Artifacts.ensure_artifact_installed(name, artifacts_toml_path))
                 end
