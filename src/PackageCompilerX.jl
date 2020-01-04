@@ -107,10 +107,9 @@ function create_sysimg_object_file(object_file::String, packages::Vector{Symbol}
                             compiled_modules::Bool)
     # include all packages into the sysimg
     julia_code = """
-        if !isdefined(Base, :uv_eventloop)
-            Base.reinit_stdio()
-        end
-        Base.__init__(); 
+        Base.reinit_stdio()
+        Base.init_load_path()
+        Base.init_depot_path()
         """
     for package in packages
         julia_code *= "using $package\n"
@@ -152,6 +151,11 @@ function create_sysimg_object_file(object_file::String, packages::Vector{Symbol}
         end # module
         """
     julia_code *= precompile_code
+
+    julia_code *= """
+        empty!(LOAD_PATH)
+        empty!(DEPOT_PATH)
+    """
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
