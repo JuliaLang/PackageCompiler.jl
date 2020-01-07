@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     }
  
     char buf[PATH_MAX];
-    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/../", free_path);
+    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/../../", free_path);
     putenv(buf);
     putenv("JULIA_LOAD_PATH=@");
 
