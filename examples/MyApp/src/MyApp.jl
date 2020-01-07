@@ -7,7 +7,7 @@ using Pkg.Artifacts
 const fooifier = joinpath(ensure_artifact_installed("fooifier", joinpath(@__DIR__, "..", "Artifacts.toml")), 
     "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
-Base.@ccallable function julia_main()::Cint
+function julia_main()
     try
         real_main()
     catch

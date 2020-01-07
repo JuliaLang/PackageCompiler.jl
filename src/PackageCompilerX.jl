@@ -46,11 +46,12 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
     sysimg_content = read(sysimg_source_path, String)
     # replaces the hardcoded list of stdlibs in sysimg.jl with
     # the stdlibs that is given as argument
-    return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* string.(stdlibs), ",\n"), "]"))
+    return replace(sysimg_content,
+        r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
 end
 
 function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
-    tmp = mktempdir(cleanup=false)
+    tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
@@ -83,7 +84,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     return tmp_sys_ji
 end
 
-function run_precompilation_script(project::String, precompile_file::Union{String, Nothing})
+function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing})
     tracefile = tempname()
     if precompile_file == nothing
         arg = `-e ''`
@@ -91,36 +92,40 @@ function run_precompilation_script(project::String, precompile_file::Union{Strin
         arg = `$precompile_file`
     end
     touch(tracefile)
-    cmd = `$(get_julia_cmd()) --sysimage=$(current_process_sysimage_path()) --project=$project
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
             --compile=all --trace-compile=$tracefile $arg`
     @debug "run_precompilation_script: running $cmd"
     read(cmd)
     return tracefile
 end
 
-function create_sysimg_object_file(object_file::String, packages::Vector{Symbol};
+function do_compilecache(project, packages, sysimage)
+    # TODO: Only call compilecache on packages with stale cachefiles
+    compilecache = ""
+    for (pkg, uuid) in packages
+        compilecache *= """println(Base.compilecache(Base.PkgId(Base.UUID("$(uuid)"), $(repr(pkg)))))\n"""
+    end
+
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $compilecache`
+    @debug "running $cmd"
+    paths = read(cmd, String)
+    return String.(split(paths))
+end
+
+function create_sysimg_object_file(object_file::String, packages::Vector{String};
                             project::String,
                             base_sysimage::String,
                             precompile_execution_file::Vector{String},
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
-                            compiled_modules::Bool)
-    # include all packages into the sysimg
-    julia_code = """
-        Base.reinit_stdio()
-        Base.init_load_path()
-        Base.init_depot_path()
-        """
-    for package in packages
-        julia_code *= "using $package\n"
-    end
+                            isapp::Bool)
     
-    # handle precompilation
+    # Handle precompilation
     precompile_statements = ""
     @debug "running precompilation execution script..."
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, file)
+        tracefile = run_precompilation_script(project, base_sysimage, file)
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
     end
     for file in precompile_statements_file
@@ -150,18 +155,74 @@ function create_sysimg_object_file(object_file::String, packages::Vector{Symbol}
             end
         end # module
         """
+
+    # include all packages into the sysimg
+    julia_code = """
+        Base.reinit_stdio()
+        Base.init_load_path()
+        Base.init_depot_path()
+        """
+
+    # Create package => uuid map
+    ctx = create_pkg_context(project)
+    pkg_uuid_map = copy(ctx.env.project.deps)
+    if ctx.env.pkg !== nothing
+        pkg_uuid_map[ctx.env.pkg.name] = ctx.env.pkg.uuid
+    end
+
+    # Run compilecache on packages to be put into sysimage
+    if !isempty(packages)
+        ji_paths = do_compilecache(project, [pkg => pkg_uuid_map[pkg] for pkg in packages], base_sysimage)
+    else
+        ji_paths = String[]
+    end
+
+    for path in ji_paths
+        julia_code *= """
+            @eval Module() begin
+                m = Base._require_from_serialized($(repr(path)))
+                m isa Exception && throw(m)
+            end
+            """
+    end
+
+    # Load the packages into Main
+    for pkg in packages
+        julia_code *= """
+            const $(pkg) = Base.loaded_modules[
+            Base.PkgId(Base.UUID("$(pkg_uuid_map[pkg])"), $(repr(pkg)))]
+            """
+    end
+
     julia_code *= precompile_code
+
+    if isapp
+        # If it is an app, there is only one packages
+        @assert length(packages) == 1
+        packages[1]
+        app_start_code = """
+        Base.@ccallable function julia_main()::Cint
+            try
+                $(packages[1]).julia_main()
+            catch
+                Core.print("julia_main() threw an unhandled exception")
+                return 1
+            end
+        end
+        """
+        julia_code *= app_start_code
+    end
 
     julia_code *= """
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
-    """
+        """
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
     @info "PackageCompilerX: creating system image object file, this might take a while..."
 
-    cmd = `$(get_julia_cmd()) --compiled-modules=$(yesno(compiled_modules)) --cpu-target=$cpu_target
+    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
     run(cmd)
@@ -184,6 +245,17 @@ function gather_stdlibs_project(ctx)
         end
     end
     return stdlibs_project
+end
+
+function check_packages_in_project(ctx, packages)
+    packages_in_project = collect(keys(ctx.env.project.deps))
+    if ctx.env.pkg !== nothing
+        push!(packages_in_project, ctx.env.pkg.name)
+    end
+    packages_not_in_project = setdiff(string.(packages), packages_in_project)
+    if !isempty(packages_not_in_project)
+        error("package(s) $(join(packages_not_in_project, ", ")) not in project")
+    end
 end
 
 """
@@ -227,7 +299,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          replace_default::Bool=false,
                          cpu_target::String=NATIVE_CPU_TARGET,
                          base_sysimage::Union{Nothing, String}=nothing,
-                         compiled_modules=true)
+                         isapp::Bool=false)
     if replace_default==true
         if sysimage_path !== nothing
             error("cannot specify `sysimage_path` when `replace_default` is `true`")
@@ -246,7 +318,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
     end
 
     # Functions lower down handles `packages` and precompilation file as arrays so convert here
-    packages = vcat(packages)
+    packages = string.(vcat(packages)) # Package names are often used as string inside Julia
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
@@ -254,6 +326,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
     ctx = create_pkg_context(project)
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx)
+
+    check_packages_in_project(ctx, packages)
 
     if !incremental
         if base_sysimage !== nothing
@@ -271,6 +345,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
         end
     end
 
+    # Create the sysimage
     object_file = tempname() * ".o"
     create_sysimg_object_file(object_file, packages;
                               project=project,
@@ -278,8 +353,10 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                               precompile_execution_file=precompile_execution_file,
                               precompile_statements_file=precompile_statements_file,
                               cpu_target=cpu_target,
-                              compiled_modules=compiled_modules)
+                              isapp=isapp)
     create_sysimg_from_object_file(object_file, sysimage_path)
+
+    # Maybe replace default sysimage
     if replace_default
         if !isfile(backup_default_sysimg_path())
             @debug "making a backup of default sysimg"
@@ -288,7 +365,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
         @info "PackageCompilerX: default sysimg replaced, restart Julia for the new sysimg to be in effect"
         mv(sysimage_path, default_sysimg_path(); force=true)
     end
-    # TODO: Remove object file
+    rm(object_file; force=true)
+    return nothing
 end
 
 function create_sysimg_from_object_file(input_object::String, sysimage_path::String)
@@ -380,7 +458,7 @@ The folder `app_source` needs to contain a package where the package include a
 function with the signature
 
 ```
-Base.@ccallable julia_main()::Cint
+julia_main()::Cint
     # Perhaps do something based on ARGS
     ...
 end
@@ -466,14 +544,14 @@ function create_app(package_dir::String,
                             precompile_statements_file=precompile_statements_file,
                             cpu_target=APP_CPU_TARGET,
                             base_sysimage=tmp_base_sysimage,
-                            compiled_modules=false #= workaround julia#34076=#)
+                            isapp=true)
         else
             create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
                                               cpu_target=APP_CPU_TARGET,
-                                              compiled_modules=false #= workaround julia#34076=#)
+                                              isapp=true)
         end
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
         if Sys.isapple()
@@ -485,8 +563,6 @@ function create_app(package_dir::String,
     return
 end
 
-# This requires that the sysimg have been built so that there is a ccallable `julia_main`
-# in Main.
 function create_executable_from_sysimg(;sysimage_path::String,
                                         executable_path::String)
     flags = join((cflags(), ldflags(), ldlibs()), " ")
