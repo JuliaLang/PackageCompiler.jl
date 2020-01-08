@@ -228,7 +228,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     run(cmd)
 end
 
-default_sysimg_path() = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
+default_sysimg_path() = abspath(Sys.BINDIR, "..", "lib", "julia", "sys." * Libdl.dlext)
 default_sysimg_name() = basename(default_sysimg_path())
 backup_default_sysimg_path() = default_sysimg_path() * ".backup"
 backup_default_sysimg_name() = basename(backup_default_sysimg_path())
