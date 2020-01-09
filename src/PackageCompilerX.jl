@@ -99,17 +99,13 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     return tracefile
 end
 
-function do_compilecache(project, packages, sysimage)
-    # TODO: Only call compilecache on packages with stale cachefiles
-    compilecache = ""
-    for (pkg, uuid) in packages
-        compilecache *= """println(Base.compilecache(Base.PkgId(Base.UUID("$(uuid)"), $(repr(pkg)))))\n"""
-    end
-
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $compilecache`
+# Load packages in a normal julia process to make them precompile "normally"
+function do_ensurecompiled(project, packages, sysimage)
+    use = join("using " .* packages, '\n')
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
     @debug "running $cmd"
-    paths = read(cmd, String)
-    return String.(split(paths))
+    read(cmd, String)
+    return nothing
 end
 
 function create_sysimg_object_file(object_file::String, packages::Vector{String};
@@ -163,34 +159,14 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         Base.init_depot_path()
         """
 
-    # Create package => uuid map
-    ctx = create_pkg_context(project)
-    pkg_uuid_map = copy(ctx.env.project.deps)
-    if ctx.env.pkg !== nothing
-        pkg_uuid_map[ctx.env.pkg.name] = ctx.env.pkg.uuid
-    end
-
     # Run compilecache on packages to be put into sysimage
     if !isempty(packages)
-        ji_paths = do_compilecache(project, [pkg => pkg_uuid_map[pkg] for pkg in packages], base_sysimage)
-    else
-        ji_paths = String[]
+        do_ensurecompiled(project, packages, base_sysimage)
     end
 
-    for path in ji_paths
-        julia_code *= """
-            @eval Module() begin
-                m = Base._require_from_serialized($(repr(path)))
-                m isa Exception && throw(m)
-            end
-            """
-    end
-
-    # Load the packages into Main
     for pkg in packages
         julia_code *= """
-            const $(pkg) = Base.loaded_modules[
-            Base.PkgId(Base.UUID("$(pkg_uuid_map[pkg])"), $(repr(pkg)))]
+            using $pkg
             """
     end
 
