@@ -146,7 +146,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                     Base.include_string(PrecompileStagingArea, statement)
                 catch
                     # See julia issue #28808
-                    @error "failed to execute \$statement"
+                    @debug "failed to execute \$statement"
                 end
             end
         end # module
