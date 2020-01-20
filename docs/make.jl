@@ -15,6 +15,7 @@ makedocs(
 
         "Examples" => [
             "examples/ohmyrepl.md",
+            "examples/plots.md",
         ],
 
         "PackageCompilerX - the manual way" => [
