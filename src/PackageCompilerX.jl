@@ -17,6 +17,8 @@ current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
 all_stdlibs() = readdir(Sys.STDLIB)
 
 yesno(b::Bool) = b ? "yes" : "no"
+bitflag() = Int == Int32 ? `-m32` : `-m64`
+march() = (Int == Int32 ? `-march=pentium4` : ``)
 
 function get_compiler()
     cc = get(ENV, "JULIA_CC", nothing)
@@ -357,7 +359,7 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
-    cmd = `$(get_compiler()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    cmd = `$(get_compiler()) $(bitflag()) $(march()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
     @debug "running $cmd"
     run(cmd)
     return nothing
@@ -553,7 +555,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     else
         rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
     end
-    cmd = `$(get_compiler()) -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
+    cmd = `$(get_compiler()) -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $(march()) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
     @debug "running $cmd"
     run(cmd)
     return nothing

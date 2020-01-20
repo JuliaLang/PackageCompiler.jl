@@ -9,6 +9,16 @@ os = "linux"
     url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-linux-gnu.tar.gz"
 
 [[fooifier]]
+arch = "i686"
+git-tree-sha1 = "c3a9f27382862092e064bcf4aeb3cb7190578338"
+libc = "glibc"
+os = "linux"
+
+    [[fooifier.download]]
+    sha256 = "97655b6a218d61284723b6923d7c96e6a256fa68b9419d723c588aa24404b102"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.i686-linux-gnu.tar.gz"
+
+[[fooifier]]
 arch = "x86_64"
 git-tree-sha1 = "f413ff2438a4e9e9dd69b23c35ca30de6af069cc"
 os = "macos"
