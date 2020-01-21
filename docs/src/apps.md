@@ -79,8 +79,9 @@ The source of an app is a package with a project and manifest file.
 It should define a function with the signature
 
 ```jl
-Base.@ccallable function julia_main()::Cint
-  ...
+function julia_main()::Cint
+  # do something based on ARGS?
+  return 0 # if things finished successfully
 end
 ```
 
