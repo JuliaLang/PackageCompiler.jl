@@ -319,14 +319,14 @@ are encoding fundamentally non-relocatable information *into the source code*.
 As an example, many packages tend to use a `build.jl` file (which runs when the
 package is installed) that looks something like:
 
-```
+```jl
 lib_path = find_library("libfoo")
 write("deps.jl", "const LIBFOO_PATH = $(repr(lib_path))")
 ```
 
 The main package file then contains
 
-``` 
+```jl
 if !isfile("../build/deps.jl")
     error("run Pkg.build(\"Package\") to re-build Package")
 end

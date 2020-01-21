@@ -115,7 +115,7 @@ which is what the REPL evaluates in.
 Delving into some internals, there is a dictionary in `Base` that keeps track
 of all loaded modules:
 
-```
+```jl-repl
 julia> Base.loaded_modules
 Dict{Base.PkgId,Module} with 33 entries:
   SHA [ea8e919c-243c-51af-8825-aaa63cd721ce]              => SHA
@@ -165,7 +165,7 @@ line](https://github.com/JuliaLang/julia/blob/49fb7924498e9fe813444cc684a24002e7
 just want to give the path to the default sysimage which we can get the path to
 via:
 
-```
+```jl-repl
 julia> unsafe_string(Base.JLOptions().image_file)
 "/home/kc/julia/lib/julia/sys.so"
 ```
@@ -192,7 +192,7 @@ initialized so Julia crashes while trying to print an error. The magic
 incantation to make IO work properly is `Base.reinit_stdio()`. To figure out
 the actual problem we modify the `custom_sysimage.jl` file to look like:
 
-```
+```jl
 Base.reinit_stdio()
 using CSV
 ```
@@ -276,7 +276,7 @@ which creates the sysimage `sys.so`.
 We can compare the size of the new sysimage versus the default one and see that the
 new is a bit larger due to the extra packages it contains:
 
-```
+```jl-repl
 julia> stat("sys.so").size / (1024*1024)
 162.16205596923828
 
@@ -403,7 +403,7 @@ type `String` and `Bool`.
 Note that some of the symbols in the list of precompile statements have a bit
 of a weird syntax containing `Symbol(#...)`, e.g:
 
-```
+```jl
 precompile(Tuple{typeof(Base.map), getfield(CSV, Symbol("##4#5")), Base.SubString{String}})
 ```
 

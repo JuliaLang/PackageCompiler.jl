@@ -86,7 +86,7 @@ As in the previous tutorial, we do a "sample run" of our app to record what
 functions end up getting compiled.  Here, we simply run the app on the sample
 CSV file since that should give good "coverage":
 
-```jl
+```
 julia --startup-file=no --trace-compile=app_precompile.jl MyApp.jl "FL_insurance_sample.csv"
 ```
 

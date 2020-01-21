@@ -100,7 +100,7 @@ Alternatively, instead of giving a path to where the new sysimage should appear,
 can choose to replace the default sysimage.
 This is done by omitting the `sysimage_path` keyword and instead adding `replace_default=true`, for example:
 
-```
+```jl
 create_sysimage([:Debugger, :OhMyREPL]; replace_default=true)
 ```
 

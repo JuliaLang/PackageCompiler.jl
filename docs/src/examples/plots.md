@@ -28,14 +28,14 @@ display(p)
 
 The custom sysimage is then created as:
 
-```
+```jl
 using PackageCompilerX
 create_sysimage(:Plots, sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
 ```
 
 If we now start Julia with the flag `-Jsys_plots.so` and re-time our previous commands:
 
-```
+```jl-repl
 julia> @time using Plots
   0.000826 seconds (852 allocations: 42.125 KiB)
 

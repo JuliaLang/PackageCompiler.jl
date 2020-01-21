@@ -56,7 +56,6 @@ end
 ...
 
 end # module
-
 ```
 
 The absolute path to `lib_path` that `find_library` found is thus effectively
@@ -207,7 +206,7 @@ MyApp.jl
 
 This is a problem that the Julia standard libraries themselves have:
 
-```
+```jl-repl
 julia> @which rand()
 rand() in Random at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/Random/src/Random.jl:256
 ```
