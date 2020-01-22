@@ -28,21 +28,21 @@ For something to be relocatable, everything that it depends on must also be
 relocatable.  In the case of an app, the app itself and all the Julia packages
 it depends on must also relocatable. This is a bit of an issue because the
 Julia package ecosystem has rarely given much thought to relocatability
-since creating "apps" has not been common. 
+since creating "apps" has not been common.
 
 The main problem with relocatability of Julia packages is that many packages
 are encoding fundamentally non-relocatable information *into the source code*.
 As an example, many packages tend to use a `build.jl` file (which runs when the
 package is first installed) that looks something like:
 
-```jl
+```julia
 lib_path = find_library("libfoo")
 write("deps.jl", "const LIBFOO_PATH = $(repr(lib_path))")
 ```
 
 The main package file then contains:
 
-```jl
+```julia
 module Package
 
 if !isfile("../build/deps.jl")
@@ -78,7 +78,7 @@ libraries.  How this is used in practice is described later.
 The source of an app is a package with a project and manifest file.
 It should define a function with the signature
 
-```jl
+```julia
 function julia_main()::Cint
   # do something based on ARGS?
   return 0 # if things finished successfully
@@ -92,7 +92,7 @@ https://github.com/KristofferC/PackageCompilerX.jl/tree/master/examples/MyApp.
 
 Regarding relocatability, PackageCompilerX provides a function
 [`audit_app(app_dir::String)`](@ref) that tries to find common problems with
-relocatability in the app. 
+relocatability in the app.
 
 The app is then compiled using the [`create_app`](@ref) function that takes a
 path to the source code of the app and the destination where the app should be
@@ -207,7 +207,7 @@ MyApp.jl
 
 This is a problem that the Julia standard libraries themselves have:
 
-```jl-repl
+```julia-repl
 julia> @which rand()
 rand() in Random at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/Random/src/Random.jl:256
 ```
@@ -219,7 +219,7 @@ comes with the app.  And while the source code is not available one can read
 the "lowered code" and use reflection to find things like the name of fields in
 structs and global variables etc:
 
-```jl-repl
+```julia-repl
 ~/PackageCompilerX.jl/examples/MyAppCompiled/bin kc/docs_apps*
 ❯ julia -q -JMyApp.so
 julia> MyApp = Base.loaded_modules[Base.PkgId(Base.UUID("f943f3d7-887a-4ed5-b0c0-a1d6899aa8f5"), "MyApp")]

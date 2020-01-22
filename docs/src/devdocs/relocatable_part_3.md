@@ -52,7 +52,7 @@ The package we used in the previous examples to create a sysimage and
 executable was CSV.jl. Now, to simplify things, we will only use a very simple
 package with no relocatability problems that also has no dependencies. The
 app will take some input on stdin and print it out with color to the terminal
-using the [Crayons.jl](https://github.com/KristofferC/Crayons.jl) package. 
+using the [Crayons.jl](https://github.com/KristofferC/Crayons.jl) package.
 
 When we add the Crayons.jl package we use a separate project to encapsulate
 things better by creating a new project in the app directory:
@@ -73,7 +73,7 @@ julia> using Pkg; Pkg.add("Crayons")
 
 The code for the app itself is quite simple:
 
-```jl
+```julia
 module MyApp
 using Crayons
 
@@ -128,7 +128,7 @@ project:
 ```
 ~/MyApp
 ❯ echo "Hello, this is some stdin" | julia --project --startup-file=no --trace-compile=app_precompile.jl MyApp.jl green
-``` 
+```
 
 The `.o` file is then created with the same `generate_sysimage.jl` file as in part 2:
 
@@ -280,7 +280,7 @@ the [`strings`](https://linux.die.net/man/1/strings) application we can see what
 an executable or library.  Running it and grepping for some relevant substrings
 we can see that a bunch of absolute paths are stored inside the sysimage:
 
-``` 
+```
 ~/MyApp/MyApp/lib/julia
 ❯ strings sys.so | grep /home/kc
 /home/kc/.julia/packages/Crayons/P4fls/src/downcasts.jl
@@ -304,7 +304,7 @@ Stacktrace:
  [1] error(::String) at ./error.jl:33
  [2] real_main() at /home/kc/MyApp/MyApp.jl:20
  [3] julia_main() at /home/kc/MyApp/MyApp.jl:6
-``` 
+```
 
 This could be avoided by not printing stacktraces and perhaps even binary
 patching out the paths in the sysimage (not covered in this blog post).
@@ -319,14 +319,14 @@ are encoding fundamentally non-relocatable information *into the source code*.
 As an example, many packages tend to use a `build.jl` file (which runs when the
 package is installed) that looks something like:
 
-```jl
+```julia
 lib_path = find_library("libfoo")
 write("deps.jl", "const LIBFOO_PATH = $(repr(lib_path))")
 ```
 
 The main package file then contains
 
-```jl
+```julia
 if !isfile("../build/deps.jl")
     error("run Pkg.build(\"Package\") to re-build Package")
 end

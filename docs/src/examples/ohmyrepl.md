@@ -33,12 +33,12 @@ the file `ohmyrepl_precompile`.  It should be filled with lines like:
 ```
 precompile(Tuple{typeof(OhMyREPL.Prompt.insert_keybindings), Any})
 precompile(Tuple{typeof(OhMyREPL.__init__)})
-``` 
+```
 
 These are functions that Julia compiled. We now just tell `create_sysimage` to
 use these precompile statements when creating the system image:
 
-```jl
+```julia
 PackageCompilerX.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
 ```
 
@@ -47,9 +47,9 @@ see the type text become highlighted with a significantly smaller delay than
 before creating the new system image
 
 
-!!! note 
+!!! note
     If you want to go back to the default sysimage you can run
 
-    ```jl
+    ```julia
     PackageCompilerX.restore_default_sysimage()
     ```

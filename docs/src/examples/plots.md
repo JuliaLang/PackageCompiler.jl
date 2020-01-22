@@ -7,7 +7,7 @@ to specifically improve this.
 To get a reference, we measure the time it takes to create the first plot with
 the default sysimage:
 
-```jl-repl
+```julia-repl
 julia> @time using Plots
   5.284989 seconds (5.22 M allocations: 308.954 MiB, 1.41% gc time)
 
@@ -20,7 +20,7 @@ This is approximately 19 seconds from start of Julia to the first plot.
 We now create a precompilation file with exactly this workload in `precompile_plots.jl`:
 
 
-```jl
+```julia
 using Plots
 p = plot(rand(5), rand(5))
 display(p)
@@ -28,14 +28,14 @@ display(p)
 
 The custom sysimage is then created as:
 
-```jl
+```julia
 using PackageCompilerX
 create_sysimage(:Plots, sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
 ```
 
 If we now start Julia with the flag `-Jsys_plots.so` and re-time our previous commands:
 
-```jl-repl
+```julia-repl
 julia> @time using Plots
   0.000826 seconds (852 allocations: 42.125 KiB)
 

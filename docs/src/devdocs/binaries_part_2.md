@@ -1,7 +1,7 @@
 # [Creating a binary from Julia code](@id man-tutorial-binary)
 
 This section targets how to build an executable based on the custom sysimage so
-that it can be run without having to explicitly start a Julia session. 
+that it can be run without having to explicitly start a Julia session.
 
 ## Interacting with Julia through `libjulia`.
 
@@ -30,7 +30,7 @@ app that parses a list of CSV files given as arguments to the app and prints
 the size of the parsed result. The code for the app (`MyApp.jl`) is shown
 below:
 
-```jl
+```julia
 module MyApp
 
 using CSV
@@ -78,7 +78,7 @@ the sample CSV file [from the first tutorial](@ref man-tutorial-sysimage)
 ❯ time julia MyApp.jl FL_insurance_sample.csv
 FL_insurance_sample.csv: 36634x18
 julia MyApp.jl FL_insurance_sample.csv  12.51s user 0.38s system 104% cpu 12.385 total
-``` 
+```
 
 ## Create the sysimage
 
@@ -94,7 +94,7 @@ The `create_sysimage.jl` script look similar to before with the exception that
 we added an include of the app file inside the anonymous module where the
 precompiliation statements are evaluated in:
 
-```jl
+```julia
 Base.init_depot_path()
 Base.init_load_path()
 
@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
     jl_atexit_hook(ret);
     return ret;
 }
-``` 
+```
 
 ## Building the executable
 
@@ -221,7 +221,7 @@ ERROR: could not find file non_existing.csv
 Stacktrace:
  [1] error(::String) at ./error.jl:33
  [2] real_main() at /home/kc/MyApp/MyApp.jl:21
- [3] julia_main() at /home/kc/MyApp/MyApp.jl:7 
+ [3] julia_main() at /home/kc/MyApp/MyApp.jl:7
 ```
 
 ### macOS considerations

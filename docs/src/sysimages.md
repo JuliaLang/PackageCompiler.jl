@@ -30,7 +30,7 @@ at when the sysimage was created. This means that no matter what package
 version you have installed in your current project, the one in the sysimage
 will take precedence. This can lead to bugs where you start with a project that
 needs a specific version of a package, but you have another one compiled into
-the sysimage. 
+the sysimage.
 
 Putting packages in the sysimage is therefore only recommended if the load time
 of those packages is a significant problem and when these packages
@@ -100,7 +100,7 @@ Alternatively, instead of giving a path to where the new sysimage should appear,
 can choose to replace the default sysimage.
 This is done by omitting the `sysimage_path` keyword and instead adding `replace_default=true`, for example:
 
-```jl
+```julia
 create_sysimage([:Debugger, :OhMyREPL]; replace_default=true)
 ```
 

@@ -42,7 +42,7 @@ here](http://spatialkeydocs.s3.amazonaws.com/FL_insurance_sample.csv.zip).
 One way of loading this file into Julia is by using the `CSV.jl` package. We
 can install `CSV.jl` using the Julia package manager `Pkg` as:
 
-```jl-repl
+```julia-repl
 julia> import Pkg; Pkg.add("CSV")
  Resolving package versions...
   Updating `~/.julia/environments/v1.3/Project.toml`
@@ -53,7 +53,7 @@ julia> import Pkg; Pkg.add("CSV")
 
 When a package is loaded for the first time it gets "precompiled":
 
-```jl-repl
+```julia-repl
 julia> @time using CSV
 [ Info: Precompiling CSV [336ed68f-0bac-5ca0-87d4-7b16caf5d00b]
  13.321758 seconds (2.69 M allocations: 151.302 MiB, 0.05% gc time)
@@ -66,7 +66,7 @@ it is not obvious what types to compile the different methods for.
 Even with `CSV` "precompiled", there is a still some loading time, but it is
 significantly lower:
 
-```jl-repl
+```julia-repl
 julia> @time using CSV
   0.694224 seconds (1.90 M allocations: 114.210 MiB)
 ```
@@ -74,7 +74,7 @@ julia> @time using CSV
 Let's load the sample CSV file:
 
 
-```jl-repl
+```julia-repl
 julia> @time CSV.read("FL_insurance_sample.csv");
 9.264898 seconds (37.17 M allocations: 2.278 GiB, 3.90% gc time)1
 ```
@@ -82,7 +82,7 @@ julia> @time CSV.read("FL_insurance_sample.csv");
 That's is quite a long time to read a smallish CSV file. One way to check
 the compilation overhead is by running the function again:
 
-```jl-repl
+```julia-repl
 julia> @time CSV.read("FL_insurance_sample.csv");
   0.083543 seconds (423 allocations: 34.695 KiB)
 ```
@@ -102,20 +102,20 @@ can be distributed we want to try to avoid as much runtime compilation
 If we time the loading of a standard library, it is clear that it is "cached"
 somehow since the time to load it is so short:
 
-```jl-repl
+```julia-repl
 julia> @time using Dates
   0.000816 seconds (1.25 k allocations: 65.625 KiB)
-``` 
+```
 
 Since `Dates` is a standard library it comes bundled in the system image.  In
 fact, `Dates` is already "loaded" when starting Julia. The effect of running
 `using Dates` just makes the module available in the `Main` module namespace
-which is what the REPL evaluates in. 
+which is what the REPL evaluates in.
 
 Delving into some internals, there is a dictionary in `Base` that keeps track
 of all loaded modules:
 
-```jl-repl
+```julia-repl
 julia> Base.loaded_modules
 Dict{Base.PkgId,Module} with 33 entries:
   SHA [ea8e919c-243c-51af-8825-aaa63cd721ce]              => SHA
@@ -147,7 +147,7 @@ For now, the goal is to put `CSV` in the sysimage (in the same way as the
 standard library `Dates` is in it). We therefore initially simply create a file
 called `custom_sysimage.jl` with the content.
 
-```jl
+```julia
 using CSV
 ```
 
@@ -165,7 +165,7 @@ line](https://github.com/JuliaLang/julia/blob/49fb7924498e9fe813444cc684a24002e7
 just want to give the path to the default sysimage which we can get the path to
 via:
 
-```jl-repl
+```julia-repl
 julia> unsafe_string(Base.JLOptions().image_file)
 "/home/kc/julia/lib/julia/sys.so"
 ```
@@ -192,7 +192,7 @@ initialized so Julia crashes while trying to print an error. The magic
 incantation to make IO work properly is `Base.reinit_stdio()`. To figure out
 the actual problem we modify the `custom_sysimage.jl` file to look like:
 
-```jl
+```julia
 Base.reinit_stdio()
 using CSV
 ```
@@ -200,7 +200,7 @@ using CSV
 
 and rerun the julia-command:
 
-``` 
+```
 julia --startup-file=no --output-o sys.o -J"/home/kc/julia/lib/julia/sys.so" custom_sysimage.jl
 ERROR: LoadError: ArgumentError: Package CSV not found in current path:
 - Run `import Pkg; Pkg.add("CSV")` to install the CSV package.
@@ -220,7 +220,7 @@ package.  Package-loading in Julia is based on the two arrays `LOAD_PATH` and
 `DEPOT_PATH`. Adding `@show LOAD_PATH` and `@show DEPOT_PATH` to the
 `custom_sysimage.jl` file and rerunning the command above prints:
 
-```jl
+```julia
 LOAD_PATH = String[]
 DEPOT_PATH = String[]
 ```
@@ -230,7 +230,7 @@ before including the standard libraries](https://github.com/JuliaLang/julia/blob
 the functions initializing these variables are explicitly called. Let us do the
 same by updating the `custom_sysimage.jl` file to:
 
-```jl
+```julia
 Base.init_depot_path()
 Base.init_load_path()
 
@@ -257,7 +257,7 @@ use a C-compiler e.g. `gcc`. We need to link with `libjulia` so we need to give
 the compiler the path to where the julia library resides which can be gotten
 by:
 
-```jl-repl
+```julia-repl
 julia> abspath(Sys.BINDIR, Base.LIBDIR)
 "/home/kc/julia/lib"
 ```
@@ -276,7 +276,7 @@ which creates the sysimage `sys.so`.
 We can compare the size of the new sysimage versus the default one and see that the
 new is a bit larger due to the extra packages it contains:
 
-```jl-repl
+```julia-repl
 julia> stat("sys.so").size / (1024*1024)
 162.16205596923828
 
@@ -293,7 +293,7 @@ On `macOS` the linker flag `-Wl,--whole-archive` is instead written as
 
 ```
 gcc -shared -o sys.dylib -Wl,-all_load sys.o -L"/home/kc/Applications/julia-1.3.0-rc4/lib" -ljulia
-``` 
+```
 
 Note that the extension has been changed from `so` to `dylib` which is the
 convention for shared libraries on macOS.
@@ -313,10 +313,10 @@ should work to produce the sysimage shared library.
 
 ### 3. Running Julia with the new sysimage
 
-We start Julia with the `-Jsys.so` flag to load the new custom `sys.so` sysimage (or `sys.dylib`, `sys.dll` on macOS and Windows respecitively) 
+We start Julia with the `-Jsys.so` flag to load the new custom `sys.so` sysimage (or `sys.dylib`, `sys.dll` on macOS and Windows respecitively)
 and indeed loading CSV is now very fast:
 
-```jl-repl
+```julia-repl
 julia> @time using CSV
   0.000432 seconds (665 allocations: 32.656 KiB)
 ```
@@ -324,7 +324,7 @@ julia> @time using CSV
 In fact, restarting Julia and looking at `Base.loaded_modules` we can see that, just like the standard libraries, CSV and
 its dependencies are already loaded when Julia is started:
 
-```jl-repl
+```julia-repl
 julia> Base.loaded_modules
 Dict{Base.PkgId,Module} with 52 entries:
    Parsers [69de0a69-1ddd-5017-9359-2bf0b02dc9f0] => Parsers
@@ -338,7 +338,7 @@ but to compile the functions used by CSV the first time. Let's try it with the
 custom sysimage:
 
 
-```jl-repl
+```julia-repl
 julia> @time using CSV
   0.001487 seconds (711 allocations: 35.203 KiB)
 
@@ -378,7 +378,7 @@ We create a file called `generate_csv_precompile.jl` containing some "training
 code" that we will use as a base to figure out what functions end up getting
 compiled:
 
-```jl
+```julia
 using CSV
 CSV.read("FL_insurance_sample.csv")
 ```
@@ -393,7 +393,7 @@ julia --startup-file=no --trace-compile=csv_precompile.jl generate_csv_precompil
 Looking at `csv_precompile.jl` we can see hundreds of functions that end up getting compiled.
 For example, the line
 
-```jl
+```julia
 precompile(Tuple{typeof(CSV.getsource), String, Bool})
 ```
 
@@ -403,7 +403,7 @@ type `String` and `Bool`.
 Note that some of the symbols in the list of precompile statements have a bit
 of a weird syntax containing `Symbol(#...)`, e.g:
 
-```jl
+```julia
 precompile(Tuple{typeof(Base.map), getfield(CSV, Symbol("##4#5")), Base.SubString{String}})
 ```
 
@@ -429,7 +429,7 @@ symbols.
 
 The end result is a `custom_sysimage.jl` file looking like:
 
-```jl
+```julia
 Base.init_depot_path()
 Base.init_load_path()
 
@@ -458,7 +458,7 @@ empty!(DEPOT_PATH)
 After repeating the process of creating the object file and using a compiler to
 create the shared library sysimage, we are in a position to time again:
 
-```jl
+```julia
 julia> @time using CSV
   0.000408 seconds (665 allocations: 32.656 KiB)
 
