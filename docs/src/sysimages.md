@@ -177,7 +177,7 @@ Using the just created system image, we can see that the `hello` function no lon
 ❯
 ```
 
-### Using a manually generated list of precompile statements
+#### Using a manually generated list of precompile statements
 
 Starting Julia with `--trace-compile=file.jl` will emit precompilation
 statements to `file.jl` for the duration of the started Julia process.  This
@@ -191,3 +191,16 @@ It is also possible to use
 [SnoopCompile.jl](https://timholy.github.io/SnoopCompile.jl/stable/snoopi/#auto-1)
 to create files with precompilation statements.
 
+
+#### Using a package's test suite to generate precompile statements
+
+It is also possible to use a package's test suite to generate a list of
+precompile statements by including the content:
+
+```julia
+import Example
+include(joinpath(pkgdir(Example), "test", "runtests.jl"))
+```
+
+in the precompile file. Note that you need to have any test dependencies installed
+in your current project.
