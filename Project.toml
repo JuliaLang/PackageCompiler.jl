@@ -12,7 +12,7 @@ WinRPM = "c17dfb99-b4f7-5aad-8812-456da1ad7187"
 
 [compat]
 julia = "1"
-WinRPM = "0.4.3"
+WinRPM = "0.4.3, 1"
 
 [extras]
 ColorTypes = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
