@@ -266,6 +266,8 @@ by setting the envirnment variable `JULIA_CC` to a path to a compiler
 
 - `replace_default::Bool`: If `true`, replaces the default system image which is automatically
    used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
+
+- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 """
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          sysimage_path::Union{String,Nothing}=nothing,
@@ -469,6 +471,8 @@ compiler.
    to `true`.
 
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
+
+- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 """
 function create_app(package_dir::String,
                     app_dir::String;
