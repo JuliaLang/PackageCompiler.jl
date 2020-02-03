@@ -1,6 +1,6 @@
 name = "MyApp"
 uuid = "f943f3d7-887a-4ed5-b0c0-a1d6899aa8f5"
-authors = ["KristofferC <kcarlsson89@gmail.com>"]
+authors = ["Kristoffer Carlsson <kristoffer.carlsson@juliacomputing.com>"]
 version = "0.1.0"
 
 [deps]

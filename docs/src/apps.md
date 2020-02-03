@@ -88,7 +88,7 @@ end
 which will be the entry point of the app (the function that runs when the
 executable in the app is run). A skeleton of an app to start working from can
 be found at
-https://github.com/KristofferC/PackageCompilerX.jl/tree/master/examples/MyApp.
+https://github.com/JuliaComputing/PackageCompilerX.jl/tree/master/examples/MyApp.
 
 Regarding relocatability, PackageCompilerX provides a function
 [`audit_app(app_dir::String)`](@ref) that tries to find common problems with
@@ -178,8 +178,8 @@ things so that they can be found during runtime on other machines.
 
 The example app uses the artifact system to depend on a very simple toy binary
 that does some simple arithmetic. It is instructive to see how the [artifact
-file](https://github.com/KristofferC/PackageCompilerX.jl/blob/8aa31d60ace6dd278daed9bef62fd5a01258da1e/examples/MyApp/Artifacts.toml)
-is [used in the source](https://github.com/KristofferC/PackageCompilerX.jl/blob/8aa31d60ace6dd278daed9bef62fd5a01258da1e/examples/MyApp/src/MyApp.jl#L7-L8).
+file](https://github.com/JuliaComputing/PackageCompilerX.jl/blob/master/examples/MyApp/Artifacts.toml)
+is [used in the source](https://github.com/JuliaComputing/PackageCompilerX.jl/blob/d722a3d91abe328ebd239e2f45660be35263ebe1/examples/MyApp/src/MyApp.jl#L7-L8).
 
 ### Reverse engineering the compiled app
 

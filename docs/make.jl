@@ -30,5 +30,5 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/KristofferC/PackageCompilerX.jl.git",
+    repo = "github.com/JuliaComputing/PackageCompilerX.jl.git",
 )

@@ -1,7 +1,7 @@
 # PackageCompilerX
 
-[![Build Status](https://travis-ci.com/KristofferC/PackageCompilerX.jl.svg?branch=master)](https://travis-ci.com/KristofferC/PackageCompilerX.jl)
-[![Codecov](https://codecov.io/gh/KristofferC/PackageCompilerX.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/KristofferC/PackageCompilerX.jl)
+[![Build Status](https://travis-ci.com/JuliaComputing/PackageCompilerX.jl.svg?branch=master)](https://travis-ci.com/JuliaComputing/PackageCompilerX.jl)
+[![Codecov](https://codecov.io/gh/JuliaComputing/PackageCompilerX.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaComputing/PackageCompilerX.jl)
 [![][docs-stable-img]][docs-stable-url]
 
 PackageCompilerX is a Julia package with two main purposes:
@@ -13,4 +13,4 @@ PackageCompilerX is a Julia package with two main purposes:
 For installation and usage instructions, see the [documentation][docs-stable-url].
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://kristofferc.github.io/PackageCompilerX.jl/dev
+[docs-stable-url]: https://JuliaComputing.github.io/PackageCompilerX.jl/dev
