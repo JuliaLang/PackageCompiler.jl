@@ -14,6 +14,12 @@ come across.
 
 ## Installation instructions
 
+!!! note
+
+    It is strongly recommended to use the official binaries that are downloaded from 
+    https://julialang.org/downloads/. Distribution-provided Julia installations are
+    unlikely to work properly with this package.
+  
 To use PackageCompilerX a C-compiler needs to be available:
 
 ### macOS, Linux
