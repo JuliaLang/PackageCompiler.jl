@@ -157,6 +157,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     # include all packages into the sysimg
     julia_code = """
         Base.reinit_stdio()
+        @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         Base.init_load_path()
         Base.init_depot_path()
         """
