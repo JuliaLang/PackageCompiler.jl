@@ -29,9 +29,4 @@ For macOS, using something like `homebrew` and for Linux the system package mana
 
 ### Windows
 
-For Windows, the minGW compiler toolchain is needed. It can be downloaded from e.g.
-[https://sourceforge.net/projects/mingw-w64/files/](https://sourceforge.net/projects/mingw-w64/files/) or by following the 
-instructions for setting up a toolchain capable of compiling Julia itself on Windows at
-[https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling](https://github.com/JuliaLang/julia/blob/master/doc/build/windows.md#cygwin-to-mingw-cross-compiling)
-and then run PackageCompilerX from the cygwin terminal. Alternatively, the package manager
-[chocolatey](https://chocolatey.org/) can be used to get mingw on Windows.
+A suitable compiler will be automatically installed the first time it is neeed.

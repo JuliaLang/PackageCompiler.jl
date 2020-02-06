@@ -20,20 +20,28 @@ yesno(b::Bool) = b ? "yes" : "no"
 bitflag() = Int == Int32 ? `-m32` : `-m64`
 march() = (Int == Int32 ? `-march=pentium4` : ``)
 
+function windows_compiler_artifact_path(f, compiler)
+    if Sys.iswindows()
+        withenv("PATH" => string(ENV["PATH"], ";", dirname(compiler))) do
+            f()
+        end
+    else
+        f()
+    end
+end
+
 function get_compiler()
     cc = get(ENV, "JULIA_CC", nothing)
     if cc !== nothing
-        return `$cc`
-    end
-    if Sys.which("gcc") !== nothing
-        return `gcc`
-    elseif Sys.which("clang") !== nothing
-        return `clang`
+        return cc
     end
     if Sys.iswindows()
-        if Sys.which("x86_64-w64-mingw32-gcc") !== nothing
-            return `x86_64-w64-mingw32-gcc`
-        end
+        return joinpath(Pkg.Artifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
+    end
+    if Sys.which("gcc") !== nothing
+        return "gcc"
+    elseif Sys.which("clang") !== nothing
+        return "clang"
     end
     error("could not find a compiler, looked for `gcc` and `clang`")
 end
@@ -362,9 +370,12 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
-    cmd = `$(get_compiler()) $(bitflag()) $(march()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    compiler = get_compiler()
+    cmd = `$compiler $(bitflag()) $(march()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
     @debug "running $cmd"
-    run(cmd)
+    windows_compiler_artifact_path(compiler) do
+        run(cmd)
+    end
     return nothing
 end
 
@@ -560,9 +571,13 @@ function create_executable_from_sysimg(;sysimage_path::String,
     else
         rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
     end
-    cmd = `$(get_compiler()) -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $(march()) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
+    compiler = get_compiler()
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $(march()) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
     @debug "running $cmd"
     run(cmd)
+    windows_compiler_artifact_path(compiler) do
+        run(cmd)
+    end
     return nothing
 end
 
