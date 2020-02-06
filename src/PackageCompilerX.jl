@@ -20,6 +20,14 @@ yesno(b::Bool) = b ? "yes" : "no"
 bitflag() = Int == Int32 ? `-m32` : `-m64`
 march() = (Int == Int32 ? `-march=pentium4` : ``)
 
+# Overwriting an open file is problematic in Windows
+# so move it out of the way first
+function move_default_sysimage_if_windows()
+    if Sys.iswindows() && isfile(default_sysimg_path())
+        mv(default_sysimg_path(), tempname())
+    end
+end
+
 function windows_compiler_artifact_path(f, compiler)
     if Sys.iswindows()
         withenv("PATH" => string(ENV["PATH"], ";", dirname(compiler))) do
@@ -352,8 +360,9 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
             @debug "making a backup of default sysimg"
             cp(default_sysimg_path(), backup_default_sysimg_path())
         end
-        @info "PackageCompilerX: default sysimg replaced, restart Julia for the new sysimg to be in effect"
+        move_default_sysimage_if_windows()
         mv(sysimage_path, default_sysimg_path(); force=true)
+        @info "PackageCompilerX: default sysimg replaced, restart Julia for the new sysimg to be in effect"
     end
     rm(object_file; force=true)
     return nothing
@@ -389,8 +398,8 @@ function restore_default_sysimage()
     if !isfile(backup_default_sysimg_path())
         error("did not find a backup sysimg")
     end
-    cp(backup_default_sysimg_path(), default_sysimg_path(); force=true)
-    rm(backup_default_sysimg_path())
+    move_default_sysimage_if_windows()
+    mv(backup_default_sysimg_path(), default_sysimg_path(); force=true)
     @info "PackageCompilerX: default sysimg restored, restart Julia for the new sysimg to be in effect"
     return nothing
 end
