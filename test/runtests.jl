@@ -14,13 +14,17 @@ Base.init_depot_path()
 @testset "PackageCompilerX.jl" begin
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
+    script = tempname()
+    write(script, "script_func() = println(\"I am a script\")")
     create_sysimage(:Example; sysimage_path=sysimage_path,
                               precompile_execution_file="precompile_execution.jl",
                               precompile_statements_file=["precompile_statements.jl",
-                                                          "precompile_statements2.jl"])
+                                                          "precompile_statements2.jl"],
+                              script=script)
     # Check we can load sysimage and that Example is available in Main
-    str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print(Example.hello("foo"))'`, String)
+    str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func()'`, String)
     @test occursin("Hello, foo", str)
+    @test occursin("I am a script", str)
 
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")

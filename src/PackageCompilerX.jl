@@ -132,6 +132,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             precompile_execution_file::Vector{String},
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
+                            script::Union{Nothing, String},
                             isapp::Bool)
     
     # Handle precompilation
@@ -178,7 +179,8 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         Base.init_depot_path()
         """
 
-    # Run compilecache on packages to be put into sysimage
+    # Ensure packages to be put into sysimage are precompiled by loading them in a
+    # separate process first.
     if !isempty(packages)
         do_ensurecompiled(project, packages, base_sysimage)
     end
@@ -190,6 +192,12 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     end
 
     julia_code *= precompile_code
+
+    if script !== nothing
+        julia_code *= """
+        include($(repr(abspath(script))))
+        """
+    end
 
     if isapp
         # If it is an app, there is only one packages
@@ -284,7 +292,11 @@ by setting the envirnment variable `JULIA_CC` to a path to a compiler
 - `replace_default::Bool`: If `true`, replaces the default system image which is automatically
    used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
 
+### Advanced keyword arguments
+
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+
+- `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          sysimage_path::Union{String,Nothing}=nothing,
@@ -295,6 +307,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                          filter_stdlibs=false,
                          replace_default::Bool=false,
                          cpu_target::String=NATIVE_CPU_TARGET,
+                         script::Union{Nothing, String}=nothing,
                          base_sysimage::Union{Nothing, String}=nothing,
                          isapp::Bool=false)
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -351,6 +364,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
                               precompile_execution_file=precompile_execution_file,
                               precompile_statements_file=precompile_statements_file,
                               cpu_target=cpu_target,
+                              script=script,
                               isapp=isapp)
     create_sysimg_from_object_file(object_file, sysimage_path)
 
