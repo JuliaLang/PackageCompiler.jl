@@ -35,3 +35,12 @@ os = "windows"
     [[fooifier.download]]
     sha256 = "7f8939e9529835b83810d3ae7e2556f6e002d571f619894e54ece42ea5262b7f"
     url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-w64-mingw32.tar.gz"
+
+[[fooifier]]
+arch = "aarch64"
+git-tree-sha1 = "281cbe3dd65aa4bdb887bfb29651da500c81e242"
+os = "linux"
+
+    [[fooifier.download]]
+    sha256 = "36886ac25cf5678c01fe20630b413f9354b7a3721c6a2c2043162f7ebd147ff5"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.aarch64-linux-gnu.tar.gz"
