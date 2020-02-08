@@ -502,7 +502,8 @@ function create_app(package_dir::String,
                     incremental=false,
                     filter_stdlibs=false,
                     audit=true,
-                    force=false)
+                    force=false,
+                    cpu_target::String=APP_CPU_TARGET)
     precompile_statements_file = abspath.(precompile_statements_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
@@ -541,13 +542,13 @@ function create_app(package_dir::String,
             tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
             create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs=filter_stdlibs,
-                            cpu_target=APP_CPU_TARGET)
+                            cpu_target=cpu_target)
 
             create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file=precompile_execution_file,
                             precompile_statements_file=precompile_statements_file,
-                            cpu_target=APP_CPU_TARGET,
+                            cpu_target=cpu_target,
                             base_sysimage=tmp_base_sysimage,
                             isapp=true)
         else
@@ -555,7 +556,7 @@ function create_app(package_dir::String,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
-                                              cpu_target=APP_CPU_TARGET,
+                                              cpu_target=cpu_target,
                                               isapp=true)
         end
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
