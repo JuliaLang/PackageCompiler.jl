@@ -9,7 +9,7 @@ addition, the time of compiling functions that OhMyREPL uses is also a factor.
 Therefore, we also want to do "Profile Guided Compilation" (PGC), where we
 record what functions gets compiled when using OhMyREPL, so they can be cached
 into the system image. OhMyREPL is a bit different from most other packages in
-that is used interactive. Normally to do PGC with PackageCompilerX we pass a
+that is used interactive. Normally to do PGC with PackageCompiler we pass a
 script to to execute as the `precompile_exectution_file` which is used to
 collect compilation data, but in this case, we will use Julia to manually
 collect this data.
@@ -39,7 +39,7 @@ These are functions that Julia compiled. We now just tell `create_sysimage` to
 use these precompile statements when creating the system image:
 
 ```julia
-PackageCompilerX.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
+PackageCompiler.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
 ```
 
 Restart julia and start typing something. If everything went well you should
@@ -51,5 +51,5 @@ before creating the new system image
     If you want to go back to the default sysimage you can run
 
     ```julia
-    PackageCompilerX.restore_default_sysimage()
+    PackageCompiler.restore_default_sysimage()
     ```

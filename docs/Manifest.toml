@@ -50,7 +50,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
-[[PackageCompilerX]]
+[[PackageCompiler]]
 deps = ["Libdl", "Pkg", "UUIDs"]
 path = ".."
 uuid = "dffaa6cc-da53-48e5-b007-4292dfcc27f1"

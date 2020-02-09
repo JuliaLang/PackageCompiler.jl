@@ -1,8 +1,8 @@
 # References
 
 ```@docs
-PackageCompilerX.create_sysimage
-PackageCompilerX.restore_default_sysimage
-PackageCompilerX.create_app
-PackageCompilerX.audit_app
+PackageCompiler.create_sysimage
+PackageCompiler.restore_default_sysimage
+PackageCompiler.create_app
+PackageCompiler.audit_app
 ```

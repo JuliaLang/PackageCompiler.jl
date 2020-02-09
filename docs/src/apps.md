@@ -88,9 +88,9 @@ end
 which will be the entry point of the app (the function that runs when the
 executable in the app is run). A skeleton of an app to start working from can
 be found at
-https://github.com/JuliaComputing/PackageCompilerX.jl/tree/master/examples/MyApp.
+https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp.
 
-Regarding relocatability, PackageCompilerX provides a function
+Regarding relocatability, PackageCompiler provides a function
 [`audit_app(app_dir::String)`](@ref) that tries to find common problems with
 relocatability in the app.
 
@@ -101,18 +101,18 @@ another machine where the same Julia that created the app can run.  As an
 example, in the code snippet below, the example app linked above is compiled and run:
 
 ```
-~/PackageCompilerX.jl/examples
+~/PackageCompiler.jl/examples
 ❯ julia -q --project
 
-julia> using PackageCompilerX
+julia> using PackageCompiler
 
 julia> create_app("MyApp", "MyAppCompiled")
-[ Info: PackageCompilerX: creating base system image (incremental=false), this might take a while...
-[ Info: PackageCompilerX: creating system image object file, this might take a while...
+[ Info: PackageCompiler: creating base system image (incremental=false), this might take a while...
+[ Info: PackageCompiler: creating system image object file, this might take a while...
 
 julia> exit()
 
-~/PackageCompilerX.jl/examples
+~/PackageCompiler.jl/examples
 ❯ MyAppCompiled/bin/MyApp
 ARGS = ["foo", "bar"]
 Base.PROGRAM_FILE = "MyAppCompiled/bin/MyApp"
@@ -121,7 +121,7 @@ Hello, World!
 
 Running the artifact
 The result of 2*5^2 - 10 == 40.000000
-unsafe_string((Base.JLOptions()).image_file) = "/Users/kristoffer/PackageCompilerX.jl/examples/MyAppCompiled/bin/MyApp.dylib"
+unsafe_string((Base.JLOptions()).image_file) = "/Users/kristoffer/PackageCompiler.jl/examples/MyAppCompiled/bin/MyApp.dylib"
 Example.domath(5) = 10
 ```
 
@@ -173,13 +173,13 @@ app with the resulting sysimage.
 
 The way to depend on external libraries or binaries when creating apps is by
 using the [artifact system](https://julialang.github.io/Pkg.jl/v1/artifacts/).
-PackageCompilerX will bundle all artifacts needed by the project, and set up
+PackageCompiler will bundle all artifacts needed by the project, and set up
 things so that they can be found during runtime on other machines.
 
 The example app uses the artifact system to depend on a very simple toy binary
 that does some simple arithmetic. It is instructive to see how the [artifact
-file](https://github.com/JuliaComputing/PackageCompilerX.jl/blob/master/examples/MyApp/Artifacts.toml)
-is [used in the source](https://github.com/JuliaComputing/PackageCompilerX.jl/blob/d722a3d91abe328ebd239e2f45660be35263ebe1/examples/MyApp/src/MyApp.jl#L7-L8).
+file](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/MyApp/Artifacts.toml)
+is [used in the source](https://github.com/JuliaLang/PackageCompiler.jl/blob/d722a3d91abe328ebd239e2f45660be35263ebe1/examples/MyApp/src/MyApp.jl#L7-L8).
 
 ### Reverse engineering the compiled app
 
@@ -194,15 +194,15 @@ compiled.  These get cached into the sysimage and can be found e.g. by dumping
 all strings in the sysimage:
 
 ```
-~/PackageCompilerX.jl/examples/MyAppCompiled/bin
+~/PackageCompiler.jl/examples/MyAppCompiled/bin
 ❯ strings MyApp.so | grep MyApp
 MyApp
-/home/kc/PackageCompilerX.jl/examples/MyApp/
+/home/kc/PackageCompiler.jl/examples/MyApp/
 MyApp
-/home/kc/PackageCompilerX.jl/examples/MyApp/src/MyApp.jl
-/home/kc/PackageCompilerX.jl/examples/MyApp/src
+/home/kc/PackageCompiler.jl/examples/MyApp/src/MyApp.jl
+/home/kc/PackageCompiler.jl/examples/MyApp/src
 MyApp.jl
-/home/kc/PackageCompilerX.jl/examples/MyApp/src/MyApp.jl
+/home/kc/PackageCompiler.jl/examples/MyApp/src/MyApp.jl
 ```
 
 This is a problem that the Julia standard libraries themselves have:
@@ -220,7 +220,7 @@ the "lowered code" and use reflection to find things like the name of fields in
 structs and global variables etc:
 
 ```julia-repl
-~/PackageCompilerX.jl/examples/MyAppCompiled/bin kc/docs_apps*
+~/PackageCompiler.jl/examples/MyAppCompiled/bin kc/docs_apps*
 ❯ julia -q -JMyApp.so
 julia> MyApp = Base.loaded_modules[Base.PkgId(Base.UUID("f943f3d7-887a-4ed5-b0c0-a1d6899aa8f5"), "MyApp")]
 MyApp

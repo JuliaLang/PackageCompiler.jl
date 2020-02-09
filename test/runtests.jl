@@ -1,8 +1,8 @@
-using PackageCompilerX: PackageCompilerX, create_sysimage, create_app
+using PackageCompiler: PackageCompiler, create_sysimage, create_app
 using Test
 using Libdl
 
-ENV["JULIA_DEBUG"] = "PackageCompilerX"
+ENV["JULIA_DEBUG"] = "PackageCompiler"
 
 # Make a new depot
 new_depot = mktempdir()
@@ -11,7 +11,7 @@ cp(joinpath(DEPOT_PATH[1], "registries", "General"), joinpath(new_depot, "regist
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
-@testset "PackageCompilerX.jl" begin
+@testset "PackageCompiler.jl" begin
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
     script = tempname()
@@ -29,7 +29,7 @@ Base.init_depot_path()
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
     # TODO: Also test something that actually gives audit warnings
-    @test_logs PackageCompilerX.audit_app(app_source_dir)
+    @test_logs PackageCompiler.audit_app(app_source_dir)
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
     for incremental in (true, false)
         if incremental == false

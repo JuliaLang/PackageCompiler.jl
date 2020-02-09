@@ -1,6 +1,6 @@
-# PackageCompilerX
+# PackageCompiler
 
-PackageCompilerX is a Julia package with two main purposes:
+PackageCompiler is a Julia package with two main purposes:
 
 1. Creating custom sysimages for reduced latency when working locally with
    packages that has a high startup time.
@@ -20,11 +20,11 @@ come across.
     https://julialang.org/downloads/. Distribution-provided Julia installations are
     unlikely to work properly with this package.
   
-To use PackageCompilerX a C-compiler needs to be available:
+To use PackageCompiler a C-compiler needs to be available:
 
 ### macOS, Linux
 
-Having a decently modern `gcc` or `clang` available should be enough to use PackageCompilerX on Linux or macOS.
+Having a decently modern `gcc` or `clang` available should be enough to use PackageCompiler on Linux or macOS.
 For macOS, using something like `homebrew` and for Linux the system package manager should work fine.
 
 ### Windows

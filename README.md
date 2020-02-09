@@ -1,10 +1,10 @@
-# PackageCompilerX
+# PackageCompiler
 
-[![Build Status](https://travis-ci.com/JuliaComputing/PackageCompilerX.jl.svg?branch=master)](https://travis-ci.com/JuliaComputing/PackageCompilerX.jl)
-[![Codecov](https://codecov.io/gh/JuliaComputing/PackageCompilerX.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaComputing/PackageCompilerX.jl)
+[![Build Status](https://travis-ci.com/JuliaComputing/PackageCompiler.jl.svg?branch=master)](https://travis-ci.com/JuliaComputing/PackageCompiler.jl)
+[![Codecov](https://codecov.io/gh/JuliaComputing/PackageCompiler.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaComputing/PackageCompiler.jl)
 [![][docs-stable-img]][docs-stable-url]
 
-PackageCompilerX is a Julia package with two main purposes:
+PackageCompiler is a Julia package with two main purposes:
 
   1. Creating custom sysimages for reduced latency when working locally with packages that has a high startup time.
 
@@ -13,4 +13,4 @@ PackageCompilerX is a Julia package with two main purposes:
 For installation and usage instructions, see the [documentation][docs-stable-url].
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://JuliaComputing.github.io/PackageCompilerX.jl/dev
+[docs-stable-url]: https://JuliaComputing.github.io/PackageCompiler.jl/dev

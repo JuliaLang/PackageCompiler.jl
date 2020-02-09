@@ -1,10 +1,10 @@
-using Documenter, PackageCompilerX
+using Documenter, PackageCompiler
 
 makedocs(
     format = Documenter.HTML(
         prettyurls = "deploy" in ARGS,
     ),
-    sitename = "PackageCompilerX",
+    sitename = "PackageCompiler",
     pages = [
         "Home" => "index.md",
 
@@ -18,7 +18,7 @@ makedocs(
             "examples/plots.md",
         ],
 
-        "PackageCompilerX - the manual way" => [
+        "PackageCompiler - the manual way" => [
             "devdocs/intro.md",
             "devdocs/sysimages_part_1.md",
             "devdocs/binaries_part_2.md",
@@ -30,5 +30,5 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/JuliaComputing/PackageCompilerX.jl.git",
+    repo = "github.com/JuliaComputing/PackageCompiler.jl.git",
 )

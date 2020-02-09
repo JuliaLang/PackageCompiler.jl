@@ -18,7 +18,7 @@ Sometimes it is desirable to create a custom sysimage with custom precompiled
 code. This is the case if one has some dependencies that take a significant
 time to load or where the compilation time for the first call is uncomfortably
 long. This section of the documentation is intended to document how to use
-PackageCompilerX to create such sysimages.
+PackageCompiler to create such sysimages.
 
 ### Drawbacks to custom sysimages
 
@@ -37,9 +37,9 @@ of those packages is a significant problem and when these packages
 are not frequently updated. In addition, compiling "workflow packages" like
 Revise.jl and OhMyREPL.jl and using that as a default sysimage might make sense.
 
-## Creating a sysimage using PackageCompilerX
+## Creating a sysimage using PackageCompiler
 
-PackageCompilerX provides the function [`create_sysimage`](@ref) to create a
+PackageCompiler provides the function [`create_sysimage`](@ref) to create a
 sysimage.  It takes as the first argument a package or a list of packages that
 should be embedded in the resulting sysimage. By default, the given packages are
 loaded from the active project but a specific project can be specified by
@@ -62,8 +62,8 @@ that the package is loaded without having to explicitly `import` it.
 ~/NewSysImageEnv 29s
 ❯ julia -q
 
-julia> using PackageCompilerX
-[ Info: Precompiling PackageCompilerX [dffaa6cc-da53-48e5-b007-4292dfcc27f1]
+julia> using PackageCompiler
+[ Info: Precompiling PackageCompiler [dffaa6cc-da53-48e5-b007-4292dfcc27f1]
 
 (v1.3) pkg> activate .
 Activating new environment at `~/NewSysImageEnv/Project.toml`
@@ -78,7 +78,7 @@ Activating new environment at `~/NewSysImageEnv/Project.toml`
   [7876af07] + Example v0.5.3
 
 julia> create_sysimage(:Example; sysimage_path="ExampleSysimage.so")
-[ Info: PackageCompilerX: creating system image object file, this might take a while...
+[ Info: PackageCompiler: creating system image object file, this might take a while...
 
 julia> exit()
 
@@ -109,7 +109,7 @@ backup of the default sysimage is created. The default sysimage can then be
 restored with [`restore_default_sysimage()`](@ref).
 
 Note that sysimages are created "incrementally" in the sense that they add to
-the sysimage of the process running PackageCompilerX. If the default sysimage
+the sysimage of the process running PackageCompiler. If the default sysimage
 has been replaced, the next `create_sysimage` call will create a new sysimage
 based on the replaced sysimage. It is possible to create a sysimage
 non-incrementally by passing the `incremental=false` keyword. This will create
@@ -155,14 +155,14 @@ the file just shown above:
 ~/NewSysImageEnv
 ❯ julia-q
 
-julia> using PackageCompilerX
+julia> using PackageCompiler
 
 (v1.3) pkg> activate .
 Activating environment at `~/NewSysImageEnv/Project.toml`
 
-julia> PackageCompilerX.create_sysimage(:Example; sysimage_path="ExampleSysimagePrecompile.so",
+julia> PackageCompiler.create_sysimage(:Example; sysimage_path="ExampleSysimagePrecompile.so",
                                          precompile_execution_file="precompile_example.jl")
-[ Info: PackageCompilerX: creating system image object file, this might take a while...
+[ Info: PackageCompiler: creating system image object file, this might take a while...
 
 julia> exit()
 ```
@@ -185,7 +185,7 @@ can be useful in cases where it is difficult to give a script that executes the
 code (like with interactive use). A file with a list of such precompile
 statements can be used when creating a sysimage by passing the keyword argument
 `precompile_statements_file`. See the [OhMyREPL.jl example](@ref manual-omr) in the docs for more
-details on how to use `--trace-compile` with PackageCompilerX.
+details on how to use `--trace-compile` with PackageCompiler.
 
 It is also possible to use
 [SnoopCompile.jl](https://timholy.github.io/SnoopCompile.jl/stable/snoopi/#auto-1)

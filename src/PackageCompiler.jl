@@ -1,4 +1,4 @@
-module PackageCompilerX
+module PackageCompiler
 
 using Base: active_project
 using Libdl: Libdl
@@ -90,7 +90,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    @info "PackageCompilerX: creating base system image (incremental=false)..."
+    @info "PackageCompiler: creating base system image (incremental=false)..."
     cd(base_dir) do
         # Create corecompiler.ji
         cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
@@ -237,7 +237,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
-    @info "PackageCompilerX: creating system image object file, this might take a while..."
+    @info "PackageCompiler: creating system image object file, this might take a while..."
 
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
@@ -390,7 +390,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
         end
         move_default_sysimage_if_windows()
         mv(sysimage_path, default_sysimg_path(); force=true)
-        @info "PackageCompilerX: default sysimg replaced, restart Julia for the new sysimg to be in effect"
+        @info "PackageCompiler: default sysimg replaced, restart Julia for the new sysimg to be in effect"
     end
     rm(object_file; force=true)
     return nothing
@@ -428,7 +428,7 @@ function restore_default_sysimage()
     end
     move_default_sysimage_if_windows()
     mv(backup_default_sysimg_path(), default_sysimg_path(); force=true)
-    @info "PackageCompilerX: default sysimg restored, restart Julia for the new sysimg to be in effect"
+    @info "PackageCompiler: default sysimg restored, restart Julia for the new sysimg to be in effect"
     return nothing
 end
 
