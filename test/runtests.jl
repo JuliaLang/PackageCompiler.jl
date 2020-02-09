@@ -11,6 +11,12 @@ cp(joinpath(DEPOT_PATH[1], "registries", "General"), joinpath(new_depot, "regist
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
+is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+
+if haskey(ENV, "CI")
+    @show Sys.ARCH
+end
+
 @testset "PackageCompiler.jl" begin
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
@@ -31,9 +37,9 @@ Base.init_depot_path()
     # TODO: Also test something that actually gives audit warnings
     @test_logs PackageCompiler.audit_app(app_source_dir)
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
-    for incremental in (true, false)
+    for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
-            filter_stdlibs = (true, false)
+            filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
         else
             filter_stdlibs = (false,)
         end

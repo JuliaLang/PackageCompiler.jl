@@ -10,7 +10,22 @@ export create_sysimage, create_app, audit_app, restore_default_sysimage
 include("juliaconfig.jl")
 
 const NATIVE_CPU_TARGET = "native"
-const APP_CPU_TARGET = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
+# See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
+function default_app_cpu_target()
+    if Sys.ARCH === :i686
+        return "pentium4;sandybridge,-xsaveopt,clone_all"
+    elseif Sys.ARCH === :x86_64
+        return "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
+    elseif Sys.ARCH === :arm
+        return "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"
+    elseif Sys.ARCH === :aarch64
+        return "generic" # is this really the best here?
+    elseif Sys.ARCH === :powerpc64le
+        return "pwr8"
+    else
+        return "generic"
+    end
+end
 
 current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
 
@@ -19,18 +34,28 @@ all_stdlibs() = readdir(Sys.STDLIB)
 yesno(b::Bool) = b ? "yes" : "no"
 
 function bitflag()
-    if Sys.ARCH == :aarch64 || Sys.ARCH == :arm
-        return ``
+    if Sys.ARCH == :i686
+        return `-m32`
+    elseif Sys.ARCH == :x86_64
+        return `-m64`
     else
-        return Int == Int32 ? `-m32` : `-m64`
+        return ``
     end
 end
 
 function march()
-    if Sys.ARCH == :aarch64 || Sys.ARCH == :arm
-        return (Int == Int32 ? `-march=armv7-a` : `-march=armv8-a+crypto+simd`)
+    if Sys.ARCH === :i686
+        return "-march=pentium4"
+    elseif Sys.ARCH === :x86_64
+        return "-march=x86-64"
+    elseif Sys.ARCH === :arm
+        return "-march=armv7-a+simd"
+    elseif Sys.ARCH === :aarch64
+        return "-march=armv8-a+crypto+simd"
+    elseif Sys.ARCH === :powerpc64le
+        return nothing
     else
-        return (Int == Int32 ? `-march=pentium4` : ``)
+        return nothing
     end
 end
 
@@ -408,7 +433,8 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     end
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
     compiler = get_compiler()
-    cmd = `$compiler $(bitflag()) $(march()) -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    m = something(march(), ``)
+    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
     @debug "running $cmd"
     windows_compiler_artifact_path(compiler) do
         run(cmd)
@@ -531,7 +557,7 @@ function create_app(package_dir::String,
                     filter_stdlibs=false,
                     audit=true,
                     force=false,
-                    cpu_target::String=APP_CPU_TARGET)
+                    cpu_target::String=default_app_cpu_target())
     precompile_statements_file = abspath.(precompile_statements_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
@@ -610,7 +636,8 @@ function create_executable_from_sysimg(;sysimage_path::String,
         rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
     end
     compiler = get_compiler()
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $(march()) -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
+    m = something(march(), ``)
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
     @debug "running $cmd"
     run(cmd)
     windows_compiler_artifact_path(compiler) do
