@@ -1,7 +1,6 @@
 name = "PackageCompilerX"
-uuid = "dffaa6cc-da53-48e5-b007-4292dfcc27f1"
-authors = ["Kristoffer Carlsson <kristoffer.carlsson@juliacomputing.com>"]
-version = "0.1.0"
+uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
+version = "1.0.0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
