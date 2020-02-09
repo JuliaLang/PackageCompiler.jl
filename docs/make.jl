@@ -31,4 +31,5 @@ makedocs(
 
 deploydocs(
     repo = "github.com/JuliaComputing/PackageCompiler.jl.git",
+    push_preview = true,
 )
