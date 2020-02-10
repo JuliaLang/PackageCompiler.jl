@@ -173,7 +173,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             cpu_target::String,
                             script::Union{Nothing, String},
                             isapp::Bool)
-    
+
     # Handle precompilation
     precompile_statements = ""
     @debug "running precompilation execution script..."
@@ -305,7 +305,7 @@ end
 
 Create a system image that includes the package(s) in `packages`.  An attempt
 to automatically find a compiler will be done but can also be given explicitly
-by setting the envirnment variable `JULIA_CC` to a path to a compiler
+by setting the environment variable `JULIA_CC` to a path to a compiler
 
 ### Keyword arguments:
 
@@ -313,10 +313,10 @@ by setting the envirnment variable `JULIA_CC` to a path to a compiler
    the resulting sysimage should be saved. If set to `nothing` the keyword argument
    `replace_defalt` needs to be set to `true`.
 
-- `project::String`: The project that should be active when the sysmage is created,
+- `project::String`: The project that should be active when the sysimage is created,
    defaults to the current active project.
 
-- `precompile_execution_file::Union{String, Vector{String}}`: A file or list of 
+- `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
    files that contain code which precompilation statements should be recorded from.
 
 - `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
@@ -337,7 +337,7 @@ by setting the envirnment variable `JULIA_CC` to a path to a compiler
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
-function create_sysimage(packages::Union{Symbol, Vector{Symbol}};
+function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          sysimage_path::Union{String,Nothing}=nothing,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -578,7 +578,7 @@ function create_app(package_dir::String,
     end
 
     audit && audit_app(ctx)
-   
+
     mkpath(app_dir)
 
     bundle_julia_libraries(app_dir)
