@@ -10,7 +10,7 @@ Therefore, we also want to do "Profile Guided Compilation" (PGC), where we
 record what functions gets compiled when using OhMyREPL, so they can be cached
 into the system image. OhMyREPL is a bit different from most other packages in
 that is used interactive. Normally to do PGC with PackageCompiler we pass a
-script to to execute as the `precompile_exectution_file` which is used to
+script to to execute as the `precompile_execution_file` which is used to
 collect compilation data, but in this case, we will use Julia to manually
 collect this data.
 
