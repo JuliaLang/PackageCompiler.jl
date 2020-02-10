@@ -1,46 +1,39 @@
-## Documentation: http://docs.travis-ci.com/user/languages/julia/
-
 language: julia
-
 os:
   - linux
   - osx
-
+  - windows
 julia:
-  - 1.0
   - 1.3
-  - nightly
-
-matrix:
+before_install:
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get update; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != arm64 ]; then sudo apt-get install gcc-multilib; fi
+arch:
+  - amd64
+  - x86
+  - arm64
+jobs:
   allow_failures:
-  - julia: nightly
-
+    - arch: x86
+  exclude:
+    - os: osx
+      arch: x86
+    - os: osx
+      arch: arm64
+    - os: windows
+      arch: arm64
+  include:
+    - stage: "Documentation"
+      julia: 1.3
+      os: linux
+      script:
+        - julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
+        - julia --project=docs/ docs/make.jl
+      after_success: skip
+branches:
+  only:
+    - master
+    - /^release-.*/
+    - /^v[0-9]+\.[0-9]+\.[0-9]+$/ # version tags
 notifications:
   email: false
-
-git:
-  depth: 99999999
-
-## uncomment the following lines to allow failures on nightly julia
-## (tests will run but not make your overall status red)
-# matrix:
-#   allow_failures:
-#   - julia: nightly
-
-## uncomment and modify the following lines to manually install system packages
-#addons:
-#  apt: # apt-get for linux
-#    packages:
-#    - gfortran
-#before_script: # homebrew for mac
-#  - if [ $TRAVIS_OS_NAME = osx ]; then brew install gcc; fi
-
-## uncomment the following lines to override the default test script
-#script:
-#  - julia -e 'using Pkg; Pkg.clone(pwd()); Pkg.build("PackageCompiler"); Pkg.test("PackageCompiler"; coverage=true)'
-
-after_success:
-  # push coverage results to Coveralls
-  - julia -e 'cd(normpath(Base.find_package("PackageCompiler"), "..", "..")); using Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
-  # push coverage results to Codecov
-  - julia -e 'cd(normpath(Base.find_package("PackageCompiler"), "..", "..")); using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'

@@ -1,0 +1,46 @@
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "98d93024ca384050c59d554415b75d61e467fd8c"
+libc = "glibc"
+os = "linux"
+
+    [[fooifier.download]]
+    sha256 = "5208c63a9d07e592c78f541fc13caa8cd191b11e7e77b31d407237c2b13ec391"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-linux-gnu.tar.gz"
+
+[[fooifier]]
+arch = "i686"
+git-tree-sha1 = "c3a9f27382862092e064bcf4aeb3cb7190578338"
+libc = "glibc"
+os = "linux"
+
+    [[fooifier.download]]
+    sha256 = "97655b6a218d61284723b6923d7c96e6a256fa68b9419d723c588aa24404b102"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.i686-linux-gnu.tar.gz"
+
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "f413ff2438a4e9e9dd69b23c35ca30de6af069cc"
+os = "macos"
+
+    [[fooifier.download]]
+    sha256 = "fcc268772d6f21d65b45fcf3854a3142679b78e53c7673dac26c95d6ccc89a24"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-apple-darwin14.tar.gz"
+
+[[fooifier]]
+arch = "x86_64"
+git-tree-sha1 = "d61f806c76b57e54f343634c5219d00d4c81b077" # FIX!
+os = "windows"
+
+    [[fooifier.download]]
+    sha256 = "7f8939e9529835b83810d3ae7e2556f6e002d571f619894e54ece42ea5262b7f"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.x86_64-w64-mingw32.tar.gz"
+
+[[fooifier]]
+arch = "aarch64"
+git-tree-sha1 = "281cbe3dd65aa4bdb887bfb29651da500c81e242"
+os = "linux"
+
+    [[fooifier.download]]
+    sha256 = "36886ac25cf5678c01fe20630b413f9354b7a3721c6a2c2043162f7ebd147ff5"
+    url = "https://github.com/staticfloat/small_bin/raw/master/libfoo/libfoo.aarch64-linux-gnu.tar.gz"

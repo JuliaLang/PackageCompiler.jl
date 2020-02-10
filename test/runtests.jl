@@ -1,161 +1,74 @@
-using PackageCompiler, Test
+using PackageCompiler: PackageCompiler, create_sysimage, create_app
+using Test
+using Libdl
 
-@testset "compilage_package" begin
-    @testset "FixedPointNumbers" begin
-        sysimage = PackageCompiler.compile_package("FixedPointNumbers", verbose = true)
-        test_code = """
-        using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = sysimage)
-        @test read(cmd, String) == "no segfaults, yay\n"
-    end
-    @testset "FixedPointNumbers ColorTypes" begin
-        sysimage = PackageCompiler.compile_package("FixedPointNumbers", "ColorTypes", verbose = true)
-        test_code = """
-        using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = sysimage)
-        @test read(cmd, String) == "no segfaults, yay\n"
-    end
+ENV["JULIA_DEBUG"] = "PackageCompiler"
+
+# Make a new depot
+new_depot = mktempdir()
+mkpath(joinpath(new_depot, "registries"))
+cp(joinpath(DEPOT_PATH[1], "registries", "General"), joinpath(new_depot, "registries", "General"))
+ENV["JULIA_DEPOT_PATH"] = new_depot
+Base.init_depot_path()
+
+is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+
+if haskey(ENV, "CI")
+    @show Sys.ARCH
 end
 
+@testset "PackageCompiler.jl" begin
+    tmp = mktempdir()
+    sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
+    script = tempname()
+    write(script, "script_func() = println(\"I am a script\")")
+    create_sysimage(:Example; sysimage_path=sysimage_path,
+                              precompile_execution_file="precompile_execution.jl",
+                              precompile_statements_file=["precompile_statements.jl",
+                                                          "precompile_statements2.jl"],
+                              script=script)
+    # Check we can load sysimage and that Example is available in Main
+    str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func()'`, String)
+    @test occursin("Hello, foo", str)
+    @test occursin("I am a script", str)
 
-@testset "compile_incremental" begin
-    @testset "unregistered package with runtests.jl" begin
-        path = joinpath(@__DIR__, "TestPackage")
-        push!(Base.LOAD_PATH, path)
-        syso, syso_old = PackageCompiler.compile_incremental(:TestPackage)
-        test_code = """
-        push!(Base.LOAD_PATH, $(repr(path)))
-        using TestPackage; TestPackage.greet()
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "Hello World!"
-        pop!(Base.LOAD_PATH)
-    end
-    @testset "unregistered package with snoopfile.jl" begin
-        path = joinpath(@__DIR__, "TestPackage2")
-        push!(Base.LOAD_PATH, path)
-        syso, syso_old = PackageCompiler.compile_incremental(:TestPackage2)
-        test_code = """
-        push!(Base.LOAD_PATH, $(repr(path)))
-        using TestPackage2; TestPackage2.greet()
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "Hello World!"
-        pop!(Base.LOAD_PATH)
-    end
-    @testset "FixedPointNumbers" begin
-        # This is the new compile_package
-        syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers)
-        test_code = """
-        using FixedPointNumbers; N0f8(0.5); println("no segfaults, yay")
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "no segfaults, yay\n"
-    end
-    @testset "FixedPointNumbers ColorTypes" begin
-        syso, syso_old = PackageCompiler.compile_incremental(:FixedPointNumbers, :ColorTypes)
-        test_code = """
-        using FixedPointNumbers, ColorTypes; N0f8(0.5); RGB(0.0, 0.0, 0.0); println("no segfaults, yay")
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "no segfaults, yay\n"
-    end
-    @testset "JSON with Distributed blacklisted" begin
-        # This is the new compile_package
-        syso, syso_old = PackageCompiler.compile_incremental(:JSON, blacklist=[:Distributed])
-        test_code = """
-        using JSON 
-        s = \"{\\"a_number\\" : 5.0, \\"an_array\\" : [\\"string\\", 9]}\"
-        j = JSON.parse(s)
-        println(\"no segfaults, yay\")
-        """
-        cmd = PackageCompiler.julia_code_cmd(test_code, J = syso)
-        @test read(cmd, String) == "no segfaults, yay\n"
-    end
-end
-
-julia = Base.julia_cmd().exec[1]
-
-@testset "build_executable" begin
-    jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
-    basedir = mktempdir()
-    relativebuilddir = "build"
-    cd(basedir) do
-        mkdir(relativebuilddir)
-        snoopfile = "snoop.jl"
-        open(snoopfile, "w") do io
-            write(io, open(read, jlfile))
-            println(io)
-            println(io, "using .Hello; Hello.julia_main(String[])")
+    # Test creating an app
+    app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+    # TODO: Also test something that actually gives audit warnings
+    @test_logs PackageCompiler.audit_app(app_source_dir)
+    app_compiled_dir = joinpath(tmp, "MyAppCompiled")
+    for incremental in (is_slow_ci ? (false,) : (true, false))
+        if incremental == false
+            filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
+        else
+            filter_stdlibs = (false,)
         end
-        build_executable(
-            jlfile, snoopfile = snoopfile, builddir = relativebuilddir, verbose = true
-        )
-    end
-    builddir = joinpath(basedir, relativebuilddir)
-    @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
-    @test isfile(joinpath(builddir, "hello$executable_ext"))
-    @test startswith(read(`$(joinpath(builddir, "hello$executable_ext"))`, String), "hello, world")
-    for i = 1:100
-        # Windows seems to have problems with removing files - it can error
-        # making this test fail.
-        try rm(basedir, recursive = true) catch end
-        sleep(1/100)
-    end
-end
+        for filter in filter_stdlibs
+            tmp_app_source_dir = joinpath(tmp, "MyApp")
+            cp(app_source_dir, tmp_app_source_dir)
+            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"))
+            rm(tmp_app_source_dir; recursive=true)
+            # Get rid of some local state
+            rm(joinpath(new_depot, "packages"); recursive=true)
+            rm(joinpath(new_depot, "compiled"); recursive=true)
+            app_path = abspath(app_compiled_dir, "bin", "MyApp" * (Sys.iswindows() ? ".exe" : ""))
+            app_output = read(`$app_path`, String)
 
-@testset "program.c" begin
-    @testset "args" begin
-        basedir = mktempdir();
-        argsjlfile = mktemp(basedir)[1];
-        write(argsjlfile, raw"""
-            Base.@ccallable function julia_main(argv::Vector{String})::Cint
-                println("@__FILE__: $(@__FILE__)")
-                println("PROGRAM_FILE: $(PROGRAM_FILE)")
-                println("argv: $(argv)")
-                # Sometimes code accesses ARGS directly, as a global
-                println("ARGS: $ARGS")
-                println("Base.ARGS: $(Base.ARGS)")
-                println("Core.ARGS: $(Core.ARGS)")
-                return 0
+            # Check stdlib filtering
+            if filter == true
+                @test !(occursin("LinearAlgebra", app_output))
+            else
+                @test occursin("LinearAlgebra", app_output)
             end
-        """)
-        builddir = joinpath(basedir, "builddir")
-        outname = "args"
-        build_executable(
-            argsjlfile, outname; builddir = builddir
-        )
-        # Check that the output from the program is as expected:
-        exe = joinpath(builddir, outname*executable_ext)
-        output = read(`$exe a b c`, String)
-        println(output)
-        @test output ==
-            "@__FILE__: $argsjlfile\n" *
-            "PROGRAM_FILE: $exe\n" *
-            "argv: [\"a\", \"b\", \"c\"]\n" *
-            "ARGS: [\"a\", \"b\", \"c\"]\n" *
-            "Base.ARGS: [\"a\", \"b\", \"c\"]\n" *
-            "Core.ARGS: Any[\"$(Sys.iswindows() ? replace(exe, "\\" => "\\\\") : exe)\", \"a\", \"b\", \"c\"]\n"
-    end
-end
-
-@testset "juliac" begin
-    mktempdir() do builddir
-        juliac = joinpath(@__DIR__, "..", "juliac.jl")
-        jlfile = joinpath(@__DIR__, "..", "examples", "hello.jl")
-        cfile = joinpath(@__DIR__, "..", "examples", "program.c")
-        @test success(`$julia $juliac -vaej $jlfile $cfile --builddir $builddir`)
-        @test isfile(joinpath(builddir, "hello.$(PackageCompiler.Libdl.dlext)"))
-        @test isfile(joinpath(builddir, "hello$executable_ext"))
-        @test success(`$(joinpath(builddir, "hello$executable_ext"))`)
-        @testset "--cc-flag" begin
-            # Try passing `--help` to $cc. This should work for any system compiler.
-            # Then grep the output for "-g", which should be present on any system.
-            @test occursin("-g", read(`$julia $juliac -se --cc-flag="--help" $jlfile $cfile --builddir $builddir`, String))
-            # Just as a control, make sure that without passing '--help', we don't see "-g"
-            @test !occursin("-g", read(`$julia $juliac -se $jlfile $cfile --builddir $builddir`, String))
+            # Check dependency run
+            @test occursin("Example.domath", app_output)
+            # Check jll package runs
+            @test occursin("Hello, World!", app_output)
+            # Check artifact runs
+            @test occursin("The result of 2*5^2 - 10 == 40.000000", app_output)
+            # Check artifact gets run from the correct place
+            @test occursin("HelloWorld artifact at $(realpath(app_compiled_dir))", app_output)
         end
     end
 end
