@@ -14,10 +14,7 @@ addons:
     sources:
       - ubuntu-toolchain-r-test
 before_install:
-  - if [ $USE_ARTIFACTS_COMPILER != "true" ] && [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get update; fi
-  - if [ $USE_ARTIFACTS_COMPILER != "true" ] && [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo apt-get install gcc-8 gcc-8-multilib linux-libc-dev linux-headers-generic; fi
-  - if [ $USE_ARTIFACTS_COMPILER != "true" ] && [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo ln -s /usr/bin/gcc-8 /usr/local/bin/gcc; fi
-  - if [ $USE_ARTIFACTS_COMPILER != "true" ] && [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo ln -s /usr/include/asm-generic /usr/include/asm; fi
+  - if [ $USE_ARTIFACTS_COMPILER != "true" ] && [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo apt-get update && sudo apt-get install gcc-8 gcc-8-multilib linux-libc-dev linux-headers-generic && ln -s /usr/bin/gcc-8 /usr/local/bin/gcc && /usr/include/asm-generic /usr/include/asm; fi
   - which gcc
   - gcc --version
 arch:
@@ -37,6 +34,10 @@ jobs:
       arch: arm64
     - os: windows
       arch: arm64
+    - arch: arm64
+      USE_ARTIFACTS_COMPILER: true
+    - arch: x86
+      USE_ARTIFACTS_COMPILER: true
   include:
     - stage: "Documentation"
       julia: 1.3
