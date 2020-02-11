@@ -145,7 +145,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
         # Create corecompiler.ji
         cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
                                   -g0 -O0 $compiler_source_path`
-        @debug "running $cmd"
+        @info "running $cmd"
         read(cmd)
 
         # Use that to create sys.ji
@@ -156,7 +156,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                       --sysimage=$tmp_corecompiler_ji
                                       -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-            @debug "running $cmd"
+            @info "running $cmd"
             read(cmd)
         finally
             rm(new_sysimage_source_path; force=true)
@@ -176,7 +176,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     touch(tracefile)
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
             --compile=all --trace-compile=$tracefile $arg`
-    @debug "run_precompilation_script: running $cmd"
+    @info "run_precompilation_script: running $cmd"
     read(cmd)
     return tracefile
 end
@@ -185,7 +185,7 @@ end
 function do_ensurecompiled(project, packages, sysimage)
     use = join("using " .* packages, '\n')
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
-    @debug "running $cmd"
+    @info "running $cmd"
     read(cmd, String)
     return nothing
 end
@@ -201,7 +201,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
 
     # Handle precompilation
     precompile_statements = ""
-    @debug "running precompilation execution script..."
+    @info "running precompilation execution script..."
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
@@ -286,12 +286,12 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         """
 
     # finally, make julia output the resulting object file
-    @debug "creating object file at $object_file"
+    @info "creating object file at $object_file"
     @info "PackageCompiler: creating system image object file, this might take a while..."
 
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
-    @debug "running $cmd"
+    @info "running $cmd"
     run(cmd)
 end
 
@@ -399,7 +399,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
 
     # Instantiate the project
     ctx = create_pkg_context(project)
-    @debug "instantiating project at $(repr(project))"
+    @info "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx)
 
     check_packages_in_project(ctx, packages)
@@ -435,7 +435,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     # Maybe replace default sysimage
     if replace_default
         if !isfile(backup_default_sysimg_path())
-            @debug "making a backup of default sysimg"
+            @info "making a backup of default sysimg"
             cp(default_sysimg_path(), backup_default_sysimg_path())
         end
         move_default_sysimage_if_windows()
@@ -460,7 +460,7 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
-    @debug "running $cmd"
+    @info "running $cmd"
     windows_compiler_artifact_path(compiler) do
         run(cmd)
     end
@@ -641,7 +641,7 @@ function create_app(package_dir::String,
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
         if Sys.isapple()
             cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
-            @debug "running $cmd"
+            @info "running $cmd"
             run(cmd)
         end
     end
@@ -663,7 +663,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
-    @debug "running $cmd"
+    @info "running $cmd"
     run(cmd)
     windows_compiler_artifact_path(compiler) do
         run(cmd)
@@ -681,7 +681,7 @@ function bundle_julia_libraries(app_dir)
 end
 
 function bundle_artifacts(ctx, app_dir)
-    @debug "bundling artifacts..."
+    @info "bundling artifacts..."
 
     pkgs = Pkg.Types.PackageSpec[]
     Pkg.Operations.load_all_deps!(ctx, pkgs)
@@ -701,12 +701,12 @@ function bundle_artifacts(ctx, app_dir)
         for f in Pkg.Artifacts.artifact_names
             artifacts_toml_path = joinpath(pkg_source_path, f)
             if isfile(artifacts_toml_path)
-                @debug "bundling artifacts for $(pkg.name)"
+                @info "bundling artifacts for $(pkg.name)"
                 artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
                 for name in keys(artifact_dict)
                     meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
                     meta == nothing && continue
-                    @debug "  \"$name\""
+                    @info "  \"$name\""
                     push!(artifact_paths, Pkg.Artifacts.ensure_artifact_installed(name, artifacts_toml_path))
                 end
                 break
