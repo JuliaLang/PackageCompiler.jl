@@ -20,7 +20,7 @@ lazy = true
 
 [[clang]]
 git-tree-sha1 = "f6797ce93d656e60eb39db5c53438eb5402415f8"
-os = "macos"
+os = "linux"
 arch = "x86_64"
 lazy = true
 
