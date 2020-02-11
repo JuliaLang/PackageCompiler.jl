@@ -6,6 +6,9 @@ os:
 julia:
   - 1.3
   - nightly
+env:
+  - USE_ARTIFACTS_COMPILER=true
+  - USE_ARTIFACTS_COMPILER=false
 addons:
   apt:
     sources:

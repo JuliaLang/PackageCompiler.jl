@@ -17,7 +17,22 @@ if haskey(ENV, "CI")
     @show Sys.ARCH
 end
 
+function use_artifacts_compiler_in_tests()
+    if lowercase(strip(get(ENV, "USE_ARTIFACTS_COMPILER", ""))) == "true"
+        if Sys.ARCH == :x86_64 && ( Sys.iswindows() || Sys.isapple() || Sys.islinux() )
+            return true
+        else
+            return false
+        end
+    else
+        return false
+    end
+end
+
 @testset "PackageCompiler.jl" begin
+    if use_artifacts_compiler_in_tests()
+        PackageCompiler.download_compiler()
+    end
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
     script = tempname()

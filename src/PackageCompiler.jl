@@ -5,7 +5,11 @@ using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID
 
-export create_sysimage, create_app, audit_app, restore_default_sysimage
+export audit_app,
+       create_app,
+       create_sysimage,
+       download_compiler,
+       restore_default_sysimage
 
 include("juliaconfig.jl")
 
@@ -75,6 +79,27 @@ function windows_compiler_artifact_path(f, compiler)
     else
         f()
     end
+end
+
+function _get_artifacts_compiler()
+    if Sys.iswindows()
+        return joinpath(Pkg.Artifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
+    else
+        clang_root = Pkg.Artifacts.artifact"clang"
+        return joinpath(clang_root, first(readdir(clang_root)), "bin", "clang")
+    end
+end
+
+"""
+    download_compiler()
+
+Download a C compiler and set `ENV["JULIA_CC"]` to the path of the downloaded
+compiler.
+"""
+function download_compiler()
+    artifacts_compiler = _get_artifacts_compiler()
+    ENV["JULIA_CC"] = artifacts_compiler
+    return artifacts_compiler
 end
 
 function get_compiler()
