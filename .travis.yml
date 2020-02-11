@@ -5,16 +5,24 @@ os:
   - windows
 julia:
   - 1.3
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get update; fi
-  - if [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != arm64 ]; then sudo apt-get install gcc-multilib; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo apt-get install gcc-8 g++-8 gcc-8-multilib; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo ln -s /usr/bin/gcc-8 /usr/local/bin/gcc; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ] && [ $TRAVIS_CPU_ARCH != "arm64" ]; then sudo ln -s /usr/bin/g++-8 /usr/local/bin/g++; fi
+  - which gcc
+  - which g++
+  - gcc --version
+  - g++ --version
 arch:
   - amd64
   - x86
   - arm64
 jobs:
-  allow_failures:
-    - arch: x86
   exclude:
     - os: osx
       arch: x86
