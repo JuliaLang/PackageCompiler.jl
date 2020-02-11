@@ -12,6 +12,8 @@ arch:
   - amd64
   - x86
   - arm64
+after_success:
+  - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
 jobs:
   allow_failures:
     - arch: x86
