@@ -71,4 +71,13 @@ end
             @test occursin("HelloWorld artifact at $(realpath(app_compiled_dir))", app_output)
         end
     end
+    # Test creating an empty sysimage
+    if !is_slow_ci
+        tmp = mktempdir()
+        sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
+        foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
+        create_sysimage(; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
+        hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
+        @test hello == "hello, world"
+    end
 end
