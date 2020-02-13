@@ -3,7 +3,7 @@
 PackageCompiler is a Julia package with two main purposes:
 
 1. Creating custom sysimages for reduced latency when working locally with
-   packages that has a high startup time.
+   packages that have high startup time.
 
 2. Creating "apps" which are a bundle of files including an executable that can
    be sent and run on other machines without Julia being installed on that machine.
@@ -29,4 +29,4 @@ For macOS, using something like `homebrew` and for Linux the system package mana
 
 ### Windows
 
-A suitable compiler will be automatically installed the first time it is neeed.
+A suitable compiler will be automatically installed the first time it is needed.
