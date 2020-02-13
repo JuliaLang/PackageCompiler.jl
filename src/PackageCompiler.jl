@@ -170,6 +170,12 @@ function do_ensurecompiled(project, packages, sysimage)
     return nothing
 end
 
+const precompile_blacklist = [
+    "precompile(Tuple{typeof(Base.permutedims), Array{Bool, 2}, Array{Int64, 1}})",
+    "precompile(Tuple{typeof(Base.permutedims), Array{Bool, 3}, Array{Int64, 1}})",
+    "precompile(Tuple{typeof(Base.permutedims), Array{UInt8, 3}, Array{Int64, 1}})",
+]
+
 function create_sysimg_object_file(object_file::String, packages::Vector{String};
                             project::String,
                             base_sysimage::String,
@@ -203,7 +209,11 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             end
             precompile_statements = String[]
             $precompile_statements
+            precompile_blacklist = $precompile_blacklist
             for statement in sort(precompile_statements)
+                if strip(statement) in precompile_blacklist
+                    continue
+                end
                 # println(statement)
                 try
                     Base.include_string(PrecompileStagingArea, statement)
