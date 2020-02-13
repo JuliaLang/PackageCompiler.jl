@@ -4,12 +4,12 @@
 enhances the REPL with, for example, syntax highlighting.  It does, however,
 come with a bit of a startup time increase, so compiling a new system image
 with OhMyREPL included is useful.  Importing the OhMyREPL package is not the
-only factor that contributes to the extra load time from using OhMyREPL In
+only factor that contributes to the extra load time from using OhMyREPL. In
 addition, the time of compiling functions that OhMyREPL uses is also a factor.
 Therefore, we also want to do "Profile Guided Compilation" (PGC), where we
 record what functions gets compiled when using OhMyREPL, so they can be cached
 into the system image. OhMyREPL is a bit different from most other packages in
-that is used interactive. Normally to do PGC with PackageCompiler we pass a
+that it is used interactive. Normally to do PGC with PackageCompiler we pass a
 script to to execute as the `precompile_execution_file` which is used to
 collect compilation data, but in this case, we will use Julia to manually
 collect this data.
@@ -43,7 +43,7 @@ PackageCompiler.create_sysimage(:OhMyREPL; precompile_statements_file="ohmyrepl_
 ```
 
 Restart julia and start typing something. If everything went well you should
-see the type text become highlighted with a significantly smaller delay than
+see the typed text become highlighted with a significantly smaller delay than
 before creating the new system image
 
 
