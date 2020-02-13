@@ -33,7 +33,7 @@ using PackageCompiler
 create_sysimage(:Plots, sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
 ```
 
-If we now start Julia with the flag `-Jsys_plots.so` and re-time our previous commands:
+If we now start Julia with the flag `-J sys_plots.so` and re-time our previous commands:
 
 ```julia-repl
 julia> @time using Plots
