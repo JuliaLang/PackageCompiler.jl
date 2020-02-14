@@ -67,13 +67,13 @@ function move_default_sysimage_if_windows()
     end
 end
 
-function windows_compiler_artifact_path(f, compiler)
+function run_with_env(cmd, compiler)
     if Sys.iswindows()
-        withenv("PATH" => string(ENV["PATH"], ";", dirname(compiler))) do
-            f()
-        end
+        env = copy(ENV)
+        env["PATH"] = string(env["PATH"], ";", dirname(compiler))
+        run(Cmd(cmd; env=env))
     else
-        f()
+        run(cmd)
     end
 end
 
@@ -441,9 +441,7 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     m = something(march(), ``)
     cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
     @debug "running $cmd"
-    windows_compiler_artifact_path(compiler) do
-        run(cmd)
-    end
+    run_with_env(cmd, compiler)
     return nothing
 end
 
@@ -646,10 +644,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     m = something(march(), ``)
     cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
     @debug "running $cmd"
-    run(cmd)
-    windows_compiler_artifact_path(compiler) do
-        run(cmd)
-    end
+    run_with_env(cmd, compiler)
     return nothing
 end
 
