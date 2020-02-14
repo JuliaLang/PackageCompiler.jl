@@ -9,6 +9,12 @@ export create_sysimage, create_app, audit_app, restore_default_sysimage
 
 include("juliaconfig.jl")
 
+const default_precompile_blacklist = [
+    "precompile(Tuple{typeof(Base.permutedims), Array{Bool, 2}, Array{Int64, 1}})",
+    "precompile(Tuple{typeof(Base.permutedims), Array{Bool, 3}, Array{Int64, 1}})",
+    "precompile(Tuple{typeof(Base.permutedims), Array{UInt8, 3}, Array{Int64, 1}})",
+]
+
 const NATIVE_CPU_TARGET = "native"
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
@@ -177,7 +183,8 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
-                            isapp::Bool)
+                            isapp::Bool,
+                            precompile_blacklist::AbstractVector{<:Union{AbstractString, Regex}} = default_precompile_blacklist)
 
     # Handle precompilation
     precompile_statements = ""
@@ -203,7 +210,19 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             end
             precompile_statements = String[]
             $precompile_statements
+            precompile_blacklist = $precompile_blacklist
             for statement in sort(precompile_statements)
+                for blacklist_member in precompile_blacklist
+                    if blacklist_member isa AbstractString
+                        if strip(statement) == strip(blacklist_member)
+                            continue
+                        end
+                    elseif blacklist_member isa Regex
+                        if occursin(blacklist_member, statement)
+                            continue
+                        end
+                    end
+                end
                 # println(statement)
                 try
                     Base.include_string(PrecompileStagingArea, statement)
@@ -341,6 +360,8 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `precompile_blacklist`: Statements that should not be precompiled
 """
 function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          sysimage_path::Union{String,Nothing}=nothing,
@@ -353,7 +374,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          base_sysimage::Union{Nothing, String}=nothing,
-                         isapp::Bool=false)
+                         isapp::Bool=false,
+                         precompile_blacklist::AbstractVector{<:Union{AbstractString, Regex}} = default_precompile_blacklist)
     precompile_statements_file = abspath.(precompile_statements_file)
     if replace_default==true
         if sysimage_path !== nothing
@@ -409,7 +431,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                               precompile_statements_file=precompile_statements_file,
                               cpu_target=cpu_target,
                               script=script,
-                              isapp=isapp)
+                              isapp=isapp,
+                              precompile_blacklist=precompile_blacklist)
     create_sysimg_from_object_file(object_file, sysimage_path)
 
     # Maybe replace default sysimage
@@ -553,6 +576,8 @@ compiler.
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+
+- `precompile_blacklist`: Statements that should not be precompiled
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -562,7 +587,8 @@ function create_app(package_dir::String,
                     filter_stdlibs=false,
                     audit=true,
                     force=false,
-                    cpu_target::String=default_app_cpu_target())
+                    cpu_target::String=default_app_cpu_target(),
+                    precompile_blacklist::AbstractVector{<:Union{AbstractString, Regex}} = default_precompile_blacklist)
     precompile_statements_file = abspath.(precompile_statements_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
@@ -601,7 +627,8 @@ function create_app(package_dir::String,
             tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
             create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs=filter_stdlibs,
-                            cpu_target=cpu_target)
+                            cpu_target=cpu_target,
+                            precompile_blacklist=precompile_blacklist)
 
             create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
@@ -609,14 +636,16 @@ function create_app(package_dir::String,
                             precompile_statements_file=precompile_statements_file,
                             cpu_target=cpu_target,
                             base_sysimage=tmp_base_sysimage,
-                            isapp=true)
+                            isapp=true,
+                            precompile_blacklist=precompile_blacklist)
         else
             create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
                                               cpu_target=cpu_target,
-                                              isapp=true)
+                                              isapp=true,
+                                              precompile_blacklist=precompile_blacklist)
         end
         create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
         if Sys.isapple()
