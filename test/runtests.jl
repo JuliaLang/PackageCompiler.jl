@@ -2,8 +2,6 @@ using PackageCompiler: PackageCompiler, create_sysimage, create_app
 using Test
 using Libdl
 
-ENV["JULIA_DEBUG"] = "PackageCompiler"
-
 # Make a new depot
 new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
