@@ -512,7 +512,7 @@ function audit_app(ctx::Pkg.Types.Context)
 end
 
 """
-    create_app(app_source::String, compiled_app::String)
+    create_app(app_source::String, compiled_app::String; kwargs...)
 
 Compile an app with the source in `app_source` to the folder `compiled_app`.
 The folder `app_source` needs to contain a package where the package include a
@@ -551,6 +551,8 @@ compiler.
    to `true`.
 
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
+
+### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 """
