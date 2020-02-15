@@ -192,14 +192,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         precompile_statements *=
             "    append!(precompile_statements, readlines($(repr(file))))\n"
     end
-    
-    if precompile_statements_file_out != ""
-        open(precompile_statements_file_out, "w") do f
-            for statement in eval(Meta.parse(precompile_statements))
-                println(f, statement)
-            end
-        end
-    end
 
     precompile_code = """
         # This @eval prevents symbols from being put into Main
@@ -212,6 +204,15 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             end
             precompile_statements = String[]
             $precompile_statements
+
+            if "$precompile_statements_file_out" != ""
+                open("$precompile_statements_file_out", "w") do f
+                    for statement in precompile_statements
+                        println(f, statement)
+                    end
+                end
+            end
+
             for statement in sort(precompile_statements)
                 # println(statement)
                 try
