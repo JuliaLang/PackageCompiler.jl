@@ -266,12 +266,12 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         """
 
     # finally, make julia output the resulting object file
-    @debug "creating object file at $object_file"
+    @info "DEBUG creating object file at $object_file"
     @info "PackageCompiler: creating system image object file, this might take a while..."
 
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
-    @debug "running $cmd"
+    @info "DEBUG running $cmd"
     run(cmd)
 end
 
