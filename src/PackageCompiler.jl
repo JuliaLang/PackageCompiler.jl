@@ -33,6 +33,16 @@ all_stdlibs() = readdir(Sys.STDLIB)
 
 yesno(b::Bool) = b ? "yes" : "no"
 
+function load_all_deps(ctx)
+    if isdefined(Pkg.Operations, :load_all_deps!)
+        pkgs = Pkg.Types.PackageSpec[]
+        Pkg.Operations.load_all_deps!(ctx, pkgs)
+    else
+        pkgs = Pkg.Operations.load_all_deps(ctx)
+    end
+    return pkgs
+end
+
 function bitflag()
     if Sys.ARCH == :i686
         return `-m32`
@@ -499,8 +509,7 @@ function audit_app(ctx::Pkg.Types.Context)
     if isfile(joinpath(dirname(ctx.env.project_file), "deps", "build.jl"))
         @warn "Project has a build script, this might indicate that it is not relocatable"
     end
-    pkgs = Pkg.Types.PackageSpec[]
-    Pkg.Operations.load_all_deps!(ctx, pkgs)
+    pkgs = load_all_deps(ctx)
     for pkg in pkgs
         pkg_source = Pkg.Operations.source_path(pkg)
         pkg_source === nothing && continue
@@ -665,8 +674,7 @@ end
 function bundle_artifacts(ctx, app_dir)
     @debug "bundling artifacts..."
 
-    pkgs = Pkg.Types.PackageSpec[]
-    Pkg.Operations.load_all_deps!(ctx, pkgs)
+    pkgs = load_all_deps(ctx)
 
     # Also want artifacts for the project itself
     @assert ctx.env.pkg !== nothing
