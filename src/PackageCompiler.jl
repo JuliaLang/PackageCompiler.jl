@@ -3,7 +3,7 @@ module PackageCompiler
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
-using UUIDs: UUID, uuid1()
+using UUIDs: UUID, uuid1
 
 export create_sysimage, create_app, audit_app, restore_default_sysimage
 
