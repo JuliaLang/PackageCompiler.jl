@@ -204,7 +204,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             end
             precompile_statements = String[]
             $precompile_statements
-
             for statement in sort(precompile_statements)
                 # println(statement)
                 try
@@ -278,7 +277,11 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         run(cmd)
     catch e
         bt = catch_backtrace()
-        @error "Julia experienced an error while compiling the sysimage. The precompile statements generated during execution of $precompile_execution_file have been saved to $tracefiles"
+        if length(tracefiles) > 0
+            @error "Julia experienced an error while compiling the sysimage. The precompile statements generated during execution of $precompile_execution_file have been saved to $tracefiles"
+        else
+            @error "Julia experienced an error while compiling the sysimage"
+        end
         showerror(stderr, e, bt)
     end
 end
