@@ -1,6 +1,7 @@
 using PackageCompiler: PackageCompiler, create_sysimage, create_app
 using Test
 using Libdl
+using Pkg
 
 ENV["JULIA_DEBUG"] = "PackageCompiler"
 
@@ -18,14 +19,23 @@ if haskey(ENV, "CI")
 end
 
 @testset "PackageCompiler.jl" begin
+    new_project = mktempdir()
+    old_project = Base.ACTIVE_PROJECT[]
+    Base.ACTIVE_PROJECT[] = new_project
+    try
+        Pkg.add("Example")
+    finally
+        Base.ACTIVE_PROJECT[] = old_project
+    end
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
     script = tempname()
     write(script, "script_func() = println(\"I am a script\")")
     create_sysimage(:Example; sysimage_path=sysimage_path,
-                              precompile_execution_file="precompile_execution.jl",
-                              precompile_statements_file=["precompile_statements.jl",
-                                                          "precompile_statements2.jl"],
+                              project=new_project,
+                              precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
+                              precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
+                                                                              "precompile_statements2.jl"]),
                               script=script)
     # Check we can load sysimage and that Example is available in Main
     str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func()'`, String)
