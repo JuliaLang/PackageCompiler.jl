@@ -33,7 +33,7 @@ using PackageCompiler
 create_sysimage(:Plots, sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
 ```
 
-If we now start Julia with the flag `-Jsys_plots.so` and re-time our previous commands:
+If we now start Julia with the flag `--sysimage sys_plots.so` and re-time our previous commands:
 
 ```julia-repl
 julia> @time using Plots
@@ -54,6 +54,6 @@ start (0.04 seconds on this machine):
     0.13s user 0.08s system 88% cpu 0.232 total
 
 # Custom sysimage
-➜ time julia -Jsys_plots.so -e ''
+➜ time julia --sysimage sys_plots.so -e ''
     0.17s user 0.10s system 94% cpu 0.284 total
 ```
