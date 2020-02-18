@@ -26,6 +26,7 @@ makedocs(
         ],
 
         "References" => "refs.md",
+        "Upgrade notes" => "upgrade.md",
     ]
 )
 
