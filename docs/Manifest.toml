@@ -54,7 +54,7 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 deps = ["Libdl", "Pkg", "UUIDs"]
 path = ".."
 uuid = "dffaa6cc-da53-48e5-b007-4292dfcc27f1"
-version = "0.1.0"
+version = "1.0.0"
 
 [[Parsers]]
 deps = ["Dates", "Test"]
