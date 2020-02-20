@@ -168,6 +168,11 @@ multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
 Nevertheless, the option is there to use. Just make sure to properly test the
 app with the resulting sysimage.
 
+### Custom binary name
+
+By default, the binary in the `bin` directory take the name of the project,
+as defined in `Project.toml`.  If you want to change the name, you can pass
+`binary_name=some_binary_name` to `create_app`.
 
 ### Artifacts
 

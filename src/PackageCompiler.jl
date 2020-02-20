@@ -549,6 +549,9 @@ compiler.
 
 ### Keyword arguments:
 
+- `app_name::String`: an alternative name for the compiled app.  If not provided,
+   the name of the package (as specified in Project.toml) is used.
+
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
    files that contain code which precompilation statements should be recorded from.
 
@@ -573,6 +576,7 @@ compiler.
 """
 function create_app(package_dir::String,
                     app_dir::String;
+                    app_name=nothing,
                     precompile_execution_file::Union{String, Vector{String}}=String[],
                     precompile_statements_file::Union{String, Vector{String}}=String[],
                     incremental=false,
@@ -590,7 +594,10 @@ function create_app(package_dir::String,
     if ctx.env.pkg === nothing
         error("expected package to have a `name`-entry")
     end
-    app_name = ctx.env.pkg.name
+    sysimg_name = ctx.env.pkg.name
+    if app_name === nothing
+        app_name = sysimg_name
+    end
     sysimg_file = app_name * "." * Libdl.dlext
     if isdir(app_dir)
         if !force
@@ -621,7 +628,7 @@ function create_app(package_dir::String,
                             incremental=false, filter_stdlibs=filter_stdlibs,
                             cpu_target=cpu_target)
 
-            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file=precompile_execution_file,
                             precompile_statements_file=precompile_statements_file,
@@ -629,7 +636,7 @@ function create_app(package_dir::String,
                             base_sysimage=tmp_base_sysimage,
                             isapp=true)
         else
-            create_sysimage(Symbol(app_name); sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
