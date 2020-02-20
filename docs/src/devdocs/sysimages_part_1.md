@@ -438,7 +438,7 @@ using CSV
 @eval Module() begin
     for (pkgid, mod) in Base.loaded_modules
         if !(pkgid.name in ("Main", "Core", "Base"))
-            eval(@__MODULE__, :(const $(Symbol(mod)) = $_mod))
+            eval(@__MODULE__, :(const $(Symbol(mod)) = $mod))
         end
     end
     for statement in readlines("csv_precompile.jl")
