@@ -586,7 +586,7 @@ function create_app(package_dir::String,
     if isdir(app_dir)
         if !force
             error("directory $(repr(app_dir)) already exists, use `force=true` to overwrite (will completely",
-                  " remove the directory")
+                  " remove the directory)")
         end
         rm(app_dir; force=true, recursive=true)
     end
