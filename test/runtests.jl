@@ -50,19 +50,22 @@ end
     for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
+            binary_name_args = ("CustomName", nothing)
         else
             filter_stdlibs = (false,)
+            binary_name_args = (nothing,)
         end
-        for filter in filter_stdlibs
+        for (filter, name) in zip(filter_stdlibs, binary_name_args)
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"))
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), app_name=name)
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
             rm(joinpath(new_depot, "packages"); recursive=true)
             rm(joinpath(new_depot, "compiled"); recursive=true)
-            app_path = abspath(app_compiled_dir, "bin", "MyApp" * (Sys.iswindows() ? ".exe" : ""))
+            app_name = name !== nothing ? name : "MyApp"
+            app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$app_path`, String)
 
             # Check stdlib filtering
