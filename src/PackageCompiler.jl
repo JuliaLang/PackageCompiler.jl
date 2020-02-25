@@ -365,6 +365,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          base_sysimage::Union{Nothing, String}=nothing,
                          isapp::Bool=false)
     precompile_statements_file = abspath.(precompile_statements_file)
+    precompile_execution_file = abspath.(precompile_execution_file)
     if replace_default==true
         if sysimage_path !== nothing
             error("cannot specify `sysimage_path` when `replace_default` is `true`")
@@ -573,6 +574,7 @@ function create_app(package_dir::String,
                     force=false,
                     cpu_target::String=default_app_cpu_target())
     precompile_statements_file = abspath.(precompile_statements_file)
+    precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
     if isempty(ctx.env.manifest)
