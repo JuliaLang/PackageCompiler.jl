@@ -167,7 +167,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
             --compile=all --trace-compile=$tracefile $arg`
     @debug "run_precompilation_script: running $cmd"
-    read(cmd)
+    run(cmd)
     return tracefile
 end
 
