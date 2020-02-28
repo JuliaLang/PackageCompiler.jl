@@ -42,6 +42,13 @@ function load_all_deps(ctx)
     end
     return pkgs
 end
+function source_path(ctx, pkg)
+    if VERSION <= v"1.4.0-rc1"
+        Pkg.Operations.source_path(pkg)
+    else
+        Pkg.Operations.source_path(ctx, pkg)
+    end
+end
 
 function bitflag()
     if Sys.ARCH == :i686
@@ -510,7 +517,7 @@ function audit_app(ctx::Pkg.Types.Context)
     end
     pkgs = load_all_deps(ctx)
     for pkg in pkgs
-        pkg_source = Pkg.Operations.source_path(pkg)
+        pkg_source = source_path(ctx, pkg)
         pkg_source === nothing && continue
         if isfile(joinpath(pkg_source, "deps", "build.jl"))
             @warn "Package $(pkg.name) has a build script, this might indicate that it is not relocatable"
@@ -682,7 +689,7 @@ function bundle_artifacts(ctx, app_dir)
     # Collect all artifacts needed for the project
     artifact_paths = String[]
     for pkg in pkgs
-        pkg_source_path = Pkg.Operations.source_path(pkg)
+        pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
         # Check to see if this package has an (Julia)Artifacts.toml
         for f in Pkg.Artifacts.artifact_names
