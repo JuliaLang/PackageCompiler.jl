@@ -172,7 +172,7 @@ app with the resulting sysimage.
 
 By default, the binary in the `bin` directory take the name of the project,
 as defined in `Project.toml`.  If you want to change the name, you can pass
-`binary_name=some_binary_name` to `create_app`.
+`app_name="some_app_name"` to `create_app`.
 
 ### Artifacts
 
@@ -257,4 +257,3 @@ CodeInfo(
 │         value@_3
 │   %11 = MyApp.DEPOT_PATH
 ```
-
