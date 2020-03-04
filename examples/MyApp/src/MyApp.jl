@@ -4,8 +4,7 @@ using Example
 using HelloWorldC_jll
 using Pkg.Artifacts
 
-const fooifier = joinpath(ensure_artifact_installed("fooifier", joinpath(@__DIR__, "..", "Artifacts.toml")), 
-    "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
+fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
 function julia_main()
     try
@@ -27,6 +26,7 @@ function real_main()
     @show Threads.nthreads()
     @show Sys.BINDIR
     display(Base.loaded_modules)
+    println()
 
     println("Running a jll package:")
     HelloWorldC_jll.hello_world() do x
@@ -36,10 +36,9 @@ function real_main()
     println()
 
     println("Running the artifact")
-    res = read(`$fooifier 5 10`, String)
+    res = read(`$(fooifier_path()) 5 10`, String)
     println("The result of 2*5^2 - 10 == $res")
 
-    println()
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
     @show sin(0.0)
