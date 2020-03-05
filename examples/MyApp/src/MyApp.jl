@@ -1,6 +1,7 @@
 module MyApp
 
 using Example
+using CodecZlib
 using HelloWorldC_jll
 using Pkg.Artifacts
 
@@ -26,6 +27,14 @@ function real_main()
     @show Threads.nthreads()
     @show Sys.BINDIR
     display(Base.loaded_modules)
+    println()
+
+    text = "cleartext"
+    stream = GzipCompressorStream(IOBuffer(text))
+    for line in eachline(GzipDecompressorStream(stream))
+        println(line)
+    end
+    close(stream)
     println()
 
     println("Running a jll package:")
