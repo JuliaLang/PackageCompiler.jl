@@ -147,7 +147,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
 
         # Use that to create sys.ji
         new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
-        new_sysimage_source_path = joinpath(base_dir, "sysimage_packagecompiler_$(uuid1()).jl")
+        new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
         write(new_sysimage_source_path, new_sysimage_content)
         try
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
