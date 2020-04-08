@@ -9,6 +9,12 @@
 #include "uv.h"
 #include "julia.h"
 
+#ifdef _MSC_VER
+JL_DLLEXPORT char *dirname(char *);
+#else
+#include <libgen.h>
+#endif
+
 JULIA_DEFINE_FAST_TLS()
 
 // TODO: Windows wmain handling as in repl.c
@@ -34,7 +40,7 @@ int main(int argc, char *argv[])
     }
  
     char buf[PATH_MAX];
-    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/../../", free_path);
+    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/", dirname(dirname(free_path)));
     putenv(buf);
     putenv("JULIA_LOAD_PATH=@");
 
