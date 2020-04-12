@@ -722,7 +722,6 @@ function bundle_artifacts(ctx, app_dir)
     end
     for artifact_path in artifact_paths
         artifact_name = basename(artifact_path)
-        # force=true?
         cp(artifact_path, joinpath(artifact_app_path, artifact_name))
     end
     return
