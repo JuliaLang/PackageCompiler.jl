@@ -694,7 +694,7 @@ function bundle_artifacts(ctx, app_dir)
     push!(pkgs, ctx.env.pkg)
 
     # Collect all artifacts needed for the project
-    artifact_paths = String[]
+    artifact_paths = Set{String}()
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
