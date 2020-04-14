@@ -676,9 +676,15 @@ end
 function bundle_julia_libraries(app_dir)
     app_libdir = joinpath(app_dir, Sys.isunix() ? "lib" : "bin")
     cp(julia_libdir(), app_libdir; force=true)
-    # We do not want to bundle the sysimg (nor the backup):
+    # We do not want to bundle the sysimg (nor the backup sysimage):
     rm(joinpath(app_libdir, "julia", default_sysimg_name()); force=true)
     rm(joinpath(app_libdir, "julia", backup_default_sysimg_name()); force=true)
+    # Remove debug symbol libraries
+    if Sys.isapple()
+        v = string(VERSION.major, ".", VERSION.minor)
+        rm(joinpath(app_libdir, "libjulia.$v.dylib.dSYM"); force=true, recursive=true)
+        rm(joinpath(app_libdir, "julia", "sys.dylib.dSYM"); force=true, recursive=true)
+    end
     return
 end
 
