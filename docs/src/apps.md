@@ -87,8 +87,7 @@ end
 
 which will be the entry point of the app (the function that runs when the
 executable in the app is run). A skeleton of an app to start working from can
-be found at
-https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp.
+be found [here](https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp).
 
 Regarding relocatability, PackageCompiler provides a function
 [`audit_app(app_dir::String)`](@ref) that tries to find common problems with
