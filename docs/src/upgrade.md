@@ -25,20 +25,16 @@ to your project file.
 
 ### Sysimages
 
-- The function to create a sysimage is now called [`create_sysimage`](@ref)
-instead of `compile_incremental`.
+- The function to create a sysimage is now called [`create_sysimage`](@ref) instead of `compile_incremental`.
 - The tests of packages are no longer automatically run to gather precompile statements. If you wish to keep using package tests you can see an example of that in the documentation for creating a sysimage.
 
 
 ### Executables
-- The function to create an executable is now called [`create_app`](@ref)
-instead of `build_executable`.
+- The function to create an executable is now called [`create_app`](@ref) instead of `build_executable`.
 - The `julia_main` function for executables should no longer take any arguments
   (just access the global `ARGS`) and no longer need to be annotated with
   `Base.@ccallable`.
 - The code for an executable need to be structured as a package, that is, with a
   `Project.toml` file and a `src/Package.jl` file etc.
-- See
-https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp for
-an example of the source code for an executable.
-
+- See https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp for
+  an example of the source code for an executable.
