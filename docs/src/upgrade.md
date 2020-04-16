@@ -36,7 +36,5 @@ to your project file.
   `Base.@ccallable`.
 - The code for an executable need to be structured as a package, that is, with a
   `Project.toml` file and a `src/Package.jl` file etc.
-- See
-https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp for
-an example of the source code for an executable.
-
+- See https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp for
+  an example of the source code for an executable.
