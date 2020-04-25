@@ -235,7 +235,7 @@ We then finally move the executable and the sysimage to the `bin` folder:
 ❯ mkdir bin
 
 ~/MyApp
-❯ cp MyApp sys.so bin/
+❯ mv MyApp sys.so bin/
 ```
 
 ![](appexe.png)
@@ -249,7 +249,7 @@ and `lib` folders into an archive:
 ❯ mkdir MyApp
 
 ~/MyApp
-❯ cp MyApp sys.so bin/
+❯ cp bin/ lib/ MyApp
 
 ~/MyApp
 ❯ tar czvf MyApp.tar.gz MyApp
