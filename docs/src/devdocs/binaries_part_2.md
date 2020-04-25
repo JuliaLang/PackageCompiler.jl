@@ -90,7 +90,7 @@ CSV file since that should give good "coverage":
 julia --startup-file=no --trace-compile=app_precompile.jl MyApp.jl "FL_insurance_sample.csv"
 ```
 
-The `create_sysimage.jl` script look similar to before with the exception that
+The `custom_sysimage.jl` script look similar to before with the exception that
 we added an include of the app file inside the anonymous module where the
 precompiliation statements are evaluated in:
 
