@@ -50,6 +50,6 @@ before creating the new system image
 !!! note
     If you want to go back to the default sysimage you can run
 
-    ```julia
-    PackageCompiler.restore_default_sysimage()
-    ```
+```julia
+PackageCompiler.restore_default_sysimage()
+```
