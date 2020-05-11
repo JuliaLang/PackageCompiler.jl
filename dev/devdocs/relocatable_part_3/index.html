@@ -82,11 +82,11 @@ end # module</code></pre><p>It got the same high-level structure as the previous
 ❯ mkdir bin
 
 ~/MyApp
-❯ cp MyApp sys.so bin/</code></pre><p><img src="../appexe.png" alt/></p><p>The final bundle of our relocatable app is then created by putting the <code>bin</code> and <code>lib</code> folders into an archive:</p><pre><code class="language-none">~/MyApp
+❯ mv MyApp sys.so bin/</code></pre><p><img src="../appexe.png" alt/></p><p>The final bundle of our relocatable app is then created by putting the <code>bin</code> and <code>lib</code> folders into an archive:</p><pre><code class="language-none">~/MyApp
 ❯ mkdir MyApp
 
 ~/MyApp
-❯ cp MyApp sys.so bin/
+❯ cp bin/ lib/ MyApp
 
 ~/MyApp
 ❯ tar czvf MyApp.tar.gz MyApp
