@@ -1,4 +1,4 @@
-# Creating a sysimage for fast plotting with Plots.jl
+# [Creating a sysimage for fast plotting with Plots.jl](@id examples-plots)
 
 A common complaint about Julia is that the "time to first plot" is a bit
 longer than desired. In this example, we will create a sysimage that is made

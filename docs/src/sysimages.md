@@ -1,4 +1,4 @@
-# Sysimages
+# [Sysimages](@id sysimages)
 
 ## What is a sysimage
 
@@ -119,7 +119,7 @@ REPL and package manager not require compilation after a Julia restart.. It is
 therefore unlikely that `incremental=false` is of much use unless in special
 cases for sysimage creation (for apps it is a different story though).
 
-### Precompilation
+### [Compilation of functions](@id tracing)
 
 The step where we included Example.jl in the sysimage meant that loading
 Example is now pretty much instant (the package is already loaded when Julia

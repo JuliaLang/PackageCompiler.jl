@@ -1,4 +1,4 @@
-# Apps
+# [Apps](@id apps)
 
 With an "app" we here mean a "bundle" of files where one of these files is an
 executable and where this bundle can be sent to another machine while still allowing
@@ -130,10 +130,10 @@ archive and sent to another machine or an installer could be wrapped around the
 directory, perhaps providing a better user experience than just an archive of
 files.
 
-### Precompilation
+### Compilation of functions
 
-In the same way as files for precompilation could be given when creating
-sysimages, the same keyword arguments are used to add precompilation to apps.
+In the same way as [files for precompilation could be given when creating
+sysimages](@ref tracing), the same keyword arguments are used to add precompilation to apps.
 
 ### Incremental vs non-incremental sysimage
 
