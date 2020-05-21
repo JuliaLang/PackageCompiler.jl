@@ -127,7 +127,7 @@ Dict{Base.PkgId,Module} with 33 entries:
 
 and we can here see the `Dates` module is there, even after restarting Julia.
 This means that `Dates` is in the sysimage itself and does not have to be loaded
-from amywhere external.
+from anywhere external.
 
 Creating and using a custom sysimage is done in three steps:
 
