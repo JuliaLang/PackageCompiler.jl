@@ -31,6 +31,11 @@ completely intractable to compile all possible combinations, so instead PackageC
 relies upon ["tracing" an exemplar session](@ref tracing) and recording which methods were
 used. Any methods that were missed will still be compiled as they are needed (by default).
 
+Note that to use PackageCompiler.jl effectively some knowledge on how
+how packages and ["environments"](https://julialang.github.io/Pkg.jl/stable/environments/) work
+is required. If you are just starting out with Julia, it is unlikely that you would
+want to use PackageCompiler.jl
+
 -----
 
 The manual contains some uses of Linux commands like `ls` (`dir` in Windows)
