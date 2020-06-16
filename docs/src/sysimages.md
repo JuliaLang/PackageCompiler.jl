@@ -153,7 +153,7 @@ the file just shown above:
 
 ```julia-repl
 ~/NewSysImageEnv
-❯ julia-q
+❯ julia -q
 
 julia> using PackageCompiler
 
