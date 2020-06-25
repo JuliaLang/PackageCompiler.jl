@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     if (uv_exepath(free_path, &path_size)) {
        jl_error("fatal error: unexpected error while retrieving exepath");
     }
- 
+
     char buf[PATH_MAX];
     snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/", dirname(dirname(free_path)));
     putenv(buf);

@@ -583,6 +583,7 @@ function create_app(package_dir::String,
                     filter_stdlibs=false,
                     audit=true,
                     force=false,
+                    c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
                     cpu_target::String=default_app_cpu_target())
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
@@ -606,6 +607,7 @@ function create_app(package_dir::String,
         end
         rm(app_dir; force=true, recursive=true)
     end
+    c_driver_program = abspath(c_driver_program)
 
     audit && audit_app(ctx)
 
@@ -643,7 +645,8 @@ function create_app(package_dir::String,
                                               cpu_target=cpu_target,
                                               isapp=true)
         end
-        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name)
+        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name,
+                                    c_driver_program_path=c_driver_program,)
         if Sys.isapple()
             cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
             @debug "running $cmd"
@@ -654,10 +657,11 @@ function create_app(package_dir::String,
 end
 
 function create_executable_from_sysimg(;sysimage_path::String,
-                                        executable_path::String)
+                                        executable_path::String,
+                                        c_driver_program_path::String,)
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
-    wrapper = joinpath(@__DIR__, "embedding_wrapper.c")
+    wrapper = c_driver_program_path
     if Sys.iswindows()
         rpath = ``
     elseif Sys.isapple()
