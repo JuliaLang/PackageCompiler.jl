@@ -1,5 +1,5 @@
 [[x86_64-w64-mingw32]]
-git-tree-sha1 = "fdff308295487f361ef6e8dc2d27f5abe8a6eee9"
+git-tree-sha1 = "b910b96db4f5b375989b59407892e2723425dc8a"
 os = "windows"
 arch = "x86_64"
 lazy = true
