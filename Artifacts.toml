@@ -1,9 +1,9 @@
 [[x86_64-w64-mingw32]]
-git-tree-sha1 = "572b61b5075459e3ed62317e674398166ca98dd4"
+git-tree-sha1 = "b910b96db4f5b375989b59407892e2723425dc8a"
 os = "windows"
 arch = "x86_64"
 lazy = true
 
     [[x86_64-w64-mingw32.download]]
     sha256 = "fe3f401bc936fbe6af940b26c5e0f266f762a3416f979c706e599b24082dc5c7"
-    url = "https://github.com/JuliaComputing/PackageCompilerX.jl/releases/download/v0.1/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.tar.gz"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.tar.gz"
