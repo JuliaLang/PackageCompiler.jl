@@ -180,7 +180,7 @@ end
 
 # Load packages in a normal julia process to make them precompile "normally"
 function do_ensurecompiled(project, packages, sysimage)
-    use = join("using " .* packages, '\n')
+    use = join("import " .* packages, '\n')
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
     @debug "running $cmd"
     read(cmd, String)
@@ -248,7 +248,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
 
     for pkg in packages
         julia_code *= """
-            using $pkg
+            import $pkg
             """
     end
 
