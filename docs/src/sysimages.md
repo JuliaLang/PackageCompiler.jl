@@ -25,7 +25,7 @@ PackageCompiler to create such sysimages.
 It should be clearly stated that there are some drawbacks to using a custom
 sysimage, thereby sidestepping the standard Julia package precompilation
 system.  The biggest drawback is that packages that are compiled into a
-sysimage (including their dependencies!) are "locked" to the version they where
+sysimage (including their dependencies!) are "locked" to the version they were
 at when the sysimage was created. This means that no matter what package
 version you have installed in your current project, the one in the sysimage
 will take precedence. This can lead to bugs where you start with a project that
