@@ -333,7 +333,7 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 
 - `sysimage_path::Union{String,Nothing}`: The path to where
    the resulting sysimage should be saved. If set to `nothing` the keyword argument
-   `replace_defalt` needs to be set to `true`.
+   `replace_default` needs to be set to `true`.
 
 - `project::String`: The project that should be active when the sysimage is created,
    defaults to the current active project.
