@@ -97,10 +97,16 @@ Dict{Base.PkgId,Module} with 34 entries:
 ```
 
 Alternatively, instead of giving a path to where the new sysimage should appear, one
-can choose to replace the default sysimage.
-This is done by omitting the `sysimage_path` keyword and instead adding `replace_default=true`, for example:
+can choose to replace the default sysimage. **This is
+[_not_ recommended](https://github.com/JuliaLang/PackageCompiler.jl/issues/434#issuecomment-675563737)
+as this can
+cause compatibility issues with other packages that depend on the default sysimage
+such as Julia-VSCode.** Replacing the default sysimage is done by omitting the
+`sysimage_path` keyword and instead adding `replace_default=true`, for example:
 
 ```julia
+# This is not recommended and may cause compatability issues since external
+# packages such as Julia-VSCode may depend on the default sysimage.
 create_sysimage([:Debugger, :OhMyREPL]; replace_default=true)
 ```
 
@@ -118,6 +124,10 @@ precompilation that the Julia bundled sysimage provides which is what make the
 REPL and package manager not require compilation after a Julia restart.. It is
 therefore unlikely that `incremental=false` is of much use unless in special
 cases for sysimage creation (for apps it is a different story though).
+
+As an alternative consider using another mechanism to pass the `-J` flag to
+Julia as above. These include creating a desktop shortcut or a shell alias,
+`$ alias julia='julia -q -J/path/to/sysimage.so'`, that includes the option.
 
 ### [Compilation of functions](@id tracing)
 
