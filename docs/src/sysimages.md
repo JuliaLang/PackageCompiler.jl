@@ -127,7 +127,7 @@ cases for sysimage creation (for apps it is a different story though).
 
 As an alternative consider using another mechanism to pass the `-J` flag to
 Julia as above. These include creating a desktop shortcut or a shell alias,
-`$ alias julia='julia -q -J/path/to/sysimage.so'`, that includes the option.
+`$ alias julia='julia -J/path/to/sysimage.so'`, that includes the option.
 
 ### [Compilation of functions](@id tracing)
 
