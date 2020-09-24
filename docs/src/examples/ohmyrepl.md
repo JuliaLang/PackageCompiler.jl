@@ -28,7 +28,7 @@ OhMyREPL.  To this end, start Julia with the
 Julia session but all functions that get compiled are output to the file
 `ohmyrepl_precompile.jl`. In the Julia session, load OhMyREPL, use the REPL a bit
 so that the functionality of OhMyREPL is exercised. Quit Julia and look into
-the file `ohmyrepl_precompile`.  It should be filled with lines like:
+the file `ohmyrepl_precompile.jl`.  It should be filled with lines like:
 
 ```
 precompile(Tuple{typeof(OhMyREPL.Prompt.insert_keybindings), Any})
