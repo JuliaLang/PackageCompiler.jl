@@ -99,7 +99,7 @@ function get_compiler()
     if cc !== nothing
         return cc
     end
-    if Sys.iswindows()
+    @static if Sys.iswindows()
         return joinpath(Pkg.Artifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
     end
     if Sys.which("gcc") !== nothing
