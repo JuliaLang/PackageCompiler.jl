@@ -222,6 +222,9 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             $precompile_statements
             for statement in sort(precompile_statements)
                 # println(statement)
+                # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
+                # N with a large number seems to work around it.
+                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
                 try
                     Base.include_string(PrecompileStagingArea, statement)
                 catch
