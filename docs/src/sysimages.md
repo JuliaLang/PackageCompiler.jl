@@ -87,7 +87,7 @@ julia> exit()
 ExampleSysimage.so  Manifest.toml  Project.toml
 
 ~/NewSysImageEnv
-❯ julia -q -JExampleSysimage.so
+❯ julia -q -J ExampleSysimage.so
 
 julia> Base.loaded_modules
 Dict{Base.PkgId,Module} with 34 entries:
