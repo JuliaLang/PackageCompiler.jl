@@ -1,6 +1,6 @@
 # PackageCompiler
 
-[![Build Status](https://travis-ci.org/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.org/JuliaLang/PackageCompiler.jl)
+[![Build Status](https://travis-ci.com/JuliaLang/PackageCompiler.jl.svg?branch=master)](https://travis-ci.com/JuliaLang/PackageCompiler.jl)
 [![Codecov](https://codecov.io/gh/JuliaLang/PackageCompiler.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/PackageCompiler.jl)
 [![][docs-stable-img]][docs-stable-url]
 
