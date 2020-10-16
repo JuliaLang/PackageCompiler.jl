@@ -4,6 +4,7 @@ using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID, uuid1
+using Logging
 
 export create_sysimage, create_app, audit_app, restore_default_sysimage
 
@@ -212,6 +213,12 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
+
+            using Logging
+            # Pass through the user's logging level to the spawned process.
+            logger = ConsoleLogger(stderr, Logging.$(Logging.min_enabled_level(global_logger())))
+            global_logger(logger)
+
             PrecompileStagingArea = Module()
             for (_pkgid, _mod) in Base.loaded_modules
                 if !(_pkgid.name in ("Main", "Core", "Base"))
@@ -226,10 +233,13 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                 # N with a large number seems to work around it.
                 statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
                 try
-                    Base.include_string(PrecompileStagingArea, statement)
-                catch
+                    success = Base.include_string(PrecompileStagingArea, statement)
+                    if !success
+                        @debug "Precompilation failed: \$statement"
+                    end
+                catch e
                     # See julia issue #28808
-                    @debug "failed to execute \$statement"
+                    @debug "Error executing \$statement:\n\$e"
                 end
             end
         end # module
