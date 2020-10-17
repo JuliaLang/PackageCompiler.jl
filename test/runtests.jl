@@ -36,6 +36,7 @@ end
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
                                                                               "precompile_statements2.jl"]),
+                              precompile_function_file=joinpath(@__DIR__, "precompile_function_file.jl"),
                               script=script)
     # Check we can load sysimage and that Example is available in Main
     str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func()'`, String)
