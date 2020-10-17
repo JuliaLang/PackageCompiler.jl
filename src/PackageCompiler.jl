@@ -199,7 +199,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     # Handle precompilation
     precompile_statements = ""
     @debug "running precompilation execution script..."
-    tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
