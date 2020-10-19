@@ -226,22 +226,28 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                     eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
                 end
             end
-            precompile_statements = String[]
-            $precompile_statements
-            for statement in sort(precompile_statements)
-                # println(statement)
-                # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
-                # N with a large number seems to work around it.
-                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
-                try
-                    success = Base.include_string(PrecompileStagingArea, statement)
-                    if !success
-                        @debug "Precompilation failed: \$statement"
+            let (failures, errors) = (0, 0)
+                precompile_statements = String[]
+                $precompile_statements
+                for statement in sort(precompile_statements)
+                    # println(statement)
+                    # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
+                    # N with a large number seems to work around it.
+                    statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
+                    try
+                        success = Base.include_string(PrecompileStagingArea, statement)
+                        if !success
+                            failures += 1
+                            @debug "Precompilation failed: \$statement"
+                        end
+                    catch e
+                        # See julia issue #28808
+                        errors += 1
+                        @debug "Error executing \$statement:\n\$e"
                     end
-                catch e
-                    # See julia issue #28808
-                    @debug "Error executing \$statement:\n\$e"
                 end
+                total = length(precompile_statements)
+                @info "PackageCompiler: completed \$total precompile statements with \$failures failures, \$errors errors."
             end
         end # module
         """
