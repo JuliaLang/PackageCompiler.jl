@@ -424,7 +424,7 @@ statements](https://github.com/JuliaLang/julia/issues/28808) running a
 precompile statement can fail.  The solution to these issues is to load all
 modules in the sysimage by looping through `Base.loaded_modules` and to use a
 `try-catch` for each precompile statement.  In addition, we evaluate everything
-in an anonymous module to not pollute the `Main` module which a bunch of
+in an anonymous module to not pollute the `Main` module with a bunch of
 symbols.
 
 The end result is a `custom_sysimage.jl` file looking like:
