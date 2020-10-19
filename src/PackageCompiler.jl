@@ -224,7 +224,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                 # println(statement)
                 # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
                 # N with a large number seems to work around it.
-                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
+                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\\1, 100}")
                 try
                     Base.include_string(PrecompileStagingArea, statement)
                 catch
