@@ -240,6 +240,9 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         Base.init_load_path()
+        if isdefined(Base, :init_active_project)
+            Base.init_active_project()
+        end
         Base.init_depot_path()
         """
 
