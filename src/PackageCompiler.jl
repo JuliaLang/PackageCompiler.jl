@@ -202,6 +202,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
+        push!(tracefiles, tracefile)
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
     end
     for file in precompile_statements_file
@@ -295,7 +296,15 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
-    run(cmd)
+    try
+        run(cmd)
+    catch e
+        if length(tracefiles) > 0
+            error("An error occurred while compiling the sysimage. The precompile statements generated during execution of $precompile_execution_file have been saved to $tracefiles")
+        else
+            error("An error occurred while compiling the sysimage")
+        end
+    end
 end
 
 default_sysimg_path() = abspath(Sys.BINDIR, "..", "lib", "julia", "sys." * Libdl.dlext)
