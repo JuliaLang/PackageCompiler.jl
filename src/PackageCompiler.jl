@@ -4,6 +4,7 @@ using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID, uuid1
+using Logging
 
 export create_sysimage, create_app, audit_app, restore_default_sysimage
 
@@ -202,6 +203,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
+        @debug "precompile statements written to: $tracefile"
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
     end
     for file in precompile_statements_file
@@ -212,25 +214,40 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
+
+            using Logging
+            # Pass through the user's logging level to the spawned process.
+            logger = ConsoleLogger(stderr, Logging.$(Logging.min_enabled_level(global_logger())))
+            global_logger(logger)
+
             PrecompileStagingArea = Module()
             for (_pkgid, _mod) in Base.loaded_modules
                 if !(_pkgid.name in ("Main", "Core", "Base"))
                     eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
                 end
             end
-            precompile_statements = String[]
-            $precompile_statements
-            for statement in sort(precompile_statements)
-                # println(statement)
-                # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
-                # N with a large number seems to work around it.
-                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\\1, 100}")
-                try
-                    Base.include_string(PrecompileStagingArea, statement)
-                catch
-                    # See julia issue #28808
-                    @debug "failed to execute \$statement"
+            let (failures, errors) = (0, 0)
+                precompile_statements = String[]
+                $precompile_statements
+                for statement in sort(precompile_statements)
+                    # println(statement)
+                    # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
+                    # N with a large number seems to work around it.
+                    statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\\1, 100}")
+                    try
+                        success = Base.include_string(PrecompileStagingArea, statement)
+                        if !success
+                            failures += 1
+                            @debug "Precompilation failed: \$statement"
+                        end
+                    catch e
+                        # See julia issue #28808
+                        errors += 1
+                        @debug "Error executing \$statement:\n\$e"
+                    end
                 end
+                total = length(precompile_statements)
+                @info "PackageCompiler: completed \$total precompile statements with \$failures failures, \$errors errors."
             end
         end # module
         """
