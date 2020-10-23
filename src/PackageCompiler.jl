@@ -202,6 +202,9 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     @debug "running precompilation execution script..."
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
+        # TODO(PR): Even better, can we compute the loaded_modules at the end of running
+        #   each precompilation_script, and then add those into the supplied `packages`?
+        #   Maybe only if `isapp == true`?
         tracefile = run_precompilation_script(project, base_sysimage, file)
         @debug "precompile statements written to: $tracefile"
         precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
@@ -221,6 +224,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             global_logger(logger)
 
             PrecompileStagingArea = Module()
+            @show Base.loaded_modules
             for (_pkgid, _mod) in Base.loaded_modules
                 if !(_pkgid.name in ("Main", "Core", "Base"))
                     eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
@@ -282,7 +286,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
 
     if isapp
         # If it is an app, there is only one packages
-        @assert length(packages) == 1
+        #@assert length(packages) == 1
         packages[1]
         app_start_code = """
         Base.@ccallable function julia_main()::Cint
@@ -636,6 +640,14 @@ function create_app(package_dir::String,
     bundle_julia_libraries(app_dir)
     bundle_artifacts(ctx, app_dir)
 
+    # Load all packages in the Project into the sysimg for Apps. Without specifying this,
+    # we cannot serialize any methods from those packages, because the packages won't be
+    # loaded in the final julia process. Since we cannot know which packages will be needed
+    # we can load _all_ of the packages (and their recursive packages) from the project.
+    # This may be more than the user will actually need, but that is up to users to prune
+    # their Project files to only those `deps` actually in use.
+    packages = Symbol.(keys(Pkg.TOML.parsefile(ctx.env.project_file)["deps"]))
+
     # TODO: Create in a temp dir and then move it into place?
     binpath = joinpath(app_dir, "bin")
     mkpath(binpath)
@@ -650,7 +662,9 @@ function create_app(package_dir::String,
                             incremental=false, filter_stdlibs=filter_stdlibs,
                             cpu_target=cpu_target)
 
-            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([Symbol(sysimg_name); packages...];
+                            sysimage_path=sysimg_file,
+                            project=package_dir,
                             incremental=true,
                             precompile_execution_file=precompile_execution_file,
                             precompile_statements_file=precompile_statements_file,
@@ -658,7 +672,8 @@ function create_app(package_dir::String,
                             base_sysimage=tmp_base_sysimage,
                             isapp=true)
         else
-            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([Symbol(sysimg_name); packages...];
+                                              sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
