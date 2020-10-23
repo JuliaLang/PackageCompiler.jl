@@ -289,7 +289,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
 
     if isapp
         # If it is an app, there is only one packages
-        #@assert length(packages) == 1
         packages[1]
         app_start_code = """
         Base.@ccallable function julia_main()::Cint
@@ -649,7 +648,7 @@ function create_app(package_dir::String,
     # we can load _all_ of the packages (and their recursive packages) from the project.
     # This may be more than the user will actually need, but that is up to users to prune
     # their Project files to only those `deps` actually in use.
-    packages = Symbol.(keys(Pkg.TOML.parsefile(ctx.env.project_file)["deps"]))
+    packages = keys(ctx.env.project.deps )
 
     # TODO: Create in a temp dir and then move it into place?
     binpath = joinpath(app_dir, "bin")
