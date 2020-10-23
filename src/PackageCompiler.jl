@@ -648,7 +648,7 @@ function create_app(package_dir::String,
     # we can load _all_ of the packages (and their recursive packages) from the project.
     # This may be more than the user will actually need, but that is up to users to prune
     # their Project files to only those `deps` actually in use.
-    packages = keys(ctx.env.project.deps )
+    packages = Symbol.(keys(ctx.env.project.deps))
 
     # TODO: Create in a temp dir and then move it into place?
     binpath = joinpath(app_dir, "bin")
