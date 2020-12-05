@@ -30,6 +30,14 @@ end
 current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
 
 all_stdlibs() = readdir(Sys.STDLIB)
+@static if VERSION >= v"1.6.0-DEV.1673"
+    sysimage_modules() = map(x->x.name, Base._sysimage_modules)
+else
+    sysimage_modules() = all_stdlibs()
+end
+stdlibs_in_sysimage() = intersect(all_stdlibs(), sysimage_modules())
+stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
+
 
 yesno(b::Bool) = b ? "yes" : "no"
 
@@ -239,6 +247,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     julia_code = """
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+        @eval Sys STDLIB = "$(Sys.BINDIR)/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)"
         Base.init_load_path()
         if isdefined(Base, :init_active_project)
             Base.init_active_project()
@@ -307,14 +316,18 @@ backup_default_sysimg_name() = basename(backup_default_sysimg_path())
 gather_stdlibs_project(project::String) = gather_stdlibs_project(create_pkg_context(project))
 function gather_stdlibs_project(ctx)
     @assert ctx.env.manifest !== nothing
-    stdlibs = all_stdlibs()
-    stdlibs_project = String[]
+    sysimage_stdlibs = stdlibs_in_sysimage()
+    non_sysimage_stdlibs = stdlibs_not_in_sysimage()
+    sysimage_stdlibs_project = String[]
+    non_sysimage_stdlibs_project = String[]
     for (uuid, pkg) in ctx.env.manifest
-        if pkg.name in stdlibs
-            push!(stdlibs_project, pkg.name)
+        if pkg.name in sysimage_stdlibs
+            push!(sysimage_stdlibs_project, pkg.name)
+        elseif pkg.name in non_sysimage_stdlibs
+            push!(non_sysimage_stdlibs_project, pkg.name)
         end
     end
-    return stdlibs_project
+    return sysimage_stdlibs_project, non_sysimage_stdlibs_project
 end
 
 function check_packages_in_project(ctx, packages)
@@ -413,11 +426,12 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         if filter_stdlibs
-            stdlibs = gather_stdlibs_project(ctx)
+            sysimage_stdlibs, non_sysimage_stdlibs = gather_stdlibs_project(ctx)
         else
-            stdlibs= all_stdlibs()
+            sysimage_stdlibs = stdlibs_in_sysimage()
+            non_sysimage_stdlibs = stdlibs_not_in_sysimage()
         end
-        base_sysimage = create_fresh_base_sysimage(stdlibs; cpu_target=cpu_target)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target=cpu_target)
     else
         if base_sysimage == nothing
             base_sysimage = current_process_sysimage_path()
