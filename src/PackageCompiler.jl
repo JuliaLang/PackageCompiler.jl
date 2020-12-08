@@ -467,18 +467,6 @@ end
 function create_sysimg_from_object_file(input_object::String, sysimage_path::String)
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
-    private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
-        else
-            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
-        end
-    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
-    else
-        dirname(abspath(Libdl.dlpath("libjulia-internal")))
-    end
-
     # Prevent compiler from stripping all symbols from the shared lib.
     # TODO: On clang on windows this is called something else
     if Sys.isapple()
@@ -490,6 +478,17 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = if VERSION >= v"1.6.0-DEV.1673"
+        private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
+            if ccall(:jl_is_debugbuild, Cint, ()) != 0
+                dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+            else
+                joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+            end
+        elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+            dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
+        else
+            dirname(abspath(Libdl.dlpath("libjulia-internal")))
+        end
         `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file -ljulia-internal -ljulia $extra`
     else
         `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
