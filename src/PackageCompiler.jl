@@ -467,6 +467,18 @@ end
 function create_sysimg_from_object_file(input_object::String, sysimage_path::String)
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
+    private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
+        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+        else
+            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+        end
+    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
+    else
+        dirname(abspath(Libdl.dlpath("libjulia-internal")))
+    end
+
     # Prevent compiler from stripping all symbols from the shared lib.
     # TODO: On clang on windows this is called something else
     if Sys.isapple()
@@ -477,7 +489,11 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    cmd = if VERSION >= v"1.6.0-DEV.1673"
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file -ljulia-internal -ljulia $extra`
+    else
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    end
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
@@ -682,12 +698,22 @@ function create_executable_from_sysimg(;sysimage_path::String,
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = c_driver_program_path
-    if Sys.iswindows()
-        rpath = ``
-    elseif Sys.isapple()
-        rpath = `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
+    rpath = if VERSION >= v"1.6.0-DEV.1673"
+        if Sys.iswindows()
+            ``
+        elseif Sys.isapple()
+            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'`
+        else
+            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib -Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib/julia`
+        end
     else
-        rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+        if Sys.iswindows()
+            ``
+        elseif Sys.isapple()
+            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
+        else
+            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+        end
     end
     compiler = get_compiler()
     m = something(march(), ``)
