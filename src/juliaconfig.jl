@@ -24,7 +24,11 @@ end
 julia_includedir() = abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 
 function ldflags()
-    fl = "-L$(shell_escape(julia_libdir()))"
+    fl = if VERSION >= v"1.6.0-DEV.1673"
+        "-L$(shell_escape(julia_libdir())) -L$(shell_escape(julia_private_libdir()))"
+    else
+        "-L$(shell_escape(julia_libdir()))"
+    end
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
         fl = fl * " -Wl,--export-all-symbols"
@@ -36,17 +40,25 @@ end
 
 # TODO
 function ldlibs(relative_path=nothing)
-    libname = if ccall(:jl_is_debugbuild, Cint, ()) != 0
-        "julia-debug"
+    libnames = if VERSION >= v"1.6.0-DEV.1673"
+        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+            "-ljulia-debug -ljulia-debug-internal"
+        else
+            "-ljulia -ljulia-internal"
+        end
     else
-        "julia"
+        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+            "-ljulia-debug"
+        else
+            "-ljulia"
+        end
     end
     if Sys.islinux()
-        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) -l$libname"
+        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
     elseif Sys.iswindows()
-        return "-l$libname -lopenlibm"
+        return "$libnames -lopenlibm"
     else
-        return "-l$libname"
+        return "$libnames"
     end
 end
 

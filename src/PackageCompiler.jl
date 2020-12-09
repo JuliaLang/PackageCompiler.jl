@@ -30,6 +30,14 @@ end
 current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
 
 all_stdlibs() = readdir(Sys.STDLIB)
+@static if VERSION >= v"1.6.0-DEV.1673"
+    sysimage_modules() = map(x->x.name, Base._sysimage_modules)
+else
+    sysimage_modules() = all_stdlibs()
+end
+stdlibs_in_sysimage() = intersect(all_stdlibs(), sysimage_modules())
+stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
+
 
 yesno(b::Bool) = b ? "yes" : "no"
 
@@ -239,6 +247,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     julia_code = """
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
+        @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
         Base.init_load_path()
         if isdefined(Base, :init_active_project)
             Base.init_active_project()
@@ -307,14 +316,18 @@ backup_default_sysimg_name() = basename(backup_default_sysimg_path())
 gather_stdlibs_project(project::String) = gather_stdlibs_project(create_pkg_context(project))
 function gather_stdlibs_project(ctx)
     @assert ctx.env.manifest !== nothing
-    stdlibs = all_stdlibs()
-    stdlibs_project = String[]
+    sysimage_stdlibs = stdlibs_in_sysimage()
+    non_sysimage_stdlibs = stdlibs_not_in_sysimage()
+    sysimage_stdlibs_project = String[]
+    non_sysimage_stdlibs_project = String[]
     for (uuid, pkg) in ctx.env.manifest
-        if pkg.name in stdlibs
-            push!(stdlibs_project, pkg.name)
+        if pkg.name in sysimage_stdlibs
+            push!(sysimage_stdlibs_project, pkg.name)
+        elseif pkg.name in non_sysimage_stdlibs
+            push!(non_sysimage_stdlibs_project, pkg.name)
         end
     end
-    return stdlibs_project
+    return sysimage_stdlibs_project, non_sysimage_stdlibs_project
 end
 
 function check_packages_in_project(ctx, packages)
@@ -413,11 +426,12 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         if filter_stdlibs
-            stdlibs = gather_stdlibs_project(ctx)
+            sysimage_stdlibs, non_sysimage_stdlibs = gather_stdlibs_project(ctx)
         else
-            stdlibs= all_stdlibs()
+            sysimage_stdlibs = stdlibs_in_sysimage()
+            non_sysimage_stdlibs = stdlibs_not_in_sysimage()
         end
-        base_sysimage = create_fresh_base_sysimage(stdlibs; cpu_target=cpu_target)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target=cpu_target)
     else
         if base_sysimage == nothing
             base_sysimage = current_process_sysimage_path()
@@ -463,7 +477,22 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    cmd = if VERSION >= v"1.6.0-DEV.1673"
+        private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
+            if ccall(:jl_is_debugbuild, Cint, ()) != 0
+                dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+            else
+                joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+            end
+        elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+            dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
+        else
+            dirname(abspath(Libdl.dlpath("libjulia-internal")))
+        end
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file -ljulia-internal -ljulia $extra`
+    else
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+    end
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
@@ -668,12 +697,22 @@ function create_executable_from_sysimg(;sysimage_path::String,
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = c_driver_program_path
-    if Sys.iswindows()
-        rpath = ``
-    elseif Sys.isapple()
-        rpath = `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
+    rpath = if VERSION >= v"1.6.0-DEV.1673"
+        if Sys.iswindows()
+            ``
+        elseif Sys.isapple()
+            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'`
+        else
+            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib -Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib/julia`
+        end
     else
-        rpath = `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+        if Sys.iswindows()
+            ``
+        elseif Sys.isapple()
+            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
+        else
+            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
+        end
     end
     compiler = get_compiler()
     m = something(march(), ``)
