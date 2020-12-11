@@ -205,17 +205,14 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             isapp::Bool)
 
     # Handle precompilation
-    precompile_statements = ""
+    precompile_files = String[]
     @debug "running precompilation execution script..."
     tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
-        precompile_statements *= "    append!(precompile_statements, readlines($(repr(tracefile))))\n"
+        push!(precompile_files, tracefile)
     end
-    for file in precompile_statements_file
-        precompile_statements *=
-            "    append!(precompile_statements, readlines($(repr(file))))\n"
-    end
+    append!(precompile_files, precompile_statements_file)
 
     precompile_code = """
         # This @eval prevents symbols from being put into Main
@@ -226,9 +223,10 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                     eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
                 end
             end
-            precompile_statements = String[]
-            $precompile_statements
-            for statement in sort(precompile_statements)
+            precompile_files = String[
+                $(join(map(repr, precompile_files), "\n" * " " ^ 8))
+            ]
+            for file in precompile_files, statement in eachline(file)
                 # println(statement)
                 # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
                 # N with a large number seems to work around it.
