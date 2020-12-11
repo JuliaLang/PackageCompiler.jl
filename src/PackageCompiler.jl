@@ -155,6 +155,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
 
         # Use that to create sys.ji
         new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+        new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
         new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
         write(new_sysimage_source_path, new_sysimage_content)
         try
