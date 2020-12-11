@@ -64,6 +64,7 @@ end
             # Get rid of some local state
             rm(joinpath(new_depot, "packages"); recursive=true)
             rm(joinpath(new_depot, "compiled"); recursive=true)
+            rm(joinpath(new_depot, "artifacts"); recursive=true)
             app_name = name !== nothing ? name : "MyApp"
             app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$app_path`, String)
