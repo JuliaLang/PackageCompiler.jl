@@ -625,6 +625,11 @@ function create_app(package_dir::String,
     precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
+    if VERSION >= v"1.6.0-DEV.1673"
+        Pkg.instantiate(ctx, allow_autoprecomp = false)
+    else
+        Pkg.instantiate(ctx)
+    end
     if isempty(ctx.env.manifest)
         @warn "it is not recommended to create an app without a preexisting manifest"
     end
