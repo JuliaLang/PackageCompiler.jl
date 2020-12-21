@@ -161,8 +161,9 @@ it is possible to call `rand()` from a package without depending on Random,
 even though that is where the method is defined. If Random was excluded from
 the sysimage that call would then error. The same thing is true for e.g. matrix
 multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
-`LinearAlgebra` and `Random` This is because these standard libraries do
-"type-piracy" so just loading those packages can cause code to change behavior.
+`LinearAlgebra` and `Random` This is because these standard libraries practice
+["type-piracy"](https://docs.julialang.org/en/v1/manual/style-guide/#Avoid-type-piracy), 
+just loading those packages can cause code to change behavior.
 
 Nevertheless, the option is there to use. Just make sure to properly test the
 app with the resulting sysimage.
