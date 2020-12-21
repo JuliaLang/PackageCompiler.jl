@@ -1,5 +1,9 @@
 # [Relocatable apps](@id man-tutorial-reloc)
 
+!!! info
+    This section is for people who want to understand PackageCompiler.jl under
+    the hood. It is not required reading to use the pacakge.
+
 In the previous tutorials, we created a custom sysimage and a binary (app) that
 did some simple CSV parsing with an (depending on the exact demands) acceptable
 latency (time until the app starts doing real work).  However, trying to send

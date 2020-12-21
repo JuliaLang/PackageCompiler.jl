@@ -1,5 +1,9 @@
 # [Creating a sysimage](@id man-tutorial-sysimage)
 
+!!! info
+    This section is for people who want to understand PackageCompiler.jl under
+    the hood. It is not required reading to use the package.
+
 ## Julia's compilation model and sysimages
 
 Julia is a JIT-compiled language. More specifically, functions are compiled

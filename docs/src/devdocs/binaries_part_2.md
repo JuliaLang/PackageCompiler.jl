@@ -1,5 +1,9 @@
 # [Creating a binary from Julia code](@id man-tutorial-binary)
 
+!!! info
+    This section is for people who want to understand PackageCompiler.jl under
+    the hood. It is not required reading to use the package.
+
 This section targets how to build an executable based on the custom sysimage so
 that it can be run without having to explicitly start a Julia session.
 
