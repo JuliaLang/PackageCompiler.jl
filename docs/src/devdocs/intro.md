@@ -1,5 +1,9 @@
 # Introduction
 
+!!! info
+    This section is for people who want to understand PackageCompiler.jl under
+    the hood. It is not required reading to use the package.
+
 This part of the documentation contains a set of tutorials aimed to teach how
 PackageCompiler works internally. This is done by going through some examples
 of manually creating sysimages and apps, mostly from the command line.
