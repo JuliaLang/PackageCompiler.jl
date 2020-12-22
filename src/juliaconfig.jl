@@ -42,7 +42,7 @@ end
 function ldlibs(relative_path=nothing)
     libnames = if VERSION >= v"1.6.0-DEV.1673"
         if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            "-ljulia-debug -ljulia-debug-internal"
+            "-ljulia-debug -ljulia-internal-debug"
         else
             "-ljulia -ljulia-internal"
         end
