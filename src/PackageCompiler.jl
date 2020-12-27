@@ -155,6 +155,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
 
         # Use that to create sys.ji
         new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+        new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
         new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
         write(new_sysimage_source_path, new_sysimage_content)
         try
@@ -622,6 +623,11 @@ function create_app(package_dir::String,
     precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
+    if VERSION >= v"1.6.0-DEV.1673"
+        Pkg.instantiate(ctx, allow_autoprecomp = false)
+    else
+        Pkg.instantiate(ctx)
+    end
     if isempty(ctx.env.manifest)
         @warn "it is not recommended to create an app without a preexisting manifest"
     end
