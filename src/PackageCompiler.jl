@@ -746,6 +746,9 @@ compiler.
 
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
+- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifats,
+  defaults to `true`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -760,7 +763,8 @@ function create_app(package_dir::String,
                     audit=true,
                     force=false,
                     c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
-                    cpu_target::String=default_app_cpu_target())
+                    cpu_target::String=default_app_cpu_target(),
+                    include_lazy_artifacts::Bool=true)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
@@ -851,6 +855,9 @@ compiler.
    Used to determine and set the `compatibility_version` (on Apple) and `soname` (on
    Linux/UNIX).
 
+- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifats,
+  defaults to `true`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -868,7 +875,8 @@ function create_library(package_dir::String,
                         julia_init_c_file::String=joinpath(@__DIR__, "julia_init.c"),
                         version=nothing,
                         compat_level="major",
-                        cpu_target::String=default_app_cpu_target())
+                        cpu_target::String=default_app_cpu_target(),
+                        include_lazy_artifacts::Bool=true)
 
     julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
 
@@ -883,7 +891,7 @@ function create_library(package_dir::String,
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
         library_only=true, julia_init_c_file=julia_init_c_file, header_files=header_files,
-        version=version, compat_level=compat_level)
+        version=version, compat_level=compat_level, include_lazy_artifacts=include_lazy_artifacts)
 
 end
 
@@ -902,8 +910,8 @@ function _create_app(package_dir::String,
                     julia_init_c_file=nothing,
                     header_files::Vector{String}=String[],
                     version=nothing,
-                    compat_level::String="major")
-
+                    compat_level::String="major",
+                    include_lazy_artifacts::Bool=true)
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -945,7 +953,7 @@ function _create_app(package_dir::String,
     mkpath(dest_dir)
 
     bundle_julia_libraries(dest_dir, library_only)
-    bundle_artifacts(ctx, dest_dir, library_only)
+    bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=include_lazy_artifacts)
 
     library_only && bundle_headers(dest_dir, header_files)
 
@@ -1037,7 +1045,7 @@ function bundle_julia_libraries(dest_dir, library_only)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir, library_only)
+function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=true)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
@@ -1060,6 +1068,12 @@ function bundle_artifacts(ctx, dest_dir, library_only)
                 @debug "bundling artifacts for $(pkg.name)"
                 artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
                 for name in keys(artifact_dict)
+                    if !include_lazy_artifacts &&
+                            isa(artifact_dict[name], AbstractDict) &&
+                            get(artifact_dict[name], "lazy", false)
+                        @info "skipping lazy artifact \"$name\""
+                        continue
+                    end
                     meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
                     meta == nothing && continue
                     @debug "  \"$name\""
