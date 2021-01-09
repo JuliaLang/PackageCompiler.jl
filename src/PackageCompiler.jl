@@ -5,7 +5,7 @@ using Libdl: Libdl
 using Pkg: Pkg
 using UUIDs: UUID, uuid1
 
-export create_sysimage, create_app, audit_app, restore_default_sysimage
+export create_sysimage, create_app, create_library, audit_app, restore_default_sysimage
 
 include("juliaconfig.jl")
 
@@ -371,6 +371,9 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 - `replace_default::Bool`: If `true`, replaces the default system image which is automatically
    used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
 
+- `julia_init_c_file::String`: File to include in the system image with functions for
+   initializing julia from external code.  Used when creating a shared library.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -388,7 +391,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          base_sysimage::Union{Nothing, String}=nothing,
-                         isapp::Bool=false)
+                         isapp::Bool=false,
+                         julia_init_c_file=nothing)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     if replace_default==true
@@ -437,6 +441,8 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
         end
     end
 
+    o_init_file = julia_init_c_file === nothing ? nothing : compile_c_init_julia(julia_init_c_file, sysimage_path)
+
     # Create the sysimage
     object_file = tempname() * ".o"
     create_sysimg_object_file(object_file, packages;
@@ -447,7 +453,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                               cpu_target=cpu_target,
                               script=script,
                               isapp=isapp)
-    create_sysimg_from_object_file(object_file, sysimage_path)
+    create_sysimg_from_object_file(object_file, sysimage_path, o_init_file=o_init_file)
 
     # Maybe replace default sysimage
     if replace_default
@@ -463,17 +469,34 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     return nothing
 end
 
-function create_sysimg_from_object_file(input_object::String, sysimage_path::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
+    @debug "Compiling $julia_init_c_file"
+    compiler = get_compiler()
+    m = something(march(), ``)
+    flags = Base.shell_split(cflags())
+
+    o_init_file = splitext(julia_init_c_file)[1] * ".o"
+    cmd = `$compiler -c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
+
+    @debug "running $cmd"
+    run_with_env(cmd, compiler)
+    return o_init_file
+end
+
+function create_sysimg_from_object_file(input_object::String, sysimage_path::String; o_init_file=nothing)
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
+
+    o_files = [input_object]
+    o_init_file !== nothing && push!(o_files, o_init_file)
 
     # Prevent compiler from stripping all symbols from the shared lib.
     # TODO: On clang on windows this is called something else
     if Sys.isapple()
-        o_file = `-Wl,-all_load $input_object`
+        o_file_flags = `-Wl,-all_load $o_files`
     else
-        o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
+        o_file_flags = `-Wl,--whole-archive $o_files -Wl,--no-whole-archive`
     end
-    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : rpath()
+    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : Sys.isunix() ? `-fPIC $(rpath())` : ``
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = if VERSION >= v"1.6.0-DEV.1673"
@@ -488,9 +511,9 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
         else
             dirname(abspath(Libdl.dlpath("libjulia-internal")))
         end
-        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file -ljulia-internal -ljulia $extra`
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
     else
-        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file -ljulia $extra`
+        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file_flags -ljulia $extra`
     end
     @debug "running $cmd"
     run_with_env(cmd, compiler)
@@ -619,6 +642,132 @@ function create_app(package_dir::String,
                     force=false,
                     c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
                     cpu_target::String=default_app_cpu_target())
+
+    _create_app(package_dir, app_dir, app_name, precompile_execution_file,
+        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
+        c_driver_program=c_driver_program)
+end
+
+"""
+    create_library(package_dir::String, dest_dir::String; kwargs...)
+
+Compile an library with the source in `package_dir` to the folder `dest_dir`.
+The folder `app_source` should to contain a package with C-callable functions,
+e.g.
+
+```
+Base.@ccallable function julia_cg(fptr::Ptr{Cvoid}, cx::Ptr{Cdouble}, cb::Ptr{Cdouble}, len::Csize_t)::Cint
+    try
+        x = unsafe_wrap(Array, cx, (len,))
+        b = unsafe_wrap(Array, cb, (len,))
+        A = COp(fptr,len)
+        cg!(x, A, b)
+    catch
+        Base.invokelatest(Base.display_error, Base.catch_stack())
+        return 1
+    end
+    return 0
+end
+```
+
+The library will be placed in the `lib` folder in `dest_dir`, and can be linked to
+and called into from C/C++ or other languages that can use C libraries.
+
+Note that any applications/programs linking to this library may need help finding
+it at run time.  Options include
+
+* Installing all libraries somewhere in the library search path.
+* Adding `/path/to/libname` to an appropriate library search path environment
+  variable (`DYLD_LIBRARY_PATH` on OSX, `PATH` on Windows, or `LD_LIBRARY_PATH`
+  on Linux/BSD/Unix).
+* Running `install_name_tool -change libname /path/to/libname` (OSX)
+
+To use any Julia exported functions, you *must* first call `init_julia(argc, argv)`,
+where `argc` and `argv` are parameters that would normally be passed to `julia` on the
+command line (e.g., to set up the number of threads or processes).
+
+When your program is exiting, it is also suggested to call `shutdown_julia(retcode)`,
+to allow Julia to cleanly clean up resources and call any finalizers.  (This function
+simply calls `jl_atexit_hook(retcode)`.)
+
+An attempt to automatically find a compiler will be done but can also be given
+explicitly by setting the envirnment variable `JULIA_CC` to a path to a
+compiler.
+
+### Keyword arguments:
+
+- `lib_name::String`: an alternative name for the compiled library.  If not provided,
+   the name of the package (as specified in Project.toml) is used.  `lib` will be
+   prepended to the name if it is not already present.
+
+- `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
+   files that contain code which precompilation statements should be recorded from.
+
+- `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
+   files that contains precompilation statements that should be included in the sysimage
+   for the library.
+
+- `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
+   of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
+
+- `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
+   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+
+- `audit::Bool`: Warn about eventual relocatability problems with the library, defaults
+   to `true`.
+
+- `force::Bool`: Remove the folder `compiled_lib` if it exists before creating the library.
+
+- `header_files::Vector{String}`: A list of header files to include in the library bundle.
+
+- `julia_init_c_file::String`: File to include in the system image with functions for
+   initializing julia from external code.
+
+### Advanced keyword arguments
+
+- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+"""
+function create_library(package_dir::String,
+                        dest_dir::String;
+                        lib_name=nothing,
+                        precompile_execution_file::Union{String, Vector{String}}=String[],
+                        precompile_statements_file::Union{String, Vector{String}}=String[],
+                        incremental=true,
+                        filter_stdlibs=false,
+                        audit=true,
+                        force=false,
+                        header_files::Vector{String} = String[],
+                        julia_init_c_file::String=joinpath(@__DIR__, "julia_init.c"),
+                        cpu_target::String=default_app_cpu_target())
+
+    julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
+
+    if !(julia_init_h_file in header_files)
+        push!(header_files, julia_init_h_file)
+    end
+
+    _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
+        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
+        library_only=true, julia_init_c_file=julia_init_c_file, header_files=header_files)
+
+end
+
+function _create_app(package_dir::String,
+                    dest_dir::String,
+                    name,
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    incremental,
+                    filter_stdlibs,
+                    audit,
+                    force,
+                    cpu_target::String;
+                    library_only::Bool=false,
+                    c_driver_program::String="",
+                    julia_init_c_file=nothing,
+                    header_files::Vector{String}=String[])
+    isapp = !library_only
+
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
@@ -635,30 +784,34 @@ function create_app(package_dir::String,
         error("expected package to have a `name`-entry")
     end
     sysimg_name = ctx.env.pkg.name
-    if app_name === nothing
-        app_name = sysimg_name
+    if name === nothing
+        name = sysimg_name
     end
-    sysimg_file = app_name * "." * Libdl.dlext
-    if isdir(app_dir)
+    sysimg_file = name * "." * Libdl.dlext
+    if library_only && !startswith(sysimg_file, "lib")
+        sysimg_file = "lib" * sysimg_file
+    end
+    if isdir(dest_dir)
         if !force
-            error("directory $(repr(app_dir)) already exists, use `force=true` to overwrite (will completely",
+            error("directory $(repr(dest_dir)) already exists, use `force=true` to overwrite (will completely",
                   " remove the directory)")
         end
-        rm(app_dir; force=true, recursive=true)
+        rm(dest_dir; force=true, recursive=true)
     end
-    c_driver_program = abspath(c_driver_program)
 
     audit && audit_app(ctx)
 
-    mkpath(app_dir)
+    mkpath(dest_dir)
 
-    bundle_julia_libraries(app_dir)
-    bundle_artifacts(ctx, app_dir)
+    bundle_julia_libraries(dest_dir, library_only)
+    bundle_artifacts(ctx, dest_dir)
+
+    library_only && bundle_headers(dest_dir, header_files)
 
     # TODO: Create in a temp dir and then move it into place?
-    binpath = joinpath(app_dir, "bin")
-    mkpath(binpath)
-    cd(binpath) do
+    target_path = Sys.isunix() && library_only ? joinpath(dest_dir, "lib") : joinpath(dest_dir, "bin")
+    mkpath(target_path)
+    cd(target_path) do
         if !incremental
             tmp = mktempdir()
             # Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
@@ -675,14 +828,16 @@ function create_app(package_dir::String,
                             precompile_statements_file=precompile_statements_file,
                             cpu_target=cpu_target,
                             base_sysimage=tmp_base_sysimage,
-                            isapp=true)
+                            isapp=isapp,
+                            julia_init_c_file=julia_init_c_file)
         else
             create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
                                               cpu_target=cpu_target,
-                                              isapp=true)
+                                              isapp=isapp,
+                                              julia_init_c_file=julia_init_c_file)
         end
 
         if Sys.isapple()
@@ -691,8 +846,11 @@ function create_app(package_dir::String,
             run(cmd)
         end
 
-        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name,
-                                        c_driver_program_path=c_driver_program,)
+        if !library_only
+            c_driver_program = abspath(c_driver_program)
+            create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=name,
+                                         c_driver_program_path=c_driver_program)
+        end
     end
     return
 end
@@ -711,8 +869,8 @@ function create_executable_from_sysimg(;sysimage_path::String,
     return nothing
 end
 
-function bundle_julia_libraries(app_dir)
-    app_libdir = joinpath(app_dir, Sys.isunix() ? "lib" : "bin")
+function bundle_julia_libraries(dest_dir, library_only)
+    app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     cp(julia_libdir(), app_libdir; force=true)
     # We do not want to bundle the sysimg (nor the backup sysimage):
     rm(joinpath(app_libdir, "julia", default_sysimg_name()); force=true)
@@ -726,7 +884,7 @@ function bundle_julia_libraries(app_dir)
     return
 end
 
-function bundle_artifacts(ctx, app_dir)
+function bundle_artifacts(ctx, dest_dir)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
@@ -760,13 +918,25 @@ function bundle_artifacts(ctx, app_dir)
     end
 
     # Copy the artifacts needed to the app directory
-    artifact_app_path = joinpath(app_dir, "artifacts")
+    artifact_app_path = joinpath(dest_dir, "artifacts")
     if !isempty(artifact_paths)
         mkpath(artifact_app_path)
     end
     for artifact_path in artifact_paths
         artifact_name = basename(artifact_path)
         cp(artifact_path, joinpath(artifact_app_path, artifact_name))
+    end
+    return
+end
+
+function bundle_headers(dest_dir, header_files)
+    isempty(header_files) && return
+    include_dir = joinpath(dest_dir, "include")
+    mkpath(include_dir)
+
+    for header_file in header_files
+        new_file = joinpath(include_dir, basename(header_file))
+        cp(header_file, new_file; force=true)
     end
     return
 end
