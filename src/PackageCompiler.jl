@@ -473,7 +473,7 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     else
         o_file = `-Wl,--whole-archive $input_object -Wl,--no-whole-archive`
     end
-    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : ``
+    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : rpath()
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = if VERSION >= v"1.6.0-DEV.1673"
@@ -703,26 +703,9 @@ function create_executable_from_sysimg(;sysimage_path::String,
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = c_driver_program_path
-    rpath = if VERSION >= v"1.6.0-DEV.1673"
-        if Sys.iswindows()
-            ``
-        elseif Sys.isapple()
-            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'`
-        else
-            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib -Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib/julia`
-        end
-    else
-        if Sys.iswindows()
-            ``
-        elseif Sys.isapple()
-            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
-        else
-            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
-        end
-    end
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $rpath $flags`
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath()) $flags`
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
