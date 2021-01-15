@@ -684,13 +684,15 @@ function create_app(package_dir::String,
                                               cpu_target=cpu_target,
                                               isapp=true)
         end
-        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name,
-                                    c_driver_program_path=c_driver_program,)
+
         if Sys.isapple()
-            cmd = `install_name_tool -change $sysimg_file @rpath/$sysimg_file $app_name`
+            cmd = `install_name_tool -id @rpath/$sysimg_file $sysimg_file`
             @debug "running $cmd"
             run(cmd)
         end
+
+        create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=app_name,
+                                        c_driver_program_path=c_driver_program,)
     end
     return
 end
