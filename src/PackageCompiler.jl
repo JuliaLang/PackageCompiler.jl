@@ -123,6 +123,60 @@ function get_julia_cmd()
     cmd = `$julia_path --color=yes --startup-file=no`
 end
 
+function get_compat_version(version::VersionNumber, level::String)
+    level == "full" ? version :
+    level == "patch" ? VersionNumber(version.major, version.minor, version.patch) :
+    level == "minor" ? VersionNumber(version.major, version.minor) :
+    level == "major" ? VersionNumber(version.major) :
+    error("Unknown level: $level")
+end
+
+function get_compat_version_str(version::VersionNumber, level::String)
+    level == "full" ? "$(version)" :
+    level == "patch" ? "$(version.major).$(version.minor).$(version.patch)" :
+    level == "minor" ? "$(version.major).$(version.minor)" :
+    level == "major" ? "$(version.major)" :
+    error("Unknown level: $level")
+end
+
+function get_sysimg_file(name::String;
+                     library_only::Bool=false,
+                     version::Union{VersionNumber, Nothing}=nothing,
+                     level::String="patch")
+
+    dlext = Libdl.dlext
+    (!library_only || Sys.iswindows()) && return "$name.$dlext"
+
+    # For libraries on Unix/Apple, make sure the name starts with "lib"
+
+    if !startswith(name, "lib")
+        name = "lib" * name
+    end
+
+    if version === nothing
+        return "$name.$dlext"
+    end
+
+    version = get_compat_version_str(version, level)
+    sysimg_file = (
+        Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
+        Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
+        error("Unable to determine sysimage_file; system is not Windows, Apple, or UNIX!")
+    )
+
+    return sysimg_file
+end
+
+function get_soname(name::String;
+                library_only::Bool=false,
+                version::Union{VersionNumber, Nothing}=nothing,
+                compat_level::String="major")
+
+    (!Sys.isunix() || Sys.isapple()) && return nothing
+    return get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
+end
+
+
 function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     sysimg_content = read(sysimg_source_path, String)
@@ -374,6 +428,15 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 - `julia_init_c_file::String`: File to include in the system image with functions for
    initializing julia from external code.  Used when creating a shared library.
 
+- `version::VersionNumber`: Shared library version number (optional).  Added to the sysimg
+   `.so` name on Linux/UNIX, and the `.dylib` name on Apple platforms, and to set the internal
+   `current_version` on Apple.  Ignored on Windows.
+
+- `compat_level::String`: compatibility level for library.  One of "major", "minor".
+   With `version`, used to determine the `compatibility_version` on Apple.
+
+- `soname`: On linux, used to set the internal soname for the system image.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -388,11 +451,15 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          incremental::Bool=true,
                          filter_stdlibs=false,
                          replace_default::Bool=false,
-                         cpu_target::String=NATIVE_CPU_TARGET,
-                         script::Union{Nothing, String}=nothing,
                          base_sysimage::Union{Nothing, String}=nothing,
                          isapp::Bool=false,
-                         julia_init_c_file=nothing)
+                         julia_init_c_file=nothing,
+                         version=nothing,
+                         compat_level::String="major",
+                         soname=nothing,
+                         cpu_target::String=NATIVE_CPU_TARGET,
+                         script::Union{Nothing, String}=nothing)
+
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     if replace_default==true
@@ -436,7 +503,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
         end
         base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target=cpu_target)
     else
-        if base_sysimage == nothing
+        if isnothing(base_sysimage)
             base_sysimage = current_process_sysimage_path()
         end
     end
@@ -453,7 +520,12 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                               cpu_target=cpu_target,
                               script=script,
                               isapp=isapp)
-    create_sysimg_from_object_file(object_file, sysimage_path, o_init_file=o_init_file)
+    create_sysimg_from_object_file(object_file,
+                                   sysimage_path,
+                                   o_init_file=o_init_file,
+                                   compat_level=compat_level,
+                                   version=version,
+                                   soname=soname)
 
     # Maybe replace default sysimage
     if replace_default
@@ -483,7 +555,36 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
     return o_init_file
 end
 
-function create_sysimg_from_object_file(input_object::String, sysimage_path::String; o_init_file=nothing)
+function get_extra_linker_flags(version, compat_level, soname)
+    current_ver_arg = ``
+    compat_ver_arg = ``
+
+    if version !== nothing
+        compat_version = get_compat_version(version, compat_level)
+        current_ver_arg = `-current_version $version`
+        compat_ver_arg = `-compatibility_version $compat_version`
+    end
+
+    soname_arg = soname === nothing ? `` : `-Wl,-soname,$soname`
+    rpath_args = rpath()
+
+    extra = (
+        Sys.iswindows() ? `-Wl,--export-all-symbols` :
+        Sys.isapple() ? `-fPIC $compat_ver_arg $current_ver_arg $rpath_args` :
+        Sys.isunix() ? `-fPIC $soname_arg $rpath_args` :
+        error("What kind of machine is this?")
+    )
+
+    return extra
+end
+
+function create_sysimg_from_object_file(input_object::String,
+                                        sysimage_path::String;
+                                        o_init_file=nothing,
+                                        version=nothing,
+                                        compat_level::String="major",
+                                        soname=nothing)
+
     julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
     o_files = [input_object]
@@ -496,7 +597,9 @@ function create_sysimg_from_object_file(input_object::String, sysimage_path::Str
     else
         o_file_flags = `-Wl,--whole-archive $o_files -Wl,--no-whole-archive`
     end
-    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` : Sys.isunix() ? `-fPIC $(rpath())` : ``
+
+    extra = get_extra_linker_flags(version, compat_level, soname)
+
     compiler = get_compiler()
     m = something(march(), ``)
     cmd = if VERSION >= v"1.6.0-DEV.1673"
@@ -584,10 +687,10 @@ function audit_app(ctx::Pkg.Types.Context)
 end
 
 """
-    create_app(app_source::String, compiled_app::String; kwargs...)
+    create_app(package_dir::String, compiled_app::String; kwargs...)
 
-Compile an app with the source in `app_source` to the folder `compiled_app`.
-The folder `app_source` needs to contain a package where the package include a
+Compile an app with the source in `package_dir` to the folder `compiled_app`.
+The folder `package_dir` needs to contain a package where the package includes a
 function with the signature
 
 ```
@@ -652,7 +755,7 @@ end
     create_library(package_dir::String, dest_dir::String; kwargs...)
 
 Compile an library with the source in `package_dir` to the folder `dest_dir`.
-The folder `app_source` should to contain a package with C-callable functions,
+The folder `package_dir` should to contain a package with C-callable functions,
 e.g.
 
 ```
@@ -670,8 +773,8 @@ Base.@ccallable function julia_cg(fptr::Ptr{Cvoid}, cx::Ptr{Cdouble}, cb::Ptr{Cd
 end
 ```
 
-The library will be placed in the `lib` folder in `dest_dir`, and can be linked to
-and called into from C/C++ or other languages that can use C libraries.
+The library will be placed in the `lib` folder in `dest_dir` (or `bin` on Windows),
+and can be linked to and called into from C/C++ or other languages that can use C libraries.
 
 Note that any applications/programs linking to this library may need help finding
 it at run time.  Options include
@@ -723,6 +826,15 @@ compiler.
 - `julia_init_c_file::String`: File to include in the system image with functions for
    initializing julia from external code.
 
+- `version::VersionNumber`: Library version number.  Added to the sysimg `.so` name
+   on Linux, and the `.dylib` name on Apple platforms, and with `compat_level`, used to
+   determine and set the `current_version`, `compatibility_version` (on Apple) and
+   `soname` (on Linux/UNIX)
+
+- `compat_level::String`: compatibility level for library.  One of "major", "minor".
+   Used to determine and set the `compatibility_version` (on Apple) and `soname` (on
+   Linux/UNIX).
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -732,12 +844,14 @@ function create_library(package_dir::String,
                         lib_name=nothing,
                         precompile_execution_file::Union{String, Vector{String}}=String[],
                         precompile_statements_file::Union{String, Vector{String}}=String[],
-                        incremental=true,
+                        incremental=false,
                         filter_stdlibs=false,
                         audit=true,
                         force=false,
                         header_files::Vector{String} = String[],
                         julia_init_c_file::String=joinpath(@__DIR__, "julia_init.c"),
+                        version=nothing,
+                        compat_level="major",
                         cpu_target::String=default_app_cpu_target())
 
     julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
@@ -746,9 +860,14 @@ function create_library(package_dir::String,
         push!(header_files, julia_init_h_file)
     end
 
+    if version isa String
+        version = parse(VersionNumber, version)
+    end
+
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        library_only=true, julia_init_c_file=julia_init_c_file, header_files=header_files)
+        library_only=true, julia_init_c_file=julia_init_c_file, header_files=header_files,
+        version=version, compat_level=compat_level)
 
 end
 
@@ -765,7 +884,10 @@ function _create_app(package_dir::String,
                     library_only::Bool=false,
                     c_driver_program::String="",
                     julia_init_c_file=nothing,
-                    header_files::Vector{String}=String[])
+                    header_files::Vector{String}=String[],
+                    version=nothing,
+                    compat_level::String="major")
+
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -787,10 +909,13 @@ function _create_app(package_dir::String,
     if name === nothing
         name = sysimg_name
     end
-    sysimg_file = name * "." * Libdl.dlext
-    if library_only && !startswith(sysimg_file, "lib")
-        sysimg_file = "lib" * sysimg_file
-    end
+
+    sysimg_file = get_sysimg_file(name, library_only=library_only, version=version)
+    soname = get_soname(name,
+                        library_only=library_only,
+                        version=version,
+                        compat_level=compat_level)
+
     if isdir(dest_dir)
         if !force
             error("directory $(repr(dest_dir)) already exists, use `force=true` to overwrite (will completely",
@@ -829,7 +954,9 @@ function _create_app(package_dir::String,
                             cpu_target=cpu_target,
                             base_sysimage=tmp_base_sysimage,
                             isapp=isapp,
-                            julia_init_c_file=julia_init_c_file)
+                            julia_init_c_file=julia_init_c_file,
+                            version=version,
+                            soname=soname)
         else
             create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
@@ -837,7 +964,9 @@ function _create_app(package_dir::String,
                                               precompile_statements_file=precompile_statements_file,
                                               cpu_target=cpu_target,
                                               isapp=isapp,
-                                              julia_init_c_file=julia_init_c_file)
+                                              julia_init_c_file=julia_init_c_file,
+                                              version=version,
+                                              soname=soname)
         end
 
         if Sys.isapple()
@@ -850,6 +979,14 @@ function _create_app(package_dir::String,
             c_driver_program = abspath(c_driver_program)
             create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=name,
                                          c_driver_program_path=c_driver_program)
+        end
+
+        if library_only && version !== nothing && Sys.isunix()
+            compat_file = get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
+            base_file = get_sysimg_file(name, library_only=library_only)
+            @debug "creating symlinks for $compat_file and $base_file"
+            symlink(sysimg_file, compat_file)
+            symlink(sysimg_file, base_file)
         end
     end
     return
