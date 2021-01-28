@@ -6,7 +6,7 @@ take some time. All subsequent calls within that same session use this fast comp
 but if you restart Julia you lose all the compiled work. PackageCompiler allows you to do this
 work up front — further ahead of time — and store the results for a lower latency startup.
 
-There are two main workflows:
+There are three main workflows:
 
 1. You can save loaded packages and compiled functions into a file (called a
     [sysimage](@ref sysimages)) that you pass to `julia` upon startup. Typically the
@@ -22,7 +22,12 @@ There are two main workflows:
     potentially cross-platfrom binary libraries) and Julia itself with a single executable
     as its entry point.
 
-The most challenging part in both cases is in determining _which_ methods need to be
+3. Alternatively, you can create a [C library](@ref libs).  In this case, your package should
+    define c-callable functions to be included in the sysimage.  As with apps, generating a
+    library bundles together Julia and all dependencies in a (hopefully) redistributable
+    directory structure that can be moved to other machines (of the same architecture).
+
+The most challenging part in all cases is in determining _which_ methods need to be
 compiled ahead of time. For example, your project will certainly require addition between
 integers (`+(::Int, ::Int)`; thankfully that's already compiled into Julia itself), but does
 it require addition of dates (like `+(::Date, ::Day)` or `+(::DateTime, ::Hour)`)? What
