@@ -4,6 +4,7 @@
 .DS_Store
 /Manifest.toml
 /examples/MyApp/MyApp
+/examples/*Compiled
 /dev/
 *.so
 *.dll
