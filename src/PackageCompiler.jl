@@ -487,7 +487,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     # Instantiate the project
     ctx = create_pkg_context(project)
     @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx)
+    Pkg.instantiate(ctx, verbose=true)
 
     check_packages_in_project(ctx, packages)
 
@@ -895,9 +895,9 @@ function _create_app(package_dir::String,
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
     if VERSION >= v"1.6.0-DEV.1673"
-        Pkg.instantiate(ctx, allow_autoprecomp = false)
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
     else
-        Pkg.instantiate(ctx)
+        Pkg.instantiate(ctx, verbose=true)
     end
     if isempty(ctx.env.manifest)
         @warn "it is not recommended to create an app without a preexisting manifest"
