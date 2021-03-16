@@ -167,6 +167,12 @@ function get_sysimg_file(name::String;
     return sysimg_file
 end
 
+function get_depot_path(root_dir::String, library_only::Bool)
+    # Use <root>/share/julia as the depot path when creating libraries
+    library_only && return joinpath(root_dir, "share", "julia")
+    return root_dir
+end
+
 function get_soname(name::String;
                 library_only::Bool=false,
                 version::Union{VersionNumber, Nothing}=nothing,
@@ -929,7 +935,7 @@ function _create_app(package_dir::String,
     mkpath(dest_dir)
 
     bundle_julia_libraries(dest_dir, library_only)
-    bundle_artifacts(ctx, dest_dir)
+    bundle_artifacts(ctx, dest_dir, library_only)
 
     library_only && bundle_headers(dest_dir, header_files)
 
@@ -1021,7 +1027,7 @@ function bundle_julia_libraries(dest_dir, library_only)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir)
+function bundle_artifacts(ctx, dest_dir, library_only)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
@@ -1055,7 +1061,9 @@ function bundle_artifacts(ctx, dest_dir)
     end
 
     # Copy the artifacts needed to the app directory
-    artifact_app_path = joinpath(dest_dir, "artifacts")
+    depot_path = get_depot_path(dest_dir, library_only)
+    artifact_app_path = joinpath(depot_path, "artifacts")
+
     if !isempty(artifact_paths)
         mkpath(artifact_app_path)
     end
