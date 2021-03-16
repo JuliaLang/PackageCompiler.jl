@@ -43,7 +43,25 @@ void set_depot_path(char *sysimage_path)
     // dirname mutates the original string on some systems,
     // so make a copy
     char *_sysimage_path = strdup(sysimage_path);
-    char *dir = dirname(dirname(_sysimage_path));
+    char *root_dir = dirname(dirname(_sysimage_path));
+    int root_dir_len = strlen(root_dir);
+
+    // for library bundles, we create the depot path under
+    // <root_dir>/share/julia
+#ifdef _WIN32
+    char *depot_subdir = "\\share\\julia";
+#else
+    char *depot_subdir = "/share/julia";
+#endif
+    int depot_dir_len = strlen(depot_subdir);
+
+    int full_path_len = root_dir_len + depot_dir_len;
+    char *dir = malloc(full_path_len + 1);
+
+    strncpy(dir, root_dir, root_dir_len);
+    strncpy(dir + root_dir_len, depot_subdir, depot_dir_len);
+    dir[full_path_len] = '\0';
+
 #ifdef _WIN32
     _putenv_s("JULIA_DEPOT_PATH", dir);
     _putenv_s("JULIA_LOAD_PATH", "@");
@@ -52,6 +70,7 @@ void set_depot_path(char *sysimage_path)
     setenv("JULIA_LOAD_PATH", "@", 1);
 #endif
     free(_sysimage_path);
+    free(dir);
 }
 
 void init_julia(int argc, char **argv)

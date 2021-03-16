@@ -88,19 +88,18 @@ Here you have different options depending on your operating system and needs.
 
 1. Install the libraries in a non-standard location, and update an appropriate environment
    variable to point to the library location.
-   * On Linux and other unix-like OSes, `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
-   * On Mac, set `export DYLD_FALLBACK_LIBRARY_PATH=/path/to/lib:$DYLD_FALLBACK_LIBRARY_PATH`
+   * On Linux and other unix-like OSes, run `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
+   * On Mac, run `export DYLD_FALLBACK_LIBRARY_PATH=/path/to/lib:$DYLD_FALLBACK_LIBRARY_PATH`
    * On Windows, include the library location in `PATH`. (* NOTE: not tested--does this work? *)
 
 2. (Linux/Unix/Mac) Install the library files in a standard library location. `/usr/local/`
    is one possible location:
    * Libraries would be installed in `/usr/local/lib`
    * Include files would be installed in `/usr/local/include`
-   * Julia artifacts and any other depot components could be placed under `/usr/local/share`.
+   * Julia artifacts and any other depot components would be installed under `/usr/local/share/julia`.
     
-   NOTE: the current build structure doesn't facilitate this last point.
-   NOTE 2: On Linux, installing under `/usr/local/lib` or another standard location requires 
-           that you run `ldconfig` as root after install.
+   NOTE: On Linux, installing under `/usr/local/lib` or another standard location requires 
+         that you run `ldconfig` as root after install.
 
 3. (Mac) Include the full library bundle in an application bundle, and set the `rpath`
    on the application bundle to the relative path of the library from the executable.
