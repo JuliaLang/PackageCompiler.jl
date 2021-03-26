@@ -19,8 +19,8 @@ section (e.g. the `julia-config.jl` script) but it is good to know they exist.
 
 A rough outline of the steps we will take to create an executable are:
 
-- Create our Julia app with a `Base.@ccallable` entry-point which means the Julia
-  function can be called directly from C.
+- Create our Julia app with a `julia_main()::Cint` entry-point which can be
+  called directly from C.
 - Create a custom sysimage to reduce latency (this is pretty much just doing
   part 1) and to hold the C-callable function from the first step.
 - Write an embedding wrapper in C that loads our custom sysimage, does some
@@ -39,7 +39,7 @@ module MyApp
 
 using CSV
 
-Base.@ccallable function julia_main()::Cint
+function julia_main()::Cint
     try
         real_main()
     catch
@@ -66,12 +66,10 @@ end
 end # module
 ```
 
-The function `julia_main` has been annotated with `Base.@ccallable` which means
-that a function with the unmangled name will appear in the sysimage. This
-function is just a small wrapper function that calls out to `real_main` which
-does the actual work.  All the code that is executed is put inside a try-catch
-block since the error will otherwise happen in the C-code where the backtrace
-is not very good
+The function `julia_main` is just a small wrapper function that calls out to
+`real_main` which does the actual work.  All the code that is executed is put
+inside a try-catch block since the error will otherwise happen in the C-code
+where the backtrace is not very good.
 
 To facilitate testing, we [check if the file was directly
 executed](https://docs.julialang.org/en/v1/manual/faq/#How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1)

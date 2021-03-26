@@ -32,7 +32,7 @@ to your project file.
 ### Executables
 - The function to create an executable is now called [`create_app`](@ref) instead of `build_executable`.
 - The `julia_main` function for executables should no longer take any arguments
-  (just access the global `ARGS`) and no longer need to be annotated with
+  (just access the global `ARGS`) and no longer should be annotated with
   `Base.@ccallable`.
 - The code for an executable need to be structured as a package, that is, with a
   `Project.toml` file and a `src/Package.jl` file etc.

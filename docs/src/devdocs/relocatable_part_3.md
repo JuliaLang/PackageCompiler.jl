@@ -81,7 +81,7 @@ The code for the app itself is quite simple:
 module MyApp
 using Crayons
 
-Base.@ccallable function julia_main()::Cint
+function julia_main()::Cint
     try
         real_main()
     catch
@@ -108,9 +108,11 @@ function real_main()
     end
     return 0
 end
+
 if abspath(PROGRAM_FILE) == @__FILE__
     real_main()
 end
+
 end # module
 ```
 
