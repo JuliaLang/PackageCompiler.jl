@@ -17,7 +17,7 @@ julia> @time (p = plot(rand(5), rand(5)); display(p))
 
 This is approximately 19 seconds from start of Julia to the first plot.
 
-We now create a precompilation file with exactly this workload in `precompile_plots.jl`:
+We now create a precompilation file with exactly this workload in a file called `precompile_plots.jl` in the current directory:
 
 
 ```julia
