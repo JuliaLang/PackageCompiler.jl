@@ -174,7 +174,7 @@ end
 
 function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing})
     tracefile = tempname()
-    if precompile_file == nothing
+    if precompile_file === nothing
         arg = `-e ''`
     else
         arg = `$precompile_file`
@@ -183,18 +183,22 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
             --compile=all --trace-compile=$tracefile $arg`
     @debug "run_precompilation_script: running $cmd"
-    @info "\n===== Start precompile execution =====\n"
+    precompile_file === nothing || @info "===== Start precompile execution ====="
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
-    @info "\n===== End precompile execution =====\n"
+    precompile_file === nothing || @info "===== End precompile execution ====="
     return tracefile
 end
 
-# Load packages in a normal julia process to make them precompile "normally"
 function do_ensurecompiled(project, packages, sysimage)
-    use = join("import " .* packages, '\n')
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
-    @debug "running $cmd"
-    read(cmd, String)
+    if VERSION >= v"1.6.0"
+        run(`$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e 'using Pkg; Pkg.precompile(; strict=true)'`)
+    else
+        # Pkg.precompile is buggy pre 1.6 (and slow).
+        use = join("import " .* packages, '\n')
+        cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
+        @debug "running $cmd"
+        read(cmd, String)
+    end
     return nothing
 end
 
@@ -256,8 +260,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         Base.init_depot_path()
         """
 
-    # Ensure packages to be put into sysimage are precompiled by loading them in a
-    # separate process first.
+    # Ensure packages to be put into sysimage are precompiled
     if !isempty(packages)
         do_ensurecompiled(project, packages, base_sysimage)
     end
