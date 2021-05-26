@@ -42,19 +42,22 @@ stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
 yesno(b::Bool) = b ? "yes" : "no"
 
 function load_all_deps(ctx)
+    ctx_or_env = VERSION <= v"1.7.0-" ? ctx : ctx.env
     if isdefined(Pkg.Operations, :load_all_deps!)
         pkgs = Pkg.Types.PackageSpec[]
-        Pkg.Operations.load_all_deps!(ctx, pkgs)
+        Pkg.Operations.load_all_deps!(ctx_or_env, pkgs)
     else
-        pkgs = Pkg.Operations.load_all_deps(ctx)
+        pkgs = Pkg.Operations.load_all_deps(ctx_or_env)
     end
     return pkgs
 end
 function source_path(ctx, pkg)
     if VERSION <= v"1.4.0-rc1"
         Pkg.Operations.source_path(pkg)
-    else
+    elseif VERSION <= v"1.7.0-"
         Pkg.Operations.source_path(ctx, pkg)
+    else
+        Pkg.Operations.source_path(ctx.env.project_file, pkg)
     end
 end
 
