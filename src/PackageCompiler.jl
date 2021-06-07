@@ -626,7 +626,8 @@ function create_app(package_dir::String,
                     audit=true,
                     force=false,
                     c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
-                    cpu_target::String=default_app_cpu_target())
+                    cpu_target::String=default_app_cpu_target(),
+                    include_lazy_artifacts=true)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
@@ -661,7 +662,7 @@ function create_app(package_dir::String,
     mkpath(app_dir)
 
     bundle_julia_libraries(app_dir)
-    bundle_artifacts(ctx, app_dir)
+    bundle_artifacts(ctx, app_dir; include_lazy_artifacts=include_lazy_artifacts)
 
     # TODO: Create in a temp dir and then move it into place?
     binpath = joinpath(app_dir, "bin")
@@ -749,7 +750,7 @@ function bundle_julia_libraries(app_dir)
     return
 end
 
-function bundle_artifacts(ctx, app_dir)
+function bundle_artifacts(ctx, app_dir; include_lazy_artifacts=true)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
@@ -772,6 +773,12 @@ function bundle_artifacts(ctx, app_dir)
                 @debug "bundling artifacts for $(pkg.name)"
                 artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
                 for name in keys(artifact_dict)
+                    if !include_lazy_artifacts &&
+                            isa(artifact_dict[name], AbstractDict) &&
+                            get(artifact_dict[name], "lazy", false)
+                        @info "skipping lazy artifact \"$name\""
+                        continue
+                    end
                     meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
                     meta == nothing && continue
                     @debug "  \"$name\""
