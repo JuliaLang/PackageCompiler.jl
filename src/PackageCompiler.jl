@@ -210,6 +210,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             base_sysimage::String,
                             precompile_execution_file::Vector{String},
                             precompile_statements_file::Vector{String},
+                            precompile_function_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
                             isapp::Bool)
@@ -217,12 +218,23 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
-    tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, precompile_statements_file)
+
+    precompile_functions = ""
+    for file in precompile_function_file
+        precompile_functions *= """
+            try
+                include("$file")
+                _precompile_()
+            catch
+                @debug "failed to execute \$file"
+            end
+            """
+    end
 
     precompile_code = """
         # This @eval prevents symbols from being put into Main
@@ -248,6 +260,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                     @debug "failed to execute \$statement"
                 end
             end
+            $precompile_functions
         end # module
         """
 
@@ -370,6 +383,10 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 - `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
    files that contains precompilation statements that should be included in the sysimage.
 
+- `precompile_function_file::Union{String, Vector{String}}`: A file or list of
+   files that contains a `_precompile_()` function in which it calls the precompilation statements
+   that should be included in the sysimage.
+
 - `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
    of the current process otherwise build a new sysimage from scratch. Defaults to `true`.
 
@@ -390,6 +407,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
                          precompile_statements_file::Union{String, Vector{String}}=String[],
+                         precompile_function_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
                          filter_stdlibs=false,
                          replace_default::Bool=false,
@@ -399,6 +417,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                          isapp::Bool=false)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
+    precompile_function_file = abspath.(precompile_function_file)
     if replace_default==true
         if sysimage_path !== nothing
             error("cannot specify `sysimage_path` when `replace_default` is `true`")
@@ -420,6 +439,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     packages = string.(vcat(packages)) # Package names are often used as string inside Julia
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
+    precompile_function_file   = vcat(precompile_function_file)
 
     # Instantiate the project
     ctx = create_pkg_context(project)
@@ -452,6 +472,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
                               base_sysimage=base_sysimage,
                               precompile_execution_file=precompile_execution_file,
                               precompile_statements_file=precompile_statements_file,
+                              precompile_function_file=precompile_function_file,
                               cpu_target=cpu_target,
                               script=script,
                               isapp=isapp)
@@ -601,6 +622,10 @@ compiler.
    files that contains precompilation statements that should be included in the sysimage
    for the app.
 
+- `precompile_function_file::Union{String, Vector{String}}`: A file or list of
+   files that contains a `_precompile_()` function in which it calls the precompilation statements
+   that should be included in the sysimage for the app.
+
 - `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
    of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
 
@@ -621,6 +646,7 @@ function create_app(package_dir::String,
                     app_name=nothing,
                     precompile_execution_file::Union{String, Vector{String}}=String[],
                     precompile_statements_file::Union{String, Vector{String}}=String[],
+                    precompile_function_file::Union{String, Vector{String}}=String[],
                     incremental=false,
                     filter_stdlibs=false,
                     audit=true,
@@ -629,6 +655,7 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target())
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
+    precompile_function_file = abspath.(precompile_function_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
     if VERSION >= v"1.6.0-DEV.1673"
@@ -681,6 +708,7 @@ function create_app(package_dir::String,
                             incremental=true,
                             precompile_execution_file=precompile_execution_file,
                             precompile_statements_file=precompile_statements_file,
+                            precompile_function_file=precompile_function_file,
                             cpu_target=cpu_target,
                             base_sysimage=tmp_base_sysimage,
                             isapp=true)
@@ -689,6 +717,7 @@ function create_app(package_dir::String,
                                               incremental=incremental, filter_stdlibs=filter_stdlibs,
                                               precompile_execution_file=precompile_execution_file,
                                               precompile_statements_file=precompile_statements_file,
+                                              precompile_function_file=precompile_function_file,
                                               cpu_target=cpu_target,
                                               isapp=true)
         end
