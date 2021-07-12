@@ -16,4 +16,4 @@ lazy = true
 
     [[i868-w64-mingw32.download]]
     sha256 = "ba6238ae2109ace8abcb40d2081360552754a7103a248db1122e411621762d37"
-    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/i686-8.1.0-release-posix-seh-rt_v6-rev0.tar.gz"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/i686-8.1.0-release-posix-sjlj-rt_v6-rev0.tar.gz"
