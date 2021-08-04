@@ -1,31 +1,21 @@
 name: Documentation
-
-on: 
+on:
   push:
-    branches: master
-    tags:
-      - v*
-
-  pull_request: 
-    branches: master
+    branches:
+      - master
+    tags: '*'
+  pull_request:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        julia-version: [1.3.0]
-        julia-arch: [x86]
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1.0.0
+      - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
         with:
-          version: ${{ matrix.julia-version }}
-      - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate()'
+          version: '1'
       - name: Build and deploy
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
-        run: julia --project=docs/ docs/make.jl deploy
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
