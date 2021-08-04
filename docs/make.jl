@@ -10,6 +10,7 @@ makedocs(
 
         "Manual" => [
             "sysimages.md"
+            "libs.md"
             "apps.md"
         ],
 
