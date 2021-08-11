@@ -12,7 +12,7 @@ original Julia source code for apps since everything gets baked into the
 sysimage.
 
 
-## Relocatability(@id relocatability)
+## [Relocatability](@id relocatability)
 
 Since we want to send the app to other machines the app we create must be
 "relocatable".  With an app being relocatable we mean it does not rely on
