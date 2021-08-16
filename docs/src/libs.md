@@ -75,7 +75,7 @@ libjulia.dylib
 be other files in the same directory, depending on your operating system and version of Julia.)
 
 In addition to most of the same keyword arguments as 
-[`create_app`](@ref), `create_libraray` has additional keyword arguments related to library
+[`create_app`](@ref), `create_library` has additional keyword arguments related to library
 naming, versioning, and including C header files in the output library bundle.  See the function
 documentation for details.
 
