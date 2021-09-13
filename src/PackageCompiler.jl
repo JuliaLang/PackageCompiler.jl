@@ -746,7 +746,7 @@ compiler.
 
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
-- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifats,
+- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
   defaults to `true`.
 
 ### Advanced keyword arguments
@@ -768,7 +768,7 @@ function create_app(package_dir::String,
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        c_driver_program=c_driver_program)
+        c_driver_program=c_driver_program, include_lazy_artifacts=include_lazy_artifacts)
 end
 
 """
@@ -855,7 +855,7 @@ compiler.
    Used to determine and set the `compatibility_version` (on Apple) and `soname` (on
    Linux/UNIX).
 
-- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifats,
+- `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
   defaults to `true`.
 
 ### Advanced keyword arguments
