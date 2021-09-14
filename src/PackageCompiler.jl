@@ -503,7 +503,11 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     # Instantiate the project
     ctx = create_pkg_context(project)
     @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true)
+    if VERSION >= v"1.6.0-DEV.1673"
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    else
+        Pkg.instantiate(ctx, verbose=true)
+    end
 
     check_packages_in_project(ctx, packages)
 
