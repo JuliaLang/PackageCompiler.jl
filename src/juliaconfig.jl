@@ -73,20 +73,14 @@ function cflags()
     return String(take!(flags))
 end
 
-function rpath()
-    Sys.iswindows() && return ``
+function rpath_executable()
+    Sys.iswindows() ? `` :
+    Sys.isapple()   ? `-Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'` :
+                      `-Wl,-rpath,\$ORIGIN/../lib:\$ORIGIN/../lib/julia`
+end
 
-    if VERSION >= v"1.6.0-DEV.1673"
-        if Sys.isapple()
-            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'`
-        else
-            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib:\$ORIGIN/../lib/julia`
-        end
-    else
-        if Sys.isapple()
-            `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/../lib'`
-        else
-            `-Wl,-rpath,\$ORIGIN:\$ORIGIN/../lib`
-        end
-    end
+function rpath_sysimage()
+    Sys.iswindows() ? `` :
+    Sys.isapple()   ? `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/julia'` :
+                      `-Wl,-rpath,\$ORIGIN:\$ORIGIN/julia`
 end
