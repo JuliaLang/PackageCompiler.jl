@@ -10,6 +10,8 @@ export create_sysimage, create_app, create_library, audit_app, restore_default_s
 include("juliaconfig.jl")
 
 const NATIVE_CPU_TARGET = "native"
+const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
+
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
     if Sys.ARCH === :i686
@@ -550,7 +552,7 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `$compiler -c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
+    cmd = `$compiler -c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
 
     @debug "running $cmd"
     run_with_env(cmd, compiler)
@@ -1008,7 +1010,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     wrapper = c_driver_program_path
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
