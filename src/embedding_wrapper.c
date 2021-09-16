@@ -15,7 +15,11 @@ JL_DLLEXPORT char *dirname(char *);
 #include <libgen.h>
 #endif
 
+#ifdef NEW_DEFINE_FAST_TLS_SYNTAX
+JULIA_DEFINE_FAST_TLS
+#else
 JULIA_DEFINE_FAST_TLS()
+#endif
 
 // TODO: Windows wmain handling as in repl.c
 
