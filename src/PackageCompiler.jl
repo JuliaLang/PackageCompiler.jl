@@ -586,7 +586,7 @@ function get_extra_linker_flags(version, compat_level, soname)
     end
 
     soname_arg = soname === nothing ? `` : `-Wl,-soname,$soname`
-    rpath_args = rpath()
+    rpath_args = rpath_sysimage()
 
     extra = (
         Sys.iswindows() ? `-Wl,--export-all-symbols` :
@@ -962,9 +962,9 @@ function _create_app(package_dir::String,
     library_only && bundle_headers(dest_dir, header_files)
 
     # TODO: Create in a temp dir and then move it into place?
-    target_path = Sys.isunix() && library_only ? joinpath(dest_dir, "lib") : joinpath(dest_dir, "bin")
-    mkpath(target_path)
-    cd(target_path) do
+    sysimage_path = Sys.isunix() ? joinpath(dest_dir, "lib") : joinpath(dest_dir, "bin")
+    mkpath(sysimage_path)
+    cd(sysimage_path) do
         if !incremental
             tmp = mktempdir()
             # Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
@@ -1003,12 +1003,6 @@ function _create_app(package_dir::String,
             run(cmd)
         end
 
-        if !library_only
-            c_driver_program = abspath(c_driver_program)
-            create_executable_from_sysimg(; sysimage_path=sysimg_file, executable_path=name,
-                                         c_driver_program_path=c_driver_program)
-        end
-
         if library_only && version !== nothing && Sys.isunix()
             compat_file = get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
             base_file = get_sysimg_file(name, library_only=library_only)
@@ -1017,6 +1011,18 @@ function _create_app(package_dir::String,
             symlink(sysimg_file, base_file)
         end
     end
+
+    if !library_only
+        executable_path = joinpath(dest_dir, "bin")
+        mkpath(executable_path)
+        cd(executable_path) do
+            c_driver_program = abspath(c_driver_program)
+            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", sysimg_file)
+            create_executable_from_sysimg(; sysimage_path, executable_path=name,
+                                         c_driver_program_path=c_driver_program)
+        end
+    end
+
     return
 end
 
@@ -1028,7 +1034,7 @@ function create_executable_from_sysimg(;sysimage_path::String,
     wrapper = c_driver_program_path
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath()) $flags`
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
