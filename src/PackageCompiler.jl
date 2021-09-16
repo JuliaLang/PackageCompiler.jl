@@ -30,11 +30,7 @@ end
 current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
 
 all_stdlibs() = readdir(Sys.STDLIB)
-@static if VERSION >= v"1.6.0-DEV.1673"
-    sysimage_modules() = map(x->x.name, Base._sysimage_modules)
-else
-    sysimage_modules() = all_stdlibs()
-end
+sysimage_modules() = map(x->x.name, Base._sysimage_modules)
 stdlibs_in_sysimage() = intersect(all_stdlibs(), sysimage_modules())
 stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
 
@@ -52,9 +48,7 @@ function load_all_deps(ctx)
     return pkgs
 end
 function source_path(ctx, pkg)
-    if VERSION <= v"1.4.0-rc1"
-        Pkg.Operations.source_path(pkg)
-    elseif VERSION <= v"1.7.0-"
+    if VERSION <= v"1.7.0-"
         Pkg.Operations.source_path(ctx, pkg)
     else
         Pkg.Operations.source_path(ctx.env.project_file, pkg)
@@ -255,15 +249,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
 end
 
 function do_ensurecompiled(project, packages, sysimage)
-    if VERSION >= v"1.6.0"
-        run(`$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e 'using Pkg; Pkg.precompile(; strict=true)'`)
-    else
-        # Pkg.precompile is buggy pre 1.6 (and slow).
-        use = join("import " .* packages, '\n')
-        cmd = `$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e $use`
-        @debug "running $cmd"
-        read(cmd, String)
-    end
+    run(`$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e 'using Pkg; Pkg.precompile(; strict=true)'`)
     return nothing
 end
 
@@ -503,11 +489,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     # Instantiate the project
     ctx = create_pkg_context(project)
     @debug "instantiating project at $(repr(project))"
-    if VERSION >= v"1.6.0-DEV.1673"
-        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-    else
-        Pkg.instantiate(ctx, verbose=true)
-    end
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     check_packages_in_project(ctx, packages)
 
@@ -622,22 +604,18 @@ function create_sysimg_from_object_file(input_object::String,
 
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = if VERSION >= v"1.6.0-DEV.1673"
-        private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-            if ccall(:jl_is_debugbuild, Cint, ()) != 0
-                dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
-            else
-                joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
-            end
-        elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-            dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
+    private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
+        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
         else
-            dirname(abspath(Libdl.dlpath("libjulia-internal")))
+            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
         end
-        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
+    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
     else
-        `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -o $sysimage_path $o_file_flags -ljulia $extra`
+        dirname(abspath(Libdl.dlpath("libjulia-internal")))
     end
+    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
@@ -922,11 +900,7 @@ function _create_app(package_dir::String,
     precompile_execution_file = abspath.(precompile_execution_file)
     package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
-    if VERSION >= v"1.6.0-DEV.1673"
-        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-    else
-        Pkg.instantiate(ctx, verbose=true)
-    end
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
     if isempty(ctx.env.manifest)
         @warn "it is not recommended to create an app without a preexisting manifest"
     end
