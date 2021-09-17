@@ -121,7 +121,7 @@ end
 
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
-    cmd = `$julia_path --color=yes --startup-file=no`
+    return `$julia_path --color=yes --startup-file=no`
 end
 
 function get_compat_version(version::VersionNumber, level::String)
@@ -267,7 +267,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
-    tracefiles = String[]
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file)
         push!(precompile_files, tracefile)
@@ -505,7 +504,7 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
             sysimage_stdlibs = stdlibs_in_sysimage()
             non_sysimage_stdlibs = stdlibs_not_in_sysimage()
         end
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target=cpu_target)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target)
     else
         if isnothing(base_sysimage)
             base_sysimage = current_process_sysimage_path()
@@ -517,19 +516,19 @@ function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
     # Create the sysimage
     object_file = tempname() * ".o"
     create_sysimg_object_file(object_file, packages;
-                              project=project,
-                              base_sysimage=base_sysimage,
-                              precompile_execution_file=precompile_execution_file,
-                              precompile_statements_file=precompile_statements_file,
-                              cpu_target=cpu_target,
-                              script=script,
-                              isapp=isapp)
+                              project,
+                              base_sysimage,
+                              precompile_execution_file,
+                              precompile_statements_file,
+                              cpu_target,
+                              script,
+                              isapp)
     create_sysimg_from_object_file(object_file,
-                                   sysimage_path,
-                                   o_init_file=o_init_file,
-                                   compat_level=compat_level,
-                                   version=version,
-                                   soname=soname)
+                                   sysimage_path;
+                                   o_init_file,
+                                   compat_level,
+                                   version,
+                                   soname)
 
     # Maybe replace default sysimage
     if replace_default
@@ -751,10 +750,10 @@ function create_app(package_dir::String,
                     include_lazy_artifacts::Bool=true)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        library_only=false, c_driver_program=c_driver_program, julia_init_c_file=nothing,
+        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
+        library_only=false, c_driver_program, julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
-        include_lazy_artifacts=include_lazy_artifacts)
+        include_lazy_artifacts)
 end
 
 """
@@ -875,10 +874,9 @@ function create_library(package_dir::String,
     end
 
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        library_only = true, c_driver_program="", julia_init_c_file=julia_init_c_file,
-        header_files=header_files, version=version, compat_level=compat_level,
-        include_lazy_artifacts=include_lazy_artifacts)
+        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
+        library_only=true, c_driver_program="", julia_init_c_file,
+        header_files, version, compat_level, include_lazy_artifacts)
 
 end
 
@@ -951,29 +949,28 @@ function _create_app(package_dir::String,
             # with the @ccallable function
             tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
             create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=package_dir,
-                            incremental=false, filter_stdlibs=filter_stdlibs,
-                            cpu_target=cpu_target)
+                            incremental=false, filter_stdlibs, cpu_target)
 
             create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
-                            precompile_execution_file=precompile_execution_file,
-                            precompile_statements_file=precompile_statements_file,
-                            cpu_target=cpu_target,
+                            precompile_execution_file,
+                            precompile_statements_file,
+                            cpu_target,
                             base_sysimage=tmp_base_sysimage,
-                            isapp=isapp,
-                            julia_init_c_file=julia_init_c_file,
-                            version=version,
-                            soname=soname)
+                            isapp,
+                            julia_init_c_file,
+                            version,
+                            soname)
         else
             create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
-                                              incremental=incremental, filter_stdlibs=filter_stdlibs,
-                                              precompile_execution_file=precompile_execution_file,
-                                              precompile_statements_file=precompile_statements_file,
-                                              cpu_target=cpu_target,
-                                              isapp=isapp,
-                                              julia_init_c_file=julia_init_c_file,
-                                              version=version,
-                                              soname=soname)
+                                              incremental, filter_stdlibs,
+                                              precompile_execution_file,
+                                              precompile_statements_file,
+                                              cpu_target,
+                                              isapp,
+                                              julia_init_c_file,
+                                              version,
+                                              soname)
         end
 
         if Sys.isapple()
@@ -995,10 +992,10 @@ function _create_app(package_dir::String,
         executable_path = joinpath(dest_dir, "bin")
         mkpath(executable_path)
         cd(executable_path) do
-            c_driver_program = abspath(c_driver_program)
+            c_driver_program_path = abspath(c_driver_program)
             sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", sysimg_file)
             create_executable_from_sysimg(; sysimage_path, executable_path=name,
-                                         c_driver_program_path=c_driver_program)
+                                         c_driver_program_path)
         end
     end
 
@@ -1064,7 +1061,7 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
                         continue
                     end
                     meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
-                    meta == nothing && continue
+                    meta === nothing && continue
                     @debug "  \"$name\""
                     push!(artifact_paths, Pkg.Artifacts.ensure_artifact_installed(name, artifacts_toml_path))
                 end

@@ -1,16 +1,16 @@
 # adopted from https://github.com/JuliaLang/julia/blob/release-0.6/contrib/julia-config.jl
 
+isdebugbuild() = ccall(:jl_is_debugbuild, Cint, ()) != 0 
+
 function shell_escape(str)
     str = replace(str, "'" => "'\''")
     return "'$str'"
 end
 
 function julia_libdir()
-    return if ccall(:jl_is_debugbuild, Cint, ()) != 0
-        dirname(abspath(Libdl.dlpath("libjulia-debug")))
-    else
-        dirname(abspath(Libdl.dlpath("libjulia")))
-    end
+    libname = isdebugbuild() ? "libjulia-debug" : 
+                               "libjulia"
+    return dirname(abspath(Libdl.dlpath(libname)))
 end
 
 function julia_private_libdir()
@@ -24,11 +24,7 @@ end
 julia_includedir() = abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 
 function ldflags()
-    fl = if VERSION >= v"1.6.0-DEV.1673"
-        "-L$(shell_escape(julia_libdir())) -L$(shell_escape(julia_private_libdir()))"
-    else
-        "-L$(shell_escape(julia_libdir()))"
-    end
+    fl = "-L$(shell_escape(julia_libdir())) -L$(shell_escape(julia_private_libdir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
         fl = fl * " -Wl,--export-all-symbols"
@@ -40,19 +36,8 @@ end
 
 # TODO
 function ldlibs(relative_path=nothing)
-    libnames = if VERSION >= v"1.6.0-DEV.1673"
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            "-ljulia-debug -ljulia-internal-debug"
-        else
-            "-ljulia -ljulia-internal"
-        end
-    else
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            "-ljulia-debug"
-        else
-            "-ljulia"
-        end
-    end
+    libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
+                                "-ljulia       -ljulia-internal"
     if Sys.islinux()
         return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
     elseif Sys.iswindows()
