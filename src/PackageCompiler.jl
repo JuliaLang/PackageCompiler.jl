@@ -752,7 +752,9 @@ function create_app(package_dir::String,
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        c_driver_program=c_driver_program, include_lazy_artifacts=include_lazy_artifacts)
+        library_only=false, c_driver_program=c_driver_program, julia_init_c_file=nothing,
+        header_files=String[], version=nothing, compat_level="major",
+        include_lazy_artifacts=include_lazy_artifacts)
 end
 
 """
@@ -874,8 +876,9 @@ function create_library(package_dir::String,
 
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target,
-        library_only=true, julia_init_c_file=julia_init_c_file, header_files=header_files,
-        version=version, compat_level=compat_level, include_lazy_artifacts=include_lazy_artifacts)
+        library_only = true, c_driver_program="", julia_init_c_file=julia_init_c_file,
+        header_files=header_files, version=version, compat_level=compat_level,
+        include_lazy_artifacts=include_lazy_artifacts)
 
 end
 
@@ -889,13 +892,13 @@ function _create_app(package_dir::String,
                     audit,
                     force,
                     cpu_target::String;
-                    library_only::Bool=false,
-                    c_driver_program::String="",
-                    julia_init_c_file=nothing,
-                    header_files::Vector{String}=String[],
-                    version=nothing,
-                    compat_level::String="major",
-                    include_lazy_artifacts::Bool=true)
+                    library_only::Bool,
+                    c_driver_program::String,
+                    julia_init_c_file,
+                    header_files::Vector{String},
+                    version,
+                    compat_level::String,
+                    include_lazy_artifacts::Bool)
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
