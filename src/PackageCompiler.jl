@@ -36,9 +36,6 @@ sysimage_modules() = map(x->x.name, Base._sysimage_modules)
 stdlibs_in_sysimage() = intersect(all_stdlibs(), sysimage_modules())
 stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
 
-
-yesno(b::Bool) = b ? "yes" : "no"
-
 function load_all_deps(ctx)
     ctx_or_env = VERSION <= v"1.7.0-" ? ctx : ctx.env
     if isdefined(Pkg.Operations, :load_all_deps!)
