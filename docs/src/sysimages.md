@@ -77,7 +77,7 @@ Activating new environment at `~/NewSysImageEnv/Project.toml`
   Updating `~/NewSysImageEnv/Manifest.toml`
   [7876af07] + Example v0.5.3
 
-julia> create_sysimage(:Example; sysimage_path="ExampleSysimage.so")
+julia> create_sysimage("Example"; sysimage_path="ExampleSysimage.so")
 [ Info: PackageCompiler: creating system image object file, this might take a while...
 
 julia> exit()
@@ -107,7 +107,7 @@ such as Julia-VSCode.** Replacing the default sysimage is done by omitting the
 ```julia
 # This is not recommended and may cause compatability issues since external
 # packages such as Julia-VSCode may depend on the default sysimage.
-create_sysimage([:Debugger, :OhMyREPL]; replace_default=true)
+create_sysimage(["Debugger", "OhMyREPL"]; replace_default=true)
 ```
 
 If this is the first time `create_sysimage` is called with `replace_default`, a
@@ -170,7 +170,7 @@ julia> using PackageCompiler
 (v1.3) pkg> activate .
 Activating environment at `~/NewSysImageEnv/Project.toml`
 
-julia> PackageCompiler.create_sysimage(:Example; sysimage_path="ExampleSysimagePrecompile.so",
+julia> PackageCompiler.create_sysimage("Example"; sysimage_path="ExampleSysimagePrecompile.so",
                                          precompile_execution_file="precompile_example.jl")
 [ Info: PackageCompiler: creating system image object file, this might take a while...
 
