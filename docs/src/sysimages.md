@@ -95,25 +95,6 @@ Dict{Base.PkgId,Module} with 34 entries:
   Example [7876af07-990d-54b4-ab0e-23690620f79a] => Example
 ...
 ```
-
-Alternatively, instead of giving a path to where the new sysimage should appear, one
-can choose to replace the default sysimage. **This is
-[_not_ recommended](https://github.com/JuliaLang/PackageCompiler.jl/issues/434#issuecomment-675563737)
-as this can
-cause compatibility issues with other packages that depend on the default sysimage
-such as Julia-VSCode.** Replacing the default sysimage is done by omitting the
-`sysimage_path` keyword and instead adding `replace_default=true`, for example:
-
-```julia
-# This is not recommended and may cause compatibility issues since external
-# packages such as Julia-VSCode may depend on the default sysimage.
-create_sysimage(["Debugger", "OhMyREPL"]; replace_default=true)
-```
-
-If this is the first time `create_sysimage` is called with `replace_default`, a
-backup of the default sysimage is created. The default sysimage can then be
-restored with [`restore_default_sysimage()`](@ref).
-
 Note that sysimages are created "incrementally" in the sense that they add to
 the sysimage of the process running PackageCompiler. If the default sysimage
 has been replaced, the next `create_sysimage` call will create a new sysimage
