@@ -159,7 +159,7 @@ this is not the default is that it is possible to "accidentally" depend on a
 standard library without it being reflected in the Project file.  For example,
 it is possible to call `rand()` from a package without depending on Random,
 even though that is where the method is defined. If Random was excluded from
-the sysimage that call would then error. The same thing is true for e.g. matrix
+the sysimage that call would then error. As another example, matrix
 multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
 `LinearAlgebra` and `Random` This is because these standard libraries practice
 ["type-piracy"](https://docs.julialang.org/en/v1/manual/style-guide/#Avoid-type-piracy), 
@@ -192,7 +192,7 @@ While the created app is relocatable and no source code is bundled with it,
 there are still some things about the build machine and the source code that
 can be "reverse engineered".
 
-#### Absolute paths of build machine
+#### Absolute paths of the build machine
 
 Julia records the paths and line-numbers for methods when they are getting
 compiled.  These get cached into the sysimage and can be found e.g. by dumping
