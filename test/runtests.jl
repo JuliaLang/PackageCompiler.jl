@@ -30,17 +30,24 @@ end
     tmp = mktempdir()
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
     script = tempname()
-    write(script, "script_func() = println(\"I am a script\")")
+    write(script, """
+    script_func() = println(\"I am a script\")
+    opt_during_sysimage = Base.JLOptions().opt_level
+    print_opt() = println("opt: -O\$opt_during_sysimage")
+    """)
     create_sysimage("Example"; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
                                                                               "precompile_statements2.jl"]),
-                              script=script)
+                              script=script,
+                              sysimage_build_args = `-O1`
+                              )
     # Check we can load sysimage and that Example is available in Main
-    str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func()'`, String)
+    str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
     @test occursin("Hello, foo", str)
     @test occursin("I am a script", str)
+    @test occursin("opt: -O1", str)
 
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
