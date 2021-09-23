@@ -31,7 +31,7 @@ end
     sysimage_path = joinpath(tmp, "sys." * Libdl.dlext)
     script = tempname()
     write(script, "script_func() = println(\"I am a script\")")
-    create_sysimage(:Example; sysimage_path=sysimage_path,
+    create_sysimage("Example"; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",

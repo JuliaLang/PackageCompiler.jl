@@ -398,11 +398,12 @@ function check_packages_in_project(ctx, packages)
 end
 
 """
-    create_sysimage(packages::Union{Symbol, Vector{Symbol}}; kwargs...)
+    create_sysimage(packages::Union{String, Vector{String}}; kwargs...)
 
-Create a system image that includes the package(s) in `packages`.  An attempt
-to automatically find a compiler will be done but can also be given explicitly
-by setting the environment variable `JULIA_CC` to a path to a compiler
+Create a system image that includes the package(s) in `packages` (given as a
+string or vector).  An attempt to automatically find a compiler will be done but
+can also be given explicitly by setting the environment variable `JULIA_CC` to a
+path to a compiler
 
 ### Keyword arguments:
 
@@ -446,7 +447,7 @@ by setting the environment variable `JULIA_CC` to a path to a compiler
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
-function create_sysimage(packages::Union{Symbol, Vector{Symbol}}=Symbol[];
+function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{Symbol}}=String[];
                          sysimage_path::Union{String,Nothing}=nothing,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -936,10 +937,10 @@ function _create_app(package_dir::String,
             # by first creating a normal "empty" sysimage and then use that to finally create the one
             # with the @ccallable function
             tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
-            create_sysimage(Symbol[]; sysimage_path=tmp_base_sysimage, project=package_dir,
+            create_sysimage(String[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs, cpu_target)
 
-            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage(sysimg_name; sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file,
                             precompile_statements_file,
@@ -950,15 +951,15 @@ function _create_app(package_dir::String,
                             version,
                             soname)
         else
-            create_sysimage(Symbol(sysimg_name); sysimage_path=sysimg_file, project=package_dir,
-                                              incremental, filter_stdlibs,
-                                              precompile_execution_file,
-                                              precompile_statements_file,
-                                              cpu_target,
-                                              isapp,
-                                              julia_init_c_file,
-                                              version,
-                                              soname)
+            create_sysimage(sysimg_name; sysimage_path=sysimg_file, project=package_dir,
+                                         incremental, filter_stdlibs,
+                                         precompile_execution_file,
+                                         precompile_statements_file,
+                                         cpu_target,
+                                         isapp,
+                                         julia_init_c_file,
+                                         version,
+                                         soname)
         end
 
         if Sys.isapple()
