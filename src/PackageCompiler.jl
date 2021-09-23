@@ -411,8 +411,9 @@ end
 """
     create_sysimage(packages::Vector{String}; kwargs...)
 
-Create a system image that includes the package(s) in `packages` given as a
-string or vector).
+Create a system image that includes the package(s) in `packages` (given as a
+string or vector). If the `packages` argument is not passed, all packages in the
+project will be put into the sysimage.
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
@@ -454,7 +455,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}=String[];
+function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -474,22 +475,29 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
                          soname=nothing)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
-  
+
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
 
+    ctx = create_pkg_context(project)
+
+    if packages === nothing
+        packages = collect(keys(ctx.env.project.deps))
+        if ctx.env.pkg !== nothing
+            push!(packages, ctx.env.pkg.name)
+        end
+    end
+
     # Functions lower down handles `packages` and precompilation file as arrays so convert here
-    packages = string.(vcat(packages)) # Package names are often used as string inside Julia
+    packages = string.(vcat(packages))
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
     # Instantiate the project
-    ctx = create_pkg_context(project)
 
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-  
 
     check_packages_in_project(ctx, packages)
 
@@ -945,7 +953,7 @@ function _create_app(package_dir::String,
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     isapp && bundle_julia_executable(dest_dir)
-    # TODO: Should also bundle project and update load_path for library 
+    # TODO: Should also bundle project and update load_path for library
     isapp && bundle_project(ctx, dest_dir)
 
     library_only && bundle_headers(dest_dir, header_files)
@@ -1088,7 +1096,7 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     platform = Base.BinaryPlatforms.HostPlatform()
     depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
-   
+
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue

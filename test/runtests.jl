@@ -35,7 +35,7 @@ end
     opt_during_sysimage = Base.JLOptions().opt_level
     print_opt() = println("opt: -O\$opt_during_sysimage")
     """)
-    create_sysimage(["Example"]; sysimage_path=sysimage_path,
+    create_sysimage(; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
@@ -43,6 +43,7 @@ end
                               script=script,
                               sysimage_build_args = `-O1`
                               )
+
     # Check we can load sysimage and that Example is available in Main
     str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
     @test occursin("Hello, foo", str)
@@ -128,14 +129,12 @@ end
         rm(tmp_lib_src_dir; recursive=true)
     end
 
-
-
     # Test creating an empty sysimage
     if !is_slow_ci
         tmp = mktempdir()
         sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
         foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
-        create_sysimage(; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
+        create_sysimage(String[]; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
     end
