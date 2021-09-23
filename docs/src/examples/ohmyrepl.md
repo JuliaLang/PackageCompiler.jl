@@ -39,17 +39,11 @@ These are functions that Julia compiled. We now just tell `create_sysimage` to
 use these precompile statements when creating the system image:
 
 ```julia
-PackageCompiler.create_sysimage(["OhMyREPL"]; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
+PackageCompiler.create_sysimage(["OhMyREPL"]; sysimage_path="OMR-sysimage.so", 
+                                precompile_statements_file="ohmyrepl_precompile.jl")
 ```
 
-Restart Julia and start typing something. If everything went well you should
-see the typed text become highlighted with a significantly smaller delay than
-before creating the new system image
 
-
-!!! note
-    If you want to go back to the default sysimage you can run
-
-    ```julia
-    PackageCompiler.restore_default_sysimage()
-    ```
+Exit julia and restart it with the `--sysimage=OMR-sysimage.so` command-line argument
+and start typing something. If everything went well, you should see the typed text become
+highlighted with a significantly smaller delay than with the default system image.
