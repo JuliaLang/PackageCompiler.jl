@@ -638,8 +638,6 @@ function restore_default_sysimage()
     return nothing
 end
 
-const REQUIRES = "Requires" => UUID("ae029012-a4dd-5104-9daa-d747884805df")
-
 function create_pkg_context(project)
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
     if project_toml_path === nothing
@@ -660,16 +658,6 @@ the project at `app_dir`.
 """
 audit_app(app_dir::String) = audit_app(create_pkg_context(app_dir))
 function audit_app(ctx::Pkg.Types.Context)
-    # Check for Requires.jl usage
-    if REQUIRES in ctx.env.project.deps
-        @warn "Project has a dependency on Requires.jl, code in `@require` will not be run"
-    end
-    for (uuid, pkg) in ctx.env.manifest
-        if REQUIRES in pkg.deps
-            @warn "$(pkg.name) has a dependency on Requires.jl, code in `@require` will not be run"
-        end
-    end
-
     # Check for build script usage
     if isfile(joinpath(dirname(ctx.env.project_file), "deps", "build.jl"))
         @warn "Project has a build script, this might indicate that it is not relocatable"
