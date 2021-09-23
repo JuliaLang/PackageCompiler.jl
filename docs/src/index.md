@@ -66,7 +66,3 @@ For macOS, this can be the builtin xcode command line tools or `homebrew` and fo
 
 A suitable compiler will be automatically installed the first time it is needed.
 
-## Upgrading from pre 1.0 PackageCompiler
-
-There are some notes to facilitate upgrading from the earlier version of
-PackageCompiler [here](@ref upgrade)
