@@ -273,6 +273,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
+            using Base.Meta
             PrecompileStagingArea = Module()
             for (_pkgid, _mod) in Base.loaded_modules
                 if !(_pkgid.name in ("Main", "Core", "Base"))
@@ -283,13 +284,30 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                 $(join(map(repr, precompile_files), "\n" * " " ^ 8))
             ]
             for file in precompile_files, statement in eachline(file)
-                # println(statement)
-                # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
-                # N with a large number seems to work around it.
-                statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\\1, 100}")
                 try
-                    Base.include_string(PrecompileStagingArea, statement)
-                catch
+                    # println(statement)
+                    # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
+                    ps = Meta.parse(statement)
+                    isexpr(ps, :call) || continue
+                    popfirst!(ps.args) # precompile(...)
+                    ps.head = :tuple
+                    l = ps.args[end]
+                    if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
+                        # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
+                        # Replacing N with a large number works around it.
+                        l = l.args[end]
+                        if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
+                            push!(l.args, 100) # form Vararg{T, 100} instead
+                        end
+                    end
+                    # println(ps)
+                    ps = Core.eval(PrecompileStagingArea, ps)
+                    # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+                    # Skipping them avoids the warning.
+                    ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+                    ms isa Vector || continue
+                    precompile(ps...)
+                catch e
                     # See julia issue #28808
                     @debug "failed to execute \$statement"
                 end
