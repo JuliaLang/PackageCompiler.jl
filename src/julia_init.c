@@ -56,10 +56,10 @@ void set_depot_path(char *sysimage_path)
     int depot_dir_len = strlen(depot_subdir);
 
     int full_path_len = root_dir_len + depot_dir_len + 1;
-    char *dir = malloc(full_path_len);
+    char *dir = calloc(sizeof(char), full_path_len);
 
-    strncpy(dir, root_dir, full_path_len);
-    strncpy(dir + root_dir_len, depot_subdir, full_path_len - root_dir_len);
+    strcpy(dir, root_dir);
+    strcat(dir, depot_subdir);
     dir[full_path_len] = '\0';
 
 #ifdef _WIN32
