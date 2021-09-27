@@ -416,44 +416,44 @@ end
 """
     create_sysimage(packages::Union{String, Vector{String}}; kwargs...)
 
-Create a system image that includes the package(s) in `packages` (given as a
-string or vector).  An attempt to automatically find a compiler will be done but
+Create a system image that includes the package(s) in `packages` given as a
+string or vector). An attempt to automatically find a compiler will be done but
 can also be given explicitly by setting the environment variable `JULIA_CC` to a
-path to a compiler
+path to a compiler.
 
 ### Keyword arguments:
 
 - `sysimage_path::Union{String,Nothing}`: The path to where
-   the resulting sysimage should be saved. If set to `nothing` the keyword argument
-   `replace_default` needs to be set to `true`.
+  the resulting sysimage should be saved. If set to `nothing` the keyword argument
+  `replace_default` needs to be set to `true`.
 
 - `project::String`: The project that should be active when the sysimage is created,
-   defaults to the current active project.
+  defaults to the currently active project.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
-   files that contain code which precompilation statements should be recorded from.
+  files that contain code from which precompilation statements should be recorded.
 
 - `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
-   files that contains precompilation statements that should be included in the sysimage.
+  files that contain precompilation statements that should be included in the sysimage.
 
 - `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
-   of the current process otherwise build a new sysimage from scratch. Defaults to `true`.
+  of the current process otherwise build a new sysimage from scratch. Defaults to `true`.
 
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
-   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+  Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `replace_default::Bool`: If `true`, replaces the default system image which is automatically
-   used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
+- `replace_default::Bool`: If `true`, replace the default system image which is automatically
+  used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
 
 - `julia_init_c_file::String`: File to include in the system image with functions for
-   initializing julia from external code.  Used when creating a shared library.
+  initializing julia from external code. Used when creating a shared library.
 
-- `version::VersionNumber`: Shared library version number (optional).  Added to the sysimg
-   `.so` name on Linux/UNIX, and the `.dylib` name on Apple platforms, and to set the internal
-   `current_version` on Apple.  Ignored on Windows.
+- `version::VersionNumber`: Shared library version number (optional). Added to the sysimg
+  `.so` name on Linux/UNIX, and the `.dylib` name on Apple platforms, and to set the internal
+  `current_version` on Apple. Ignored on Windows.
 
-- `compat_level::String`: compatibility level for library.  One of "major", "minor".
-   With `version`, used to determine the `compatibility_version` on Apple.
+- `compat_level::String`: compatibility level for library. One of "major", "minor".
+  With `version`, used to determine the `compatibility_version` on Apple.
 
 - `soname`: On linux, used to set the internal soname for the system image.
 
@@ -709,32 +709,32 @@ end
 ```
 
 The executable will be placed in a folder called `bin` in `compiled_app` and
-when the executabl run the `julia_main` function is called.
+when the executable run the `julia_main` function is called.
 
 An attempt to automatically find a compiler will be done but can also be given
-explicitly by setting the envirnment variable `JULIA_CC` to a path to a
+explicitly by setting the environment variable `JULIA_CC` to a path to a
 compiler.
 
 ### Keyword arguments:
 
-- `app_name::String`: an alternative name for the compiled app.  If not provided,
-   the name of the package (as specified in Project.toml) is used.
+- `app_name::String`: an alternative name for the compiled app. If not provided,
+  the name of the package (as specified in `Project.toml`) is used.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
-   files that contain code which precompilation statements should be recorded from.
+  files that contain code from which precompilation statements should be recorded.
 
 - `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
-   files that contains precompilation statements that should be included in the sysimage
-   for the app.
+  files that contain precompilation statements that should be included in the sysimage
+  for the app.
 
 - `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
-   of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
+  of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
 
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
-   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+  Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
 - `audit::Bool`: Warn about eventual relocatability problems with the app, defaults
-   to `true`.
+  to `true`.
 
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
@@ -772,7 +772,7 @@ end
 """
     create_library(package_dir::String, dest_dir::String; kwargs...)
 
-Compile an library with the source in `package_dir` to the folder `dest_dir`.
+Compile a library with the source in `package_dir` to the folder `dest_dir`.
 The folder `package_dir` should to contain a package with C-callable functions,
 e.g.
 
@@ -795,7 +795,7 @@ The library will be placed in the `lib` folder in `dest_dir` (or `bin` on Window
 and can be linked to and called into from C/C++ or other languages that can use C libraries.
 
 Note that any applications/programs linking to this library may need help finding
-it at run time.  Options include
+it at run time. Options include
 
 * Installing all libraries somewhere in the library search path.
 * Adding `/path/to/libname` to an appropriate library search path environment
@@ -808,50 +808,50 @@ where `argc` and `argv` are parameters that would normally be passed to `julia` 
 command line (e.g., to set up the number of threads or processes).
 
 When your program is exiting, it is also suggested to call `shutdown_julia(retcode)`,
-to allow Julia to cleanly clean up resources and call any finalizers.  (This function
+to allow Julia to cleanly clean up resources and call any finalizers. (This function
 simply calls `jl_atexit_hook(retcode)`.)
 
 An attempt to automatically find a compiler will be done but can also be given
-explicitly by setting the envirnment variable `JULIA_CC` to a path to a
+explicitly by setting the environment variable `JULIA_CC` to a path to a
 compiler.
 
 ### Keyword arguments:
 
-- `lib_name::String`: an alternative name for the compiled library.  If not provided,
-   the name of the package (as specified in Project.toml) is used.  `lib` will be
-   prepended to the name if it is not already present.
+- `lib_name::String`: an alternative name for the compiled library. If not provided,
+  the name of the package (as specified in Project.toml) is used. `lib` will be
+  prepended to the name if it is not already present.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
-   files that contain code which precompilation statements should be recorded from.
+  files that contain code from which precompilation statements should be recorded.
 
 - `precompile_statements_file::Union{String, Vector{String}}`: A file or list of
-   files that contains precompilation statements that should be included in the sysimage
-   for the library.
+  files that contain precompilation statements that should be included in the sysimage
+  for the library.
 
 - `incremental::Bool`: If `true`, build the new sysimage on top of the sysimage
-   of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
+  of the current process otherwise build a new sysimage from scratch. Defaults to `false`.
 
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
-   Defaults to `false`, only set to `true` if you know the potential pitfalls.
+  Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
 - `audit::Bool`: Warn about eventual relocatability problems with the library, defaults
-   to `true`.
+  to `true`.
 
 - `force::Bool`: Remove the folder `compiled_lib` if it exists before creating the library.
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
 
 - `julia_init_c_file::String`: File to include in the system image with functions for
-   initializing julia from external code.
+  initializing julia from external code.
 
-- `version::VersionNumber`: Library version number.  Added to the sysimg `.so` name
-   on Linux, and the `.dylib` name on Apple platforms, and with `compat_level`, used to
-   determine and set the `current_version`, `compatibility_version` (on Apple) and
-   `soname` (on Linux/UNIX)
+- `version::VersionNumber`: Library version number. Added to the sysimg `.so` name
+  on Linux, and the `.dylib` name on Apple platforms, and with `compat_level`, used to
+  determine and set the `current_version`, `compatibility_version` (on Apple) and
+  `soname` (on Linux/UNIX)
 
-- `compat_level::String`: compatibility level for library.  One of "major", "minor".
-   Used to determine and set the `compatibility_version` (on Apple) and `soname` (on
-   Linux/UNIX).
+- `compat_level::String`: compatibility level for library. One of "major", "minor".
+  Used to determine and set the `compatibility_version` (on Apple) and `soname` (on
+  Linux/UNIX).
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
   defaults to `true`.
