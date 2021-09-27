@@ -3,6 +3,7 @@ module PackageCompiler
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
+using LazyArtifacts
 using UUIDs: UUID, uuid1
 
 export create_sysimage, create_app, create_library, audit_app, restore_default_sysimage
@@ -104,9 +105,9 @@ function get_compiler()
         return cc
     end
     @static if Sys.iswindows() && Int==Int64
-        return joinpath(Pkg.Artifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
+        return joinpath(LazyArtifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
     elseif Sys.iswindows() && Int==Int32
-        return joinpath(Pkg.Artifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
+        return joinpath(LazyArtifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
     end
     if Sys.which("gcc") !== nothing
         return "gcc"

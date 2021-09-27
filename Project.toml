@@ -3,6 +3,7 @@ uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
 version = "1.5.0"
 
 [deps]
+LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
