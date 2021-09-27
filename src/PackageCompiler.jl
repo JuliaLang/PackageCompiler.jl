@@ -302,10 +302,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
-        Base.init_load_path()
-        if isdefined(Base, :init_active_project)
-            Base.init_active_project()
-        end
+        copy!(LOAD_PATH, [$(repr(project))]) # Only allow loading packages from current project
         Base.init_depot_path()
         """
 
