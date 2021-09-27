@@ -247,10 +247,6 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     return tracefile
 end
 
-function do_ensurecompiled(project, packages, sysimage)
-    run(`$(get_julia_cmd()) --sysimage=$sysimage --project=$project -e 'using Pkg; Pkg.precompile(; strict=true)'`)
-    return nothing
-end
 
 function create_sysimg_object_file(object_file::String, packages::Vector{String};
                             project::String,
@@ -327,11 +323,6 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         end
         Base.init_depot_path()
         """
-
-    # Ensure packages to be put into sysimage are precompiled
-    if !isempty(packages)
-        do_ensurecompiled(project, packages, base_sysimage)
-    end
 
     for pkg in packages
         julia_code *= """
@@ -509,8 +500,16 @@ function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{
 
     # Instantiate the project
     ctx = create_pkg_context(project)
-    @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+
+    @debug "instantiating and precompiling project at $(repr(project))"
+    old_load_path = copy(LOAD_PATH)
+    # Need to ensure that Pkg can find the source location of the packages:
+    copy!(LOAD_PATH, [project])
+    try
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = true)
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
 
     check_packages_in_project(ctx, packages)
 
