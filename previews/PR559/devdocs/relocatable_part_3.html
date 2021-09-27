@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Relocatable apps · PackageCompiler</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">PackageCompiler</a></span></div><form class="docs-search" action="../search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Manual</span><ul><li><a class="tocitem" href="../sysimages.html">Sysimages</a></li><li><a class="tocitem" href="../libs.html">Libraries</a></li><li><a class="tocitem" href="../apps.html">Apps</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../examples/ohmyrepl.html">Creating a sysimage with OhMyREPL</a></li><li><a class="tocitem" href="../examples/plots.html">Creating a sysimage for fast plotting with Plots.jl</a></li></ul></li><li><a class="tocitem" href="../refs.html">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="relocatable_part_3.html">Relocatable apps</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="relocatable_part_3.html">Relocatable apps</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/JuliaLang/PackageCompiler.jl/blob/master/docs/src/devdocs/relocatable_part_3.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="man-tutorial-reloc"><a class="docs-heading-anchor" href="#man-tutorial-reloc">Relocatable apps</a><a id="man-tutorial-reloc-1"></a><a class="docs-heading-anchor-permalink" href="#man-tutorial-reloc" title="Permalink"></a></h1><div class="admonition is-info"><header class="admonition-header">Info</header><div class="admonition-body"><p>This section is for people who want to understand PackageCompiler.jl under the hood. It is not required reading to use the pacakge.</p></div></div><p>In the previous tutorials, we created a custom sysimage and a binary (app) that did some simple CSV parsing with an (depending on the exact demands) acceptable latency (time until the app starts doing real work).  However, trying to send this executable to another machine will fail spectacularly. This tutorial outlines how to create and package a bundle of files into an app that we can send to other machines and have them run, without for example, requiring Julia itself to be installed, and without having to ship the source code of the app.</p><p>The tutorial will not deal with any kind of file size optimization or &quot;tree shaking&quot; as it is sometimes called.</p><h2 id="Why-is-the-built-executable-in-the-previous-tutorial-non-relocatable?"><a class="docs-heading-anchor" href="#Why-is-the-built-executable-in-the-previous-tutorial-non-relocatable?">Why is the built executable in the previous tutorial non-relocatable?</a><a id="Why-is-the-built-executable-in-the-previous-tutorial-non-relocatable?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-is-the-built-executable-in-the-previous-tutorial-non-relocatable?" title="Permalink"></a></h2><p>With relocatability, we mean the ability of being able to send e.g. an executable (or a bundle of files including an executable, here called an app) to another machine and have it run there without too many assumptions of the state of the other machine. Relocatability is not an absolute measure, most apps assume some properties of the machine they will run on (like graphics drivers if one want to show graphics) but other (implicit) assumptions, like embedding absolute paths into source code would make the app almost completely non-relocatable since that absolute path is unlikely to exist on another machine.  The goal here is to make our app relocatable enough such that if we could install and run the same Julia as we use to build the app on the other machine, then the app should also run on that machine (with exceptions if some of our dependencies impose extra requirements on the machine).</p><p>So what is causing our executable that we built in the previous tutorial to not be relocatable? Firstly, our sysimage relies on <code>libjulia</code> which we currently load from the Julia directory and, in addition, <code>libjulia</code> itself relies on other libraries (like LLVM) to work. And secondly, the packages we embedded in the sysimage might have encoded assumptions about the current system into their code.</p><p>The first problem is quite easy to fix while the second one is harder since some popular packages that we might want to use as dependencies are inherently non-relocatable.  There is nothing to do about that except try to fix these packages.</p><p>For now, we will ignore the problem of packages not being relocatable by only using a small dependency that we know does not have a relocatability problem. Later in the blog post, we will revisit this and discuss more in-depth what makes a package non-relocatable and how to fix this, even if the package needs things like external libraries or binaries (spoiler alert: it is using the artifact system presented in <a href="https://julialang.org/blog/2019/11/artifacts">the blog about artifacts</a>.</p><h2 id="A-toy-app"><a class="docs-heading-anchor" href="#A-toy-app">A toy app</a><a id="A-toy-app-1"></a><a class="docs-heading-anchor-permalink" href="#A-toy-app" title="Permalink"></a></h2><p>The package we used in the previous examples to create a sysimage and executable was CSV.jl. Now, to simplify things, we will only use a very simple package with no relocatability problems that also has no dependencies. The app will take some input on stdin and print it out with color to the terminal using the <a href="https://github.com/KristofferC/Crayons.jl">Crayons.jl</a> package.</p><p>When we add the Crayons.jl package we use a separate project to encapsulate things better by creating a new project in the app directory:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ julia -q --project=.
+
+julia&gt; using Pkg; Pkg.add(&quot;Crayons&quot;)
+  Updating registry at `~/.julia/registries/General`
+  Updating git-repo `https://github.com/JuliaRegistries/General.git`
+ Resolving package versions...
+  Updating `~/MyApp/Project.toml`
+  [a8cc5b0e] + Crayons v4.0.1
+  Updating `~/MyApp/Manifest.toml`
+  [a8cc5b0e] + Crayons v4.0.1</code></pre><p>The code for the app itself is quite simple:</p><pre><code class="language-julia hljs">module MyApp
+using Crayons
+
+Base.@ccallable function julia_main()::Cint
+    try
+        real_main()
+    catch
+        Base.invokelatest(Base.display_error, Base.catch_stack())
+        return 1
+    end
+    return 0
+end
+
+function real_main()
+    Crayons.FORCE_COLOR[] = true
+    color = :red
+    for arg in ARGS
+        if !(arg in [&quot;red&quot;, &quot;green&quot;, &quot;blue&quot;])
+            error(&quot;invalid color $arg&quot;)
+        end
+        color = Symbol(arg)
+    end
+    c = Crayon(foreground=color)
+    r = Crayon(reset=true)
+    while !eof(stdin)
+        txt = String(readavailable(stdin))
+        print(r, c, txt, r)
+    end
+    return 0
+end
+if abspath(PROGRAM_FILE) == @__FILE__
+    real_main()
+end
+end # module</code></pre><p>It got the same high-level structure as the previous app in the earlier parts. The exact details are not so interesting but here a color is set based on the command-line arguments and the <code>stdin</code> is written to <code>stdout</code> with that color. We can see some usage of it:</p><p><img src="app.png" alt/></p><h2 id="Precompilation-and-sysimage"><a class="docs-heading-anchor" href="#Precompilation-and-sysimage">Precompilation and sysimage</a><a id="Precompilation-and-sysimage-1"></a><a class="docs-heading-anchor-permalink" href="#Precompilation-and-sysimage" title="Permalink"></a></h2><p>As in part 1 we generate precompilation statements and create a system image. When recording precompilation statements and creating the sysimage, we make sure to use the <code>--project</code> flag to use the packages declared in the local project:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ echo &quot;Hello, this is some stdin&quot; | julia --project --startup-file=no --trace-compile=app_precompile.jl MyApp.jl green</code></pre><p>The <code>.o</code> file is then created with the same <code>generate_sysimage.jl</code> file as in part 2:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ gcc -shared -o sys.so -Wl,--whole-archive sys.o -Wl,--no-whole-archive -L&quot;/home/kc/julia/lib&quot; -ljulia</code></pre><p>And then the sysimage is linked:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ gcc -shared -o sys.so -Wl,--whole-archive sys.o -Wl,--no-whole-archive -L&quot;/home/kc/julia/lib&quot; -ljulia</code></pre><p>Before moving on and creating the executable, we need to think about what other files we need for the app and the file structure we want.</p><h2 id="File-structure-for-our-app-bundle"><a class="docs-heading-anchor" href="#File-structure-for-our-app-bundle">File structure for our app bundle</a><a id="File-structure-for-our-app-bundle-1"></a><a class="docs-heading-anchor-permalink" href="#File-structure-for-our-app-bundle" title="Permalink"></a></h2><p>We already mentioned that <code>libjulia</code> has some dependencies.  Using <code>ldd</code>, we can see the dependencies and where the dynamic linker would load them from:</p><pre><code class="nohighlight hljs">~/julia/lib
+❯ ldd libjulia.so
+        linux-vdso.so.1 (0x00007ffec63c3000)
+        libLLVM-6.0.so =&gt; /home/kc/julia/lib/./julia/libLLVM-6.0.so (0x00007f925ef13000)
+        libdl.so.2 =&gt; /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f925eeea000)
+        librt.so.1 =&gt; /lib/x86_64-linux-gnu/librt.so.1 (0x00007f925eedf000)
+        libpthread.so.0 =&gt; /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f925eebc000)
+        libstdc++.so.6 =&gt; /home/kc/julia/lib/./julia/libstdc++.so.6 (0x00007f925eb3e000)
+        libm.so.6 =&gt; /lib/x86_64-linux-gnu/libm.so.6 (0x00007f925e9ef000)
+        libgcc_s.so.1 =&gt; /home/kc/julia/lib/./julia/libgcc_s.so.1 (0x00007f925e7d5000)
+        libc.so.6 =&gt; /lib/x86_64-linux-gnu/libc.so.6 (0x00007f925e5e4000)
+        /lib64/ld-linux-x86-64.so.2 (0x00007f9262356000)</code></pre><p>So some libraries would be loaded from the (<code>libdl</code>, <code>librt</code>) system itself, and some are bundled with Julia (<code>libLLVM</code>, <code>libstdc++</code> etc) in the <code>julia</code> folder inside <code>lib</code>.  The reason the dynamic linker finds the libraries in the subfolder is due to the <code>rpath</code> which can be seen with <code>objdump</code>:</p><pre><code class="nohighlight hljs">❯ objdump -x libjulia.so |grep RPATH
+  RPATH                $ORIGIN/julia:$ORIGIN</code></pre><p>However, these are not the only libraries Julia (and its standard libraries) need. Libraries can also be dynamically opened at runtime (with <a href="https://linux.die.net/man/3/dlopen">dlopen</a>).  For now, we will just bring all the libraries in <code>lib/julia</code> along (excluding the sysimage since we will use our sysimage).</p><p>The plan is that on macOS and Linux the files are structured as:</p><pre><code class="nohighlight hljs">├── bin
+│   └── MyApp [executable]
+│   └── sys.so
+└── lib
+    ├── julia
+    │   ├── libamd.so -&gt; libamd.so.2.4.6
+    │   ├── libamd.so.2 -&gt; libamd.so.2.4.6
+    │   ├── libamd.so.2.4.6
+    │   ├── libcamd.so -&gt; libcamd.so.2.4.6
+   ... ...
+    │   └── libz.so.1.2.11
+    ├── libjulia.so -&gt; libjulia.so.1.3
+    ├── libjulia.so.1 -&gt; libjulia.so.1.3
+    └── libjulia.so.1.3</code></pre><p>On Windows, we will just store everything in <code>bin</code> due to no convenient way of using <code>RPATH</code>.</p><p>We create a new folder <code>lib</code> and copy the libraries into it (and remove the sysimage, since we will create cusom sysimage anyway):</p><pre><code class="nohighlight hljs">~/MyApp
+❯ mkdir lib
+
+~/MyApp
+❯ cp -r ~/julia/lib/ .
+
+~/MyApp
+❯ rm lib/julia/sys.so</code></pre><h2 id="Creating-the-binary-and-the-bundle"><a class="docs-heading-anchor" href="#Creating-the-binary-and-the-bundle">Creating the binary and the bundle</a><a id="Creating-the-binary-and-the-bundle-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-the-binary-and-the-bundle" title="Permalink"></a></h2><p>With some tweaks to the <code>rpath</code> entry so that the executable can find <code>libjulia</code> the executable is created in the same way as in the previous tutorial.</p><pre><code class="nohighlight hljs">~/MyApp
+❯ gcc -DJULIAC_PROGRAM_LIBNAME=\&quot;sys.so\&quot; -o MyApp MyApp.c sys.so -O2 -I&#39;/home/kc/julia/include/julia&#39; -L&#39;/home/kc/julia/lib&#39; -fpie -Wl,-rpath,&#39;$ORIGIN:$ORIGIN/../lib&#39; -ljulia</code></pre><p>We then finally move the executable and the sysimage to the <code>bin</code> folder:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ mkdir bin
+
+~/MyApp
+❯ mv MyApp sys.so bin/</code></pre><p><img src="appexe.png" alt/></p><p>The final bundle of our relocatable app is then created by putting the <code>bin</code> and <code>lib</code> folders into an archive:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ mkdir MyApp
+
+~/MyApp
+❯ cp bin/ lib/ MyApp
+
+~/MyApp
+❯ tar czvf MyApp.tar.gz MyApp
+MyApp/
+MyApp/bin/
+MyApp/bin/MyApp
+MyApp/bin/sys.so
+MyApp/lib/
+MyApp/lib/julia/
+...</code></pre><h3 id="macOS-consideration"><a class="docs-heading-anchor" href="#macOS-consideration">macOS consideration</a><a id="macOS-consideration-1"></a><a class="docs-heading-anchor-permalink" href="#macOS-consideration" title="Permalink"></a></h3><p>On macOS we need to run <code>install_name_tool</code> to make it use the <code>rpath</code> entries which is done by executing:</p><pre><code class="nohighlight hljs">install_name_tool -change sys.so @rpath/sys.so MyApp`</code></pre><h2 id="Information-about-source-code-and-build-machine-state-stored-in-resulting-app"><a class="docs-heading-anchor" href="#Information-about-source-code-and-build-machine-state-stored-in-resulting-app">Information about source code and build machine state stored in resulting app</a><a id="Information-about-source-code-and-build-machine-state-stored-in-resulting-app-1"></a><a class="docs-heading-anchor-permalink" href="#Information-about-source-code-and-build-machine-state-stored-in-resulting-app" title="Permalink"></a></h2><p>It should be noted that there is some state from the machine where the sysimage and binary is built that can be observed and the original source code.  Using the <a href="https://linux.die.net/man/1/strings"><code>strings</code></a> application we can see what strings are embedded in an executable or library.  Running it and grepping for some relevant substrings we can see that a bunch of absolute paths are stored inside the sysimage:</p><pre><code class="nohighlight hljs">~/MyApp/MyApp/lib/julia
+❯ strings sys.so | grep /home/kc
+/home/kc/.julia/packages/Crayons/P4fls/src/downcasts.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/crayon.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/crayon_stack.jl
+/home/kc/MyApp/MyApp.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/Crayons.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/crayon_wrapper.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/test_prints.jl
+/home/kc/.julia/packages/Crayons/P4fls/src/macro.jl</code></pre><p>In addition, when we print the stacktrace upon failure in the main function, we also leak absolute paths of the build machine:</p><pre><code class="nohighlight hljs">~/MyApp
+❯ MyApp/bin/MyApp purple
+ERROR: invalid color purple
+Stacktrace:
+ [1] error(::String) at ./error.jl:33
+ [2] real_main() at /home/kc/MyApp/MyApp.jl:20
+ [3] julia_main() at /home/kc/MyApp/MyApp.jl:6</code></pre><p>This could be avoided by not printing stacktraces and perhaps even binary patching out the paths in the sysimage (not covered in this blog post).</p><p>The lowered code can also be read by loading the sysimage and using e.g. <code>@code_lowered</code> on methods.</p><h2 id="Relocatability-of-Julia-packages"><a class="docs-heading-anchor" href="#Relocatability-of-Julia-packages">Relocatability of Julia packages</a><a id="Relocatability-of-Julia-packages-1"></a><a class="docs-heading-anchor-permalink" href="#Relocatability-of-Julia-packages" title="Permalink"></a></h2><p>The main problem with relocatability of Julia packages is that many packages are encoding fundamentally non-relocatable information <em>into the source code</em>. As an example, many packages tend to use a <code>build.jl</code> file (which runs when the package is installed) that looks something like:</p><pre><code class="language-julia hljs">lib_path = find_library(&quot;libfoo&quot;)
+write(&quot;deps.jl&quot;, &quot;const LIBFOO_PATH = $(repr(lib_path))&quot;)</code></pre><p>The main package file then contains</p><pre><code class="language-julia hljs">if !isfile(&quot;../build/deps.jl&quot;)
+    error(&quot;run Pkg.build(\&quot;Package\&quot;) to re-build Package&quot;)
+end
+include(&quot;../build/deps.jl&quot;)
+
+function __init__()
+    libfoo = Libdl.dlopen(LIBFOO_PATH)
+end</code></pre><p>The problem here is that <code>deps.jl</code> contains an absolute path to the library and this gets encoded into the source code of the package. If we would store the package in the sysimage and try use it on another system, it would error when initialized since the <code>LIBFOO_PATH</code> variable is not valid on the other system. However, sometimes we need to bundle libraries and data files since the package uses them. Fortunately, there is a plan for that which can be seen in the <a href="https://julialang.org/blog/2019/11/artifacts">blog post about artifacts</a>.</p><p>The idea is that with the new artifact system a file (<code>Artifacts.toml</code>), a package can declaratively list external libraries and files that it needs.  In addition, the artifact system provides a way to find these files at runtime in a deterministic way. It is then possible to make sure that all artifacts needed for the package is bundled in the app and can also be found by the package during runtime.</p><p>The details are left out here since they become a bit technical but it should give some incentive to switch to the artifact system.</p></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Monday 27 September 2021 11:06">Monday 27 September 2021</span>. Using Julia version 1.6.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
