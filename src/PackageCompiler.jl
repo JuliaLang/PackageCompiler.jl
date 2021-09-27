@@ -973,7 +973,7 @@ function _create_app(package_dir::String,
                                          version,
                                          soname,
                                          sysimage_build_args)
-end
+        end
 
         if Sys.isapple()
             cmd = `install_name_tool -id @rpath/$sysimg_file $sysimg_file`
