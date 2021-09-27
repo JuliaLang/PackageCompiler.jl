@@ -259,7 +259,8 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
-                            isapp::Bool)
+                            isapp::Bool,
+                            sysimage_build_args::Cmd)
 
     # Handle precompilation
     precompile_files = String[]
@@ -372,7 +373,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     @debug "creating object file at $object_file"
     @info "PackageCompiler: creating system image object file, this might take a while..."
 
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target
+    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
     run(cmd)
@@ -461,6 +462,9 @@ path to a compiler
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
+  for example `-O1 --check-bounds=yes`.
 """
 function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{Symbol}}=String[];
                          sysimage_path::Union{String,Nothing}=nothing,
@@ -477,8 +481,8 @@ function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{
                          compat_level::String="major",
                          soname=nothing,
                          cpu_target::String=NATIVE_CPU_TARGET,
-                         script::Union{Nothing, String}=nothing)
-
+                         script::Union{Nothing, String}=nothing,
+                         sysimage_build_args::Cmd=``)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     if replace_default==true
@@ -538,7 +542,8 @@ function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{
                               precompile_statements_file,
                               cpu_target,
                               script,
-                              isapp)
+                              isapp,
+                              sysimage_build_args)
     create_sysimg_from_object_file(object_file,
                                    sysimage_path;
                                    o_init_file,
@@ -739,6 +744,9 @@ compiler.
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+
+- `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
+  for example `-O1 --check-bounds=yes`.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -751,13 +759,14 @@ function create_app(package_dir::String,
                     force=false,
                     c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
                     cpu_target::String=default_app_cpu_target(),
-                    include_lazy_artifacts::Bool=true)
+                    include_lazy_artifacts::Bool=true,
+                    sysimage_build_args::Cmd=``)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=false, c_driver_program, julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
-        include_lazy_artifacts)
+        include_lazy_artifacts, sysimage_build_args)
 end
 
 """
@@ -850,6 +859,9 @@ compiler.
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+
+- `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
+  for example `-O1 --check-bounds=yes`.
 """
 function create_library(package_dir::String,
                         dest_dir::String;
@@ -865,7 +877,8 @@ function create_library(package_dir::String,
                         version=nothing,
                         compat_level="major",
                         cpu_target::String=default_app_cpu_target(),
-                        include_lazy_artifacts::Bool=true)
+                        include_lazy_artifacts::Bool=true,
+                        sysimage_build_args::Cmd=``)
 
     julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
 
@@ -880,7 +893,7 @@ function create_library(package_dir::String,
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=true, c_driver_program="", julia_init_c_file,
-        header_files, version, compat_level, include_lazy_artifacts)
+        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args)
 
 end
 
@@ -900,7 +913,8 @@ function _create_app(package_dir::String,
                     header_files::Vector{String},
                     version,
                     compat_level::String,
-                    include_lazy_artifacts::Bool)
+                    include_lazy_artifacts::Bool,
+                    sysimage_build_args::Cmd)
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -964,7 +978,8 @@ function _create_app(package_dir::String,
                             isapp,
                             julia_init_c_file,
                             version,
-                            soname)
+                            soname,
+                            sysimage_build_args)
         else
             create_sysimage(sysimg_name; sysimage_path=sysimg_file, project=package_dir,
                                          incremental, filter_stdlibs,
@@ -974,7 +989,8 @@ function _create_app(package_dir::String,
                                          isapp,
                                          julia_init_c_file,
                                          version,
-                                         soname)
+                                         soname,
+                                         sysimage_build_args)
         end
 
         if Sys.isapple()
