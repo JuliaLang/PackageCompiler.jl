@@ -77,7 +77,7 @@ Activating new environment at `~/NewSysImageEnv/Project.toml`
   Updating `~/NewSysImageEnv/Manifest.toml`
   [7876af07] + Example v0.5.3
 
-julia> create_sysimage("Example"; sysimage_path="ExampleSysimage.so")
+julia> create_sysimage(["Example"]; sysimage_path="ExampleSysimage.so")
 [ Info: PackageCompiler: creating system image object file, this might take a while...
 
 julia> exit()
@@ -170,7 +170,7 @@ julia> using PackageCompiler
 (v1.3) pkg> activate .
 Activating environment at `~/NewSysImageEnv/Project.toml`
 
-julia> PackageCompiler.create_sysimage("Example"; sysimage_path="ExampleSysimagePrecompile.so",
+julia> PackageCompiler.create_sysimage(["Example"]; sysimage_path="ExampleSysimagePrecompile.so",
                                        precompile_execution_file="precompile_example.jl")
 
 [ Info: PackageCompiler: creating system image object file, this might take a while...

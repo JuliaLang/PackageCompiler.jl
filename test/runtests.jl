@@ -35,7 +35,7 @@ end
     opt_during_sysimage = Base.JLOptions().opt_level
     print_opt() = println("opt: -O\$opt_during_sysimage")
     """)
-    create_sysimage("Example"; sysimage_path=sysimage_path,
+    create_sysimage(["Example"]; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",

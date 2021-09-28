@@ -39,7 +39,7 @@ These are functions that Julia compiled. We now just tell `create_sysimage` to
 use these precompile statements when creating the system image:
 
 ```julia
-PackageCompiler.create_sysimage("OhMyREPL"; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
+PackageCompiler.create_sysimage(["OhMyREPL"]; precompile_statements_file="ohmyrepl_precompile.jl", replace_default=true)
 ```
 
 Restart Julia and start typing something. If everything went well you should
