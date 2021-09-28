@@ -25,15 +25,23 @@ const char *get_sysimage_path(const char *libname)
 {
     if (libname == NULL)
     {
-        jl_error("Please specify `libname` when requesting the sysimage path");
+        jl_error("Specify `libname` when requesting the sysimage path");
         exit(1);
     }
 
-    void *handle;
-    const char *libpath;
+    void *handle = jl_load_dynamic_library(libname, JL_RTLD_DEFAULT, 0);
+    if (handle == NULL)
+    {
+        jl_errorf("Failed to load library at %s", libname);
+        exit(1);
+    }
 
-    handle = jl_load_dynamic_library(libname, JL_RTLD_DEFAULT, 0);
-    libpath = jl_pathname_for_handle(handle);
+    const char *libpath = jl_pathname_for_handle(handle);
+    if (libpath == NULL)
+    {
+        jl_errorf("Failed to retrieve path name for library at %s", libname);
+        exit(1);
+    }
 
     return libpath;
 }
@@ -46,8 +54,7 @@ void set_depot_path(char *sysimage_path)
     char *root_dir = dirname(dirname(_sysimage_path));
     int root_dir_len = strlen(root_dir);
 
-    // for library bundles, we create the depot path under
-    // <root_dir>/share/julia
+    // we create the depot path under <root_dir>/share/julia
 #ifdef _WIN32
     char *depot_subdir = "\\share\\julia";
 #else
@@ -64,14 +71,21 @@ void set_depot_path(char *sysimage_path)
 
 #ifdef _WIN32
     _putenv_s("JULIA_DEPOT_PATH", dir);
-    _putenv_s("JULIA_LOAD_PATH", "@");
 #else
     setenv("JULIA_DEPOT_PATH", dir, 1);
-    setenv("JULIA_LOAD_PATH", "@", 1);
 #endif
     free(_sysimage_path);
     free(dir);
 }
+
+void set_load_path() {
+#ifdef _WIN32
+    _putenv_s("JULIA_LOAD_PATH", "@");
+#else
+    setenv("JULIA_LOAD_PATH", "@", 1);
+#endif
+}
+
 
 void init_julia(int argc, char **argv)
 {
@@ -81,10 +95,12 @@ void init_julia(int argc, char **argv)
     sysimage_path = get_sysimage_path(JULIAC_PROGRAM_LIBNAME);
 
     set_depot_path((char *)sysimage_path);
+    set_load_path();
 
     jl_options.image_file = sysimage_path;
     julia_init(JL_IMAGE_CWD);
 }
+
 
 void shutdown_julia(int retcode)
 {

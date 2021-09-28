@@ -166,12 +166,6 @@ function get_sysimg_file(name::String;
     return sysimg_file
 end
 
-function get_depot_path(root_dir::String, library_only::Bool)
-    # Use <root>/share/julia as the depot path when creating libraries
-    library_only && return joinpath(root_dir, "share", "julia")
-    return root_dir
-end
-
 function get_soname(name::String;
                 library_only::Bool=false,
                 version::Union{VersionNumber, Nothing}=nothing,
@@ -757,14 +751,15 @@ function create_app(package_dir::String,
                     filter_stdlibs=false,
                     audit=true,
                     force=false,
-                    c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
+                    c_driver_program::Union{Vector{String}, String}=[joinpath(@__DIR__, "embedding_wrapper.c"), 
+                                                                     joinpath(@__DIR__, "julia_init.c")],
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=true,
                     sysimage_build_args::Cmd=``)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=false, c_driver_program, julia_init_c_file=nothing,
+        library_only=false, c_driver_programs=vcat(c_driver_program), julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
         include_lazy_artifacts, sysimage_build_args)
 end
@@ -892,7 +887,7 @@ function create_library(package_dir::String,
 
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=true, c_driver_program="", julia_init_c_file,
+        library_only=true, c_driver_programs=[""], julia_init_c_file,
         header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args)
 
 end
@@ -908,7 +903,7 @@ function _create_app(package_dir::String,
                     force,
                     cpu_target::String;
                     library_only::Bool,
-                    c_driver_program::String,
+                    c_driver_programs::Vector{String},
                     julia_init_c_file,
                     header_files::Vector{String},
                     version,
@@ -1012,10 +1007,10 @@ function _create_app(package_dir::String,
         executable_path = joinpath(dest_dir, "bin")
         mkpath(executable_path)
         cd(executable_path) do
-            c_driver_program_path = abspath(c_driver_program)
+            c_driver_programs_path = abspath.(c_driver_programs)
             sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", sysimg_file)
             create_executable_from_sysimg(; sysimage_path, executable_path=name,
-                                         c_driver_program_path)
+                                            c_driver_programs_path)
         end
     end
 
@@ -1024,13 +1019,12 @@ end
 
 function create_executable_from_sysimg(;sysimage_path::String,
                                         executable_path::String,
-                                        c_driver_program_path::String,)
+                                        c_driver_programs_path::Vector{String})
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
-    wrapper = c_driver_program_path
     compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(c_driver_programs_path) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     @debug "running $cmd"
     run_with_env(cmd, compiler)
     return nothing
@@ -1091,7 +1085,7 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
     end
 
     # Copy the artifacts needed to the app directory
-    depot_path = get_depot_path(dest_dir, library_only)
+    depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
 
     if !isempty(artifact_paths)
