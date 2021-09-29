@@ -89,32 +89,37 @@ function move_default_sysimage_if_windows()
     end
 end
 
-function run_with_env(cmd, compiler)
-    if Sys.iswindows()
-        env = copy(ENV)
-        env["PATH"] = string(env["PATH"], ";", dirname(compiler))
-        run(Cmd(cmd; env=env))
-    else
-        run(cmd)
-    end
-end
-
-function get_compiler()
+function run_compiler(cmd::Cmd)
     cc = get(ENV, "JULIA_CC", nothing)
+    path = nothing
+    local compiler_cmd
+    @static if Sys.iswindows()
+        if Int == Int64
+            path = joinpath(LazyArtifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
+            compiler_cmd = `$path`
+        else # Int == Int32
+            path = joinpath(LazyArtifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
+            compiler_cmd = `$path`
+        end
+    end
     if cc !== nothing
-        return cc
+        compiler_cmd = Cmd(Base.shell_split(cc))
+        path = nothing
+    elseif !Sys.iswindows()
+        if Sys.which("gcc") !== nothing
+            compiler_cmd = `gcc`
+        elseif Sys.which("clang") !== nothing
+            compiler_cmd = `clang`
+        else
+            error("could not find a compiler, looked for `gcc` and `clang`")
+        end
     end
-    @static if Sys.iswindows() && Int==Int64
-        return joinpath(LazyArtifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
-    elseif Sys.iswindows() && Int==Int32
-        return joinpath(LazyArtifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
+    if path !== nothing
+        compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
     end
-    if Sys.which("gcc") !== nothing
-        return "gcc"
-    elseif Sys.which("clang") !== nothing
-        return "clang"
-    end
-    error("could not find a compiler, looked for `gcc` and `clang`")
+    full_cmd = `$compiler_cmd $cmd`
+    @debug "running $full_cmd"
+    run(full_cmd)
 end
 
 function get_julia_cmd()
@@ -409,9 +414,11 @@ end
     create_sysimage(packages::Vector{String}; kwargs...)
 
 Create a system image that includes the package(s) in `packages` given as a
-string or vector). An attempt to automatically find a compiler will be done but
-can also be given explicitly by setting the environment variable `JULIA_CC` to a
-path to a compiler.
+string or vector).
+
+An attempt to automatically find a compiler will be done but can also be given
+explicitly by setting the environment variable `JULIA_CC` to a path to a
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
@@ -567,15 +574,12 @@ end
 
 function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
     @debug "Compiling $julia_init_c_file"
-    compiler = get_compiler()
     m = something(march(), ``)
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `$compiler -c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
-
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
+    run_compiler(cmd)
     return o_init_file
 end
 
@@ -624,7 +628,6 @@ function create_sysimg_from_object_file(input_object::String,
 
     extra = get_extra_linker_flags(version, compat_level, soname)
 
-    compiler = get_compiler()
     m = something(march(), ``)
     private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
         if ccall(:jl_is_debugbuild, Cint, ()) != 0
@@ -637,9 +640,8 @@ function create_sysimg_from_object_file(input_object::String,
     else
         dirname(abspath(Libdl.dlpath("libjulia-internal")))
     end
-    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `$(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
+    run_compiler(cmd)
     return nothing
 end
 
@@ -719,7 +721,7 @@ argument, for example:
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler.
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
@@ -819,7 +821,7 @@ simply calls `jl_atexit_hook(retcode)`.)
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler.
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
@@ -1034,11 +1036,9 @@ function create_executable_from_sysimg(;sysimage_path::String,
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = c_driver_program_path
-    compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    run_compiler(cmd)
     return nothing
 end
 
