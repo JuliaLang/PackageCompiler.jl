@@ -1,6 +1,5 @@
 module MyApp
 
-using Base: is_core_macro
 using Example
 using HelloWorldC_jll
 using Pkg.Artifacts
