@@ -406,7 +406,7 @@ function check_packages_in_project(ctx, packages)
 end
 
 """
-    create_sysimage(packages::Union{String, Vector{String}}; kwargs...)
+    create_sysimage(packages::Vector{String}; kwargs...)
 
 Create a system image that includes the package(s) in `packages` given as a
 string or vector). An attempt to automatically find a compiler will be done but
@@ -458,7 +458,7 @@ path to a compiler.
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_sysimage(packages::Union{Symbol, String, Vector{String}, Vector{Symbol}}=String[];
+function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}=String[];
                          sysimage_path::Union{String,Nothing}=nothing,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -969,7 +969,7 @@ function _create_app(package_dir::String,
             create_sysimage(String[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs, cpu_target)
 
-            create_sysimage(sysimg_name; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file,
                             precompile_statements_file,
@@ -981,7 +981,7 @@ function _create_app(package_dir::String,
                             soname,
                             sysimage_build_args)
         else
-            create_sysimage(sysimg_name; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
                                          incremental, filter_stdlibs,
                                          precompile_execution_file,
                                          precompile_statements_file,

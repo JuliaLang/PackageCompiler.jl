@@ -30,7 +30,7 @@ The custom sysimage is then created as:
 
 ```julia
 using PackageCompiler
-create_sysimage("Plots", sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
+create_sysimage(["Plots"], sysimage_path="sys_plots.so", precompile_execution_file="precompile_plots.jl")
 ```
 
 If we now start Julia with the flag `--sysimage sys_plots.so` and re-time our previous commands:
