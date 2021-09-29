@@ -507,7 +507,15 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
     # Need to ensure that Pkg can find the source location of the packages:
     copy!(LOAD_PATH, [project])
     try
-        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = true)
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+        try
+            # try to disable warning about precompiling packages that are already loaded given work will be done in new
+            # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
+            # so isn't present on all versions, so try and do standard precompilation if fails
+            Pkg.precompile(ctx, warn_loaded = false)
+        catch
+            Pkg.precompile(ctx)
+        end
     finally
         copy!(LOAD_PATH, old_load_path)
     end
