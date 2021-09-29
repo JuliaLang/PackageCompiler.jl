@@ -866,8 +866,8 @@ compiler.
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 
-- `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
-  for example `-O1 --check-bounds=yes`.
+- `sysimage_build_args::Cmd`: A set of command line options that is used by both the Julia process running the
+  precompilation script and the Julia process building the sysimage, for example `-t2 -O1 --check-bounds=yes`.
 """
 function create_library(package_dir::String,
                         dest_dir::String;
