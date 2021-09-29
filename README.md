@@ -15,4 +15,4 @@ PackageCompiler is a Julia package with three main purposes:
 For installation and usage instructions, see the [documentation][docs-stable-url].
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://JuliaLang.github.io/PackageCompiler.jl/dev
+[docs-stable-url]: https://JuliaLang.github.io/PackageCompiler.jl
