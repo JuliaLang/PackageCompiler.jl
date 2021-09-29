@@ -701,7 +701,7 @@ Compile an app with the source in `package_dir` to the folder `compiled_app`.
 The folder `package_dir` needs to contain a package where the package includes a
 function with the signature
 
-```
+```julia
 julia_main()::Cint
     # Perhaps do something based on ARGS
     ...
@@ -710,6 +710,12 @@ end
 
 The executable will be placed in a folder called `bin` in `compiled_app` and
 when the executable run the `julia_main` function is called.
+
+Standard Julia arguments are set by passing them after a `--julia-args`
+argument, for example:
+```
+\$ ./MyApp input.csv --julia-args -O3 -t8
+```
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a

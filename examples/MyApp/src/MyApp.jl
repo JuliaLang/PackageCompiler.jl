@@ -23,8 +23,12 @@ function real_main()
     @show LOAD_PATH
     @show pwd()
     @show Base.active_project()
-    @show Threads.nthreads()
     @show Sys.BINDIR
+
+    @show Base.JLOptions().opt_level
+    @show Base.JLOptions().nthreads
+    @show Base.JLOptions().check_bounds
+
     display(Base.loaded_modules)
     println()
 

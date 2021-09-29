@@ -31,6 +31,20 @@ int main(int argc, char *argv[])
 {
     uv_setup_args(argc, argv); // no-op on Windows
 
+    // Find where eventual julia arguments start
+    int program_argc = argc;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--julia-args") == 0) {
+            program_argc = i;
+            break;
+        }
+    }
+    int julia_argc = argc - program_argc - 1;
+    if (julia_argc > 0) {
+        char ** julia_argv = &argv[program_argc];
+        jl_parse_opts(&julia_argc, &julia_argv);
+    }
+
     // initialization
     libsupport_init();
 
@@ -53,7 +67,7 @@ int main(int argc, char *argv[])
     julia_init(JL_IMAGE_JULIA_HOME);
 
     // Initialize Core.ARGS with the full argv.
-    jl_set_ARGS(argc, argv);
+    jl_set_ARGS(program_argc, argv);
 
     // Set PROGRAM_FILE to argv[0].
     jl_set_global(jl_base_module,
@@ -61,8 +75,8 @@ int main(int argc, char *argv[])
 
     // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
     jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
-    jl_array_grow_end(ARGS, argc - 1);
-    for (int i = 1; i < argc; i++) {
+    jl_array_grow_end(ARGS, program_argc - 1);
+    for (int i = 1; i < program_argc; i++) {
         jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
         jl_arrayset(ARGS, s, i - 1);
     }
