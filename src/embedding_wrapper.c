@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
     // Find where eventual julia arguments start
     int program_argc = argc;
     for (int i = 0; i < argc; i++) {
-        if (strncmp(argv[i], "--julia-args", 12) == 0) {
+        if (strcmp(argv[i], "--julia-args") == 0) {
             program_argc = i;
             break;
         }
