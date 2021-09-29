@@ -249,7 +249,9 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
 end
 
 
-function create_sysimg_object_file(object_file::String, packages::Vector{String};
+function create_sysimg_object_file(object_file::String, 
+                            packages::Vector{String},
+                            packages_sysimg::Set{Base.PkgId};
                             project::String,
                             base_sysimage::String,
                             precompile_execution_file::Vector{String},
@@ -313,8 +315,9 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         end # module
         """
 
+    julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
-    julia_code = """
+    print(julia_code_buffer, """
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
@@ -323,26 +326,32 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             Base.init_active_project()
         end
         Base.init_depot_path()
-        """
+        """)
 
-    for pkg in packages
-        julia_code *= """
-            import $pkg
-            """
+    for pkg in packages_sysimg
+        print(julia_code_buffer, """
+            Base.require(Base.PkgId(Base.UUID("$(string(pkg.uuid))"), $(repr(pkg.name))))
+            """)
     end
 
-    julia_code *= precompile_code
+    # Make packages available in Main. It is unclear if this is the right thing to do.
+    for pkg in packages
+        print(julia_code_buffer, """
+            import $pkg
+            """)
+    end
+
+    print(julia_code_buffer, precompile_code)
 
     if script !== nothing
-        julia_code *= """
+        print(julia_code_buffer, """
         include($(repr(abspath(script))))
-        """
+        """)
     end
 
     if isapp
         # If it is an app, there is only one packages
         @assert length(packages) == 1
-        packages[1]
         app_start_code = """
         Base.@ccallable function julia_main()::Cint
             try
@@ -353,18 +362,21 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
             end
         end
         """
-        julia_code *= app_start_code
+        print(julia_code_buffer, app_start_code)
     end
 
-    julia_code *= """
+
+
+    print(julia_code_buffer, """
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
-        """
+        """)
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
     @info "PackageCompiler: creating system image object file, this might take a while..."
 
+    julia_code = String(take!(julia_code_buffer))
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
     @debug "running $cmd"
@@ -384,7 +396,7 @@ function gather_stdlibs_project(ctx)
     non_sysimage_stdlibs = stdlibs_not_in_sysimage()
     sysimage_stdlibs_project = String[]
     non_sysimage_stdlibs_project = String[]
-    for (uuid, pkg) in ctx.env.manifest
+    for (_, pkg) in ctx.env.manifest
         if pkg.name in sysimage_stdlibs
             push!(sysimage_stdlibs_project, pkg.name)
         elseif pkg.name in non_sysimage_stdlibs
@@ -437,17 +449,9 @@ path to a compiler.
 - `replace_default::Bool`: If `true`, replace the default system image which is automatically
   used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
 
-- `julia_init_c_file::String`: File to include in the system image with functions for
-  initializing julia from external code. Used when creating a shared library.
-
-- `version::VersionNumber`: Shared library version number (optional). Added to the sysimg
-  `.so` name on Linux/UNIX, and the `.dylib` name on Apple platforms, and to set the internal
-  `current_version` on Apple. Ignored on Windows.
-
-- `compat_level::String`: compatibility level for library. One of "major", "minor".
-  With `version`, used to determine the `compatibility_version` on Apple.
-
-- `soname`: On linux, used to set the internal soname for the system image.
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+   transitive dependencies into the sysimage. This only makes a differecnce if some
+   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
 
@@ -466,15 +470,17 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
                          incremental::Bool=true,
                          filter_stdlibs=false,
                          replace_default::Bool=false,
+                         cpu_target::String=NATIVE_CPU_TARGET,
+                         script::Union{Nothing, String}=nothing,
+                         sysimage_build_args::Cmd=``,
+                         include_transitive_dependencies::Bool=true,
+                         # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          isapp::Bool=false,
                          julia_init_c_file=nothing,
                          version=nothing,
                          compat_level::String="major",
-                         soname=nothing,
-                         cpu_target::String=NATIVE_CPU_TARGET,
-                         script::Union{Nothing, String}=nothing,
-                         sysimage_build_args::Cmd=``)
+                         soname=nothing)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
     if replace_default==true
@@ -531,11 +537,51 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
         end
     end
 
+    packages_sysimg = Set{Base.PkgId}()
+
+    if include_transitive_dependencies
+        # We are not sure that packages actually load their dependencies on `using`
+        # but we still want them to end up in the sysimage. Therefore, explicitly
+        # collect their dependencies, recursively.
+
+        frontier = Set{Base.PkgId}()
+        deps = ctx.env.project.deps
+        for pkg in packages
+            # Add all dependencies of the package
+            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
+                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
+            else
+                uuid = ctx.env.project.deps[pkg]
+                push!(frontier, Base.PkgId(uuid, pkg))
+            end
+        end
+        copy!(packages_sysimg, frontier)
+        new_frontier = Set{Base.PkgId}()
+        while !(isempty(frontier))
+            for pkgid in frontier
+                deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
+                    ctx.env.project.deps
+                else
+                    ctx.env.manifest.deps[pkgid.uuid].deps
+                end
+                pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
+                for pkgid_dep in pkgid_deps
+                    if !(pkgid_dep in packages_sysimg) #
+                        push!(packages_sysimg, pkgid_dep)
+                        push!(new_frontier, pkgid_dep)
+                    end
+                end
+            end
+            copy!(frontier, new_frontier)
+            empty!(new_frontier)
+        end
+    end
+
     o_init_file = julia_init_c_file === nothing ? nothing : compile_c_init_julia(julia_init_c_file, sysimage_path)
 
     # Create the sysimage
     object_file = tempname() * ".o"
-    create_sysimg_object_file(object_file, packages;
+    create_sysimg_object_file(object_file, packages, packages_sysimg;
                               project,
                               base_sysimage,
                               precompile_execution_file,
@@ -747,6 +793,10 @@ compiler.
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
   defaults to `true`.
 
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+  transitive dependencies into the sysimage. This only makes a differecnce if some
+  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -766,13 +816,14 @@ function create_app(package_dir::String,
                     c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=true,
-                    sysimage_build_args::Cmd=``)
+                    sysimage_build_args::Cmd=``,
+                    include_transitive_dependencies::Bool=true)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=false, c_driver_program, julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
-        include_lazy_artifacts, sysimage_build_args)
+        include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
 end
 
 """
@@ -862,6 +913,10 @@ compiler.
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
   defaults to `true`.
 
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+  transitive dependencies into the sysimage. This only makes a differecnce if some
+  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -884,7 +939,8 @@ function create_library(package_dir::String,
                         compat_level="major",
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=true,
-                        sysimage_build_args::Cmd=``)
+                        sysimage_build_args::Cmd=``,
+                        include_transitive_dependencies::Bool=true)
 
     julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
 
@@ -899,7 +955,7 @@ function create_library(package_dir::String,
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=true, c_driver_program="", julia_init_c_file,
-        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args)
+        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
 
 end
 
@@ -920,7 +976,8 @@ function _create_app(package_dir::String,
                     version,
                     compat_level::String,
                     include_lazy_artifacts::Bool,
-                    sysimage_build_args::Cmd)
+                    sysimage_build_args::Cmd,
+                    include_transitive_dependencies::Bool)
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -985,7 +1042,8 @@ function _create_app(package_dir::String,
                             julia_init_c_file,
                             version,
                             soname,
-                            sysimage_build_args)
+                            sysimage_build_args,
+                            include_transitive_dependencies)
         else
             create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
                                          incremental, filter_stdlibs,
@@ -996,7 +1054,8 @@ function _create_app(package_dir::String,
                                          julia_init_c_file,
                                          version,
                                          soname,
-                                         sysimage_build_args)
+                                         sysimage_build_args,
+                                         include_transitive_dependencies)
         end
 
         if Sys.isapple()

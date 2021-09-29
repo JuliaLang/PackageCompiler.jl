@@ -1,5 +1,6 @@
 module MyApp
 
+using Base: is_core_macro
 using Example
 using HelloWorldC_jll
 using Pkg.Artifacts
@@ -14,6 +15,10 @@ function julia_main()
         return 1
     end
     return 0
+end
+
+function is_crayons_loaded()
+    Base.PkgId(Base.UUID("a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"), "Crayons") in keys(Base.loaded_modules)
 end
 
 function real_main()
@@ -38,6 +43,8 @@ function real_main()
         run(`$x`)
     end
     println()
+
+    @show is_crayons_loaded()
 
     println("Running the artifact")
     res = read(`$(fooifier_path()) 5 10`, String)
