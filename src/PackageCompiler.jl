@@ -231,7 +231,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     return tmp_sys_ji
 end
 
-function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing})
+function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, sysimage_build_args::Cmd)
     tracefile = tempname()
     if precompile_file === nothing
         arg = `-e ''`
@@ -240,7 +240,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     end
     touch(tracefile)
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
-            --compile=all --trace-compile=$tracefile $arg`
+            --compile=all --trace-compile=$tracefile $sysimage_build_args $arg`
     @debug "run_precompilation_script: running $cmd"
     precompile_file === nothing || @info "===== Start precompile execution ====="
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
@@ -263,7 +263,7 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
     precompile_files = String[]
     @debug "running precompilation execution script..."
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file)
+        tracefile = run_precompilation_script(project, base_sysimage, file, sysimage_build_args)
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, precompile_statements_file)
