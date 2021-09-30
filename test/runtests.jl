@@ -96,6 +96,8 @@ end
             @test occursin("(Base.JLOptions()).opt_level = 2", app_output)
             @test occursin("(Base.JLOptions()).nthreads = 3", app_output)
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
+            # Check transitive inclusion of dependencies
+            @test occursin("is_crayons_loaded() = true", app_output)
         end
     end
 
