@@ -236,20 +236,19 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     return tmp_sys_ji
 end
 
-function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing})
-    tracefile = tempname()
+function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
+    tracefile, io = mktemp(precompile_dir; cleanup=false)
+    close(io)
     if precompile_file === nothing
         arg = `-e ''`
     else
         arg = `$precompile_file`
     end
-    touch(tracefile)
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
             --compile=all --trace-compile=$tracefile $arg`
-    @debug "run_precompilation_script: running $cmd"
-    precompile_file === nothing || @info "===== Start precompile execution ====="
+    precompile_file === nothing || @info "PackageCompiler: Executing $(precompile_file) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
-    precompile_file === nothing || @info "===== End precompile execution ====="
+    precompile_file === nothing || @info "PackageCompiler: Done"
     return tracefile
 end
 
@@ -269,8 +268,9 @@ function create_sysimg_object_file(object_file::String,
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
+    precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file)
+        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, precompile_statements_file)
@@ -1146,7 +1146,7 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
                     if !include_lazy_artifacts &&
                             isa(artifact_dict[name], AbstractDict) &&
                             get(artifact_dict[name], "lazy", false)
-                        @info "skipping lazy artifact \"$name\""
+                        @info "PackageCompiler: skipping lazy artifact \"$name\""
                         continue
                     end
                     meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
