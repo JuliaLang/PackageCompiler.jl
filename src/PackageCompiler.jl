@@ -455,6 +455,10 @@ path to a compiler.
 
 ### Advanced keyword arguments
 
+- `base_sysimage::Union{Nothing, String}`: If a `String`, names an existing sysimage upon which to build
+   the new sysimage incrementally, instead of the sysimage of the current process. Defaults to `nothing`.
+   Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
+
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
