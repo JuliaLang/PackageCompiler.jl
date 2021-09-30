@@ -288,7 +288,9 @@ function create_sysimg_object_file(object_file::String,
             precompile_files = String[
                 $(join(map(repr, precompile_files), "\n" * " " ^ 8))
             ]
+            n_success, n_fail, n_error = 0, 0, 0
             for file in precompile_files, statement in eachline(file)
+                @show statement
                 try
                     # println(statement)
                     # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
@@ -309,15 +311,26 @@ function create_sysimg_object_file(object_file::String,
                     ps = Core.eval(PrecompileStagingArea, ps)
                     # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
                     # Skipping them avoids the warning.
-                    ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-                    ms isa Vector || continue
-                    precompile(ps...)
+                    # [We disable this here because we want it to count against ]
+                    # ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+                    # ms isa Vector || continue
+                    ok_precompile = precompile(ps...)
+                    if !ok_precompile
+                        @info "Failed to precompile: \$statement"
+                        global n_fail += 1
+                    else
+                        global n_success += 1
+                    end
                 catch e
                     # See julia issue #28808
-                    @debug "failed to execute \$statement"
+                    global n_error += 1
+                    @info "Errored when precompiling: \$statement"
                 end
             end
+            n_total = n_fail + n_success + n_error
+            @info "Finished precompilation: \$n_total statements (\$n_success success, \$n_fail fail, \$n_error error)"
         end # module
+        error()
         """
 
     julia_code_buffer = IOBuffer()
