@@ -244,8 +244,10 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     else
         arg = `$precompile_file`
     end
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg)
             --compile=all --trace-compile=$tracefile $arg`
+    # --project is not propagated well with Distributed, so use environment
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => project)
     precompile_file === nothing || @info "PackageCompiler: Executing $(precompile_file) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
     precompile_file === nothing || @info "PackageCompiler: Done"
@@ -274,7 +276,6 @@ function create_sysimg_object_file(object_file::String,
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, precompile_statements_file)
-
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
@@ -1020,7 +1021,7 @@ function _create_app(package_dir::String,
 
     mkpath(dest_dir)
 
-    bundle_julia_libraries(dest_dir, library_only)
+    bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=include_lazy_artifacts)
 
     library_only && bundle_headers(dest_dir, header_files)
@@ -1088,6 +1089,7 @@ function _create_app(package_dir::String,
             create_executable_from_sysimg(; sysimage_path, executable_path=name,
                                          c_driver_program_path)
         end
+        bundle_julia_executable(executable_path)
     end
 
     return
@@ -1105,7 +1107,12 @@ function create_executable_from_sysimg(;sysimage_path::String,
     return nothing
 end
 
-function bundle_julia_libraries(dest_dir, library_only)
+function bundle_julia_executable(dir::String)
+    name = Sys.iswindows() ? "julia.exe" : "julia"
+    cp(joinpath(Sys.BINDIR::String, name), joinpath(dir, name))
+end
+
+function bundle_julia_libraries(dest_dir)
     app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     cp(julia_libdir(), app_libdir; force=true)
     # We do not want to bundle the sysimg (nor the backup sysimage):

@@ -3,6 +3,8 @@ module MyApp
 using Example
 using HelloWorldC_jll
 using Pkg.Artifacts
+using Distributed
+
 
 fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
@@ -52,6 +54,20 @@ function real_main()
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
     @show sin(0.0)
+
+    if nworkers() != 4
+        addprocs(4)
+        @eval @everywhere using MyApp
+    end
+   
+    n = @distributed (+) for i = 1:20000000
+        1
+    end
+    println("n = $n")
+    # TODO: Code loading for distributed is currently only
+    # really possible by shipping a Project.toml.  
+    # @eval @everywhere using Example
+    # @everywhere println(Example.domath(3))
     return
 end
 
