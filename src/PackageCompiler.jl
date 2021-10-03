@@ -358,22 +358,6 @@ function create_sysimg_object_file(object_file::String,
         """)
     end
 
-    if isapp
-        # If it is an app, there is only one packages
-        @assert length(packages) == 1
-        app_start_code = """
-        Base.@ccallable function julia_main()::Cint
-            try
-                $(packages[1]).julia_main()
-            catch
-                Core.print("julia_main() threw an unhandled exception")
-                return 1
-            end
-        end
-        """
-        print(julia_code_buffer, app_start_code)
-    end
-
     print(julia_code_buffer, """
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)

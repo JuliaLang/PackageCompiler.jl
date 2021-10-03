@@ -72,3 +72,5 @@ PackageCompiler 2.0 comes with a few breaking changes.
 - The functionality for replacing the default sysimage (`replace_default=true`) has been removed. Instead, you can e.g. 
   create an alias or shortcut that starts Julia with a custom sysimage by specifying the `--sysimage=<PATH/TO/SYSIMAGE>` 
   command line option.
+- Apps now need to make their "main"-functions ccallable by adding `Base.@ccallable` before the function and `::Cint` as a return type,
+  for example `Base.@ccallable julia_main()::Cint ...`.
