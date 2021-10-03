@@ -6,10 +6,12 @@ version = "1.6.0"
 LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+RelocatableFolders = "05181044-ff0b-4ac5-8273-598c1e38db00"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
 julia = "1.6"
+RelocatableFolders = "0.1"
 
 [extras]
 Example = "7876af07-990d-54b4-ab0e-23690620f79a"
