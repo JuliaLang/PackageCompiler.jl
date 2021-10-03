@@ -146,13 +146,12 @@ end
 function get_sysimg_file(name::String;
                      library_only::Bool=false,
                      version::Union{VersionNumber, Nothing}=nothing,
-                     level::String="patch")
+                     compat_level::String="patch")
 
     dlext = Libdl.dlext
-    (!library_only || Sys.iswindows()) && return "$name.$dlext"
+    (!library_only || Sys.iswindows()) && return "sys.$dlext"
 
     # For libraries on Unix/Apple, make sure the name starts with "lib"
-
     if !startswith(name, "lib")
         name = "lib" * name
     end
@@ -161,7 +160,7 @@ function get_sysimg_file(name::String;
         return "$name.$dlext"
     end
 
-    version = get_compat_version_str(version, level)
+    version = get_compat_version_str(version, compat_level)
     sysimg_file = (
         Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
         Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
@@ -171,19 +170,13 @@ function get_sysimg_file(name::String;
     return sysimg_file
 end
 
-function get_depot_path(root_dir::String, library_only::Bool)
-    # Use <root>/share/julia as the depot path when creating libraries
-    library_only && return joinpath(root_dir, "share", "julia")
-    return root_dir
-end
-
 function get_soname(name::String;
                 library_only::Bool=false,
                 version::Union{VersionNumber, Nothing}=nothing,
                 compat_level::String="major")
 
     (!Sys.isunix() || Sys.isapple()) && return nothing
-    return get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
+    return get_sysimg_file(name; library_only, version, compat_level)
 end
 
 
@@ -998,16 +991,16 @@ function _create_app(package_dir::String,
     if ctx.env.pkg === nothing
         error("expected package to have a `name`-entry")
     end
-    sysimg_name = ctx.env.pkg.name
+    project_name = ctx.env.pkg.name
     if name === nothing
-        name = sysimg_name
+        name = project_name
     end
 
-    sysimg_file = get_sysimg_file(name, library_only=library_only, version=version)
-    soname = get_soname(name,
-                        library_only=library_only,
-                        version=version,
-                        compat_level=compat_level)
+    sysimg_file = get_sysimg_file(name; library_only, version)
+    soname = get_soname(name;
+                        library_only,
+                        version,
+                        compat_level)
 
     if isdir(dest_dir)
         if !force
@@ -1023,11 +1016,18 @@ function _create_app(package_dir::String,
 
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=include_lazy_artifacts)
+    isapp && bundle_julia_executable(dest_dir)
+    # TODO: Should also bundle project and update load_path for library 
+    isapp && bundle_project(ctx, dest_dir)
 
     library_only && bundle_headers(dest_dir, header_files)
 
     # TODO: Create in a temp dir and then move it into place?
-    sysimage_path = Sys.isunix() ? joinpath(dest_dir, "lib") : joinpath(dest_dir, "bin")
+    sysimage_path = if Sys.isunix()
+        isapp ? joinpath(dest_dir, "lib", "julia") : joinpath(dest_dir, "lib")
+    else
+        joinpath(dest_dir, "bin")
+    end
     mkpath(sysimage_path)
     cd(sysimage_path) do
         if !incremental
@@ -1039,7 +1039,7 @@ function _create_app(package_dir::String,
             create_sysimage(String[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs, cpu_target)
 
-            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file,
                             precompile_statements_file,
@@ -1052,7 +1052,7 @@ function _create_app(package_dir::String,
                             sysimage_build_args,
                             include_transitive_dependencies)
         else
-            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
                                          incremental, filter_stdlibs,
                                          precompile_execution_file,
                                          precompile_statements_file,
@@ -1072,8 +1072,8 @@ function _create_app(package_dir::String,
         end
 
         if library_only && version !== nothing && Sys.isunix()
-            compat_file = get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
-            base_file = get_sysimg_file(name, library_only=library_only)
+            compat_file = get_sysimg_file(name; library_only, version, compat_level)
+            base_file = get_sysimg_file(name)
             @debug "creating symlinks for $compat_file and $base_file"
             symlink(sysimg_file, compat_file)
             symlink(sysimg_file, base_file)
@@ -1085,11 +1085,10 @@ function _create_app(package_dir::String,
         mkpath(executable_path)
         cd(executable_path) do
             c_driver_program_path = abspath(c_driver_program)
-            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", sysimg_file)
+            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", "julia", sysimg_file)
             create_executable_from_sysimg(; sysimage_path, executable_path=name,
                                          c_driver_program_path)
         end
-        bundle_julia_executable(executable_path)
     end
 
     return
@@ -1107,9 +1106,28 @@ function create_executable_from_sysimg(;sysimage_path::String,
     return nothing
 end
 
+# One of the main reason for bunlding the project file is
+# for Distributed to work. When using Distributed we need to
+# load packages on other workers and that requires the Project file.
+# See https://github.com/JuliaLang/julia/issues/42296 for some discussion.
+function bundle_project(ctx, dir)
+    julia_share =  joinpath(dir, "share", "julia")
+    mkpath(julia_share)
+    # We do not want to bundle some potentially sensitive data, only data that
+    # is already trivially retrievable from the sysimage.
+    d = Dict{String, Any}()
+    d["name"] = ctx.env.project.name
+    d["uuid"] = ctx.env.project.uuid
+    d["deps"] = ctx.env.project.deps
+
+    Pkg.Types.write_project(d, joinpath(julia_share, "Project.toml"))
+end
+
 function bundle_julia_executable(dir::String)
+    bindir = joinpath(dir, "bin")
     name = Sys.iswindows() ? "julia.exe" : "julia"
-    cp(joinpath(Sys.BINDIR::String, name), joinpath(dir, name))
+    mkpath(bindir)
+    cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
 end
 
 function bundle_julia_libraries(dest_dir)
@@ -1167,7 +1185,7 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
     end
 
     # Copy the artifacts needed to the app directory
-    depot_path = get_depot_path(dest_dir, library_only)
+    depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
 
     if !isempty(artifact_paths)

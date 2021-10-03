@@ -2,7 +2,7 @@ module MyApp
 
 using Example
 using HelloWorldC_jll
-using Pkg.Artifacts
+using Artifacts
 using Distributed
 
 
@@ -64,10 +64,8 @@ function real_main()
         1
     end
     println("n = $n")
-    # TODO: Code loading for distributed is currently only
-    # really possible by shipping a Project.toml.  
-    # @eval @everywhere using Example
-    # @everywhere println(Example.domath(3))
+    @eval @everywhere using Example
+    @everywhere println(Example.domath(3))
     return
 end
 
