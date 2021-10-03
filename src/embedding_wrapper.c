@@ -49,19 +49,40 @@ int main(int argc, char *argv[])
     libsupport_init();
 
     // Get the current exe path so we can compute a relative depot path
-    char *free_path = (char*)malloc(PATH_MAX);
+    char *exe_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
-    if (!free_path)
-       jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-    if (uv_exepath(free_path, &path_size)) {
-       jl_error("fatal error: unexpected error while retrieving exepath");
+    if (!exe_path) {
+        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+        free(exe_path);
+        return 1;
+    }
+    if (uv_exepath(exe_path, &path_size)) {
+        jl_error("fatal error: unexpected error while retrieving exepath");
+        free(exe_path);
+        return 1;
     }
 
-    char buf[PATH_MAX];
-    snprintf(buf, sizeof(buf), "JULIA_DEPOT_PATH=%s/", dirname(dirname(free_path)));
-    putenv(buf);
-    putenv("JULIA_LOAD_PATH=@");
+    char* root_dir = dirname(dirname(exe_path));
+    char* depot_str = "JULIA_DEPOT_PATH=";
+    char* load_path_str = "JULIA_LOAD_PATH=";
+#ifdef _WIN32
+    char *julia_share_subdir = "\\share\\julia";
+#else
+    char *julia_share_subdir = "/share/julia";
+#endif
+    char *depot_path_env = calloc(sizeof(char), strlen(depot_str)    + strlen(root_dir) + strlen(julia_share_subdir) + 1);
+    char *load_path_env  = calloc(sizeof(char), strlen(load_path_str)+ strlen(root_dir) + strlen(julia_share_subdir) + 1);
 
+    strcat(depot_path_env, depot_str);
+    strcat(depot_path_env, root_dir);
+    strcat(depot_path_env, julia_share_subdir);
+
+    strcat(load_path_env, load_path_str);
+    strcat(load_path_env, root_dir);
+    strcat(load_path_env, julia_share_subdir); 
+
+    putenv(depot_path_env);
+    putenv(load_path_env);
     // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
     jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
@@ -85,6 +106,10 @@ int main(int argc, char *argv[])
     int retcode = julia_main(ARGS);
 
     // Cleanup and gracefully exit
+
+    free(depot_path_env);
+    free(load_path_env);
+    free(exe_path);
     jl_atexit_hook(retcode);
     return retcode;
 }

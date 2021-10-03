@@ -98,6 +98,12 @@ end
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
             # Check transitive inclusion of dependencies
             @test occursin("is_crayons_loaded() = true", app_output)
+            # Check distributed
+            @test occursin("n = 20000000", app_output)
+            @test occursin("From worker 2:\t8", app_output)
+            @test occursin("From worker 3:\t8", app_output)
+            @test occursin("From worker 4:\t8", app_output)
+            @test occursin("From worker 5:\t8", app_output)
         end
     end
 
