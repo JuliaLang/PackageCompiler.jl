@@ -70,8 +70,8 @@ relocatable way?"  The answer is to use the "artifact system" introduced in
 Julia 1.3, and described in the following [blog
 post](https://julialang.org/blog/2019/11/artifacts). The artifact system is a
 declarative way of downloading and using "external files" like binaries and
-libraries.  How this is used in practice is described later.
-
+libraries.  How this is used in practice is described later. Another useful
+tool is the Julia package [RelocatableFolders.jl](https://github.com/JuliaPackaging/RelocatableFolders.jl).
 
 ## Creating an app
 
