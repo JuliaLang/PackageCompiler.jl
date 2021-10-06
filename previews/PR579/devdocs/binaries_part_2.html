@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Creating a binary from Julia code · PackageCompiler</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">PackageCompiler</a></span></div><form class="docs-search" action="../search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Manual</span><ul><li><a class="tocitem" href="../sysimages.html">Sysimages</a></li><li><a class="tocitem" href="../libs.html">Libraries</a></li><li><a class="tocitem" href="../apps.html">Apps</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../examples/ohmyrepl.html">Creating a sysimage with OhMyREPL</a></li><li><a class="tocitem" href="../examples/plots.html">Creating a sysimage for fast plotting with Plots.jl</a></li></ul></li><li><a class="tocitem" href="../refs.html">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="binaries_part_2.html">Creating a binary from Julia code</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="binaries_part_2.html">Creating a binary from Julia code</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/JuliaLang/PackageCompiler.jl/blob/master/docs/src/devdocs/binaries_part_2.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="man-tutorial-binary"><a class="docs-heading-anchor" href="#man-tutorial-binary">Creating a binary from Julia code</a><a id="man-tutorial-binary-1"></a><a class="docs-heading-anchor-permalink" href="#man-tutorial-binary" title="Permalink"></a></h1><div class="admonition is-info"><header class="admonition-header">Info</header><div class="admonition-body"><p>This section is for people who want to understand PackageCompiler.jl under the hood. It is not required reading to use the package.</p></div></div><p>This section targets how to build an executable based on the custom sysimage so that it can be run without having to explicitly start a Julia session.</p><h2 id="Interacting-with-Julia-through-libjulia."><a class="docs-heading-anchor" href="#Interacting-with-Julia-through-libjulia.">Interacting with Julia through <code>libjulia</code>.</a><a id="Interacting-with-Julia-through-libjulia.-1"></a><a class="docs-heading-anchor-permalink" href="#Interacting-with-Julia-through-libjulia." title="Permalink"></a></h2><p>The way to interact with Julia without using the Julia executable itself is by calling into the Julia runtime library (<code>libjulia</code>) from a C program.  A quite detail set of docs for how this is done can be found at the <a href="https://docs.julialang.org/en/v1/manual/embedding/">embedding chapter in the Julia manual</a> and it is recommended to read before reading on.  Since this is supposed to highlight the interals of PackageCompiler, will not use the conveniences shown in that section (e.g. the <code>julia-config.jl</code> script) but it is good to know they exist.</p><p>A rough outline of the steps we will take to create an executable are:</p><ul><li>Create our Julia app with a <code>Base.@ccallable</code> entry-point which means the Julia function can be called directly from C.</li><li>Create a custom sysimage to reduce latency (this is pretty much just doing part 1) and to hold the C-callable function from the first step.</li><li>Write an embedding wrapper in C that loads our custom sysimage, does some initialization and calls the entry point in the script.</li></ul><h2 id="A-toy-application"><a class="docs-heading-anchor" href="#A-toy-application">A toy application</a><a id="A-toy-application-1"></a><a class="docs-heading-anchor-permalink" href="#A-toy-application" title="Permalink"></a></h2><p>To have something concrete to work with we will create a very simple application.  Keeping with the spirit of CSV parsing, we will create a small app that parses a list of CSV files given as arguments to the app and prints the size of the parsed result. The code for the app (<code>MyApp.jl</code>) is shown below:</p><pre><code class="language-julia hljs">module MyApp
+
+using CSV
+
+Base.@ccallable function julia_main()::Cint
+    try
+        real_main()
+    catch
+        Base.invokelatest(Base.display_error, Base.catch_stack())
+        return 1
+    end
+    return 0
+end
+
+function real_main()
+    for file in ARGS
+        if !isfile(file)
+            error(&quot;could not find file $file&quot;)
+        end
+        df = CSV.read(file)
+        println(file, &quot;: &quot;, size(df, 1), &quot;x&quot;, size(df, 2))
+    end
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    real_main()
+end
+
+end # module</code></pre><p>The function <code>julia_main</code> has been annotated with <code>Base.@ccallable</code> which means that a function with the unmangled name will appear in the sysimage. This function is just a small wrapper function that calls out to <code>real_main</code> which does the actual work.  All the code that is executed is put inside a try-catch block since the error will otherwise happen in the C-code where the backtrace is not very good</p><p>To facilitate testing, we <a href="https://docs.julialang.org/en/v1/manual/faq/#How-do-I-check-if-the-current-file-is-being-run-as-the-main-script?-1">check if the file was directly executed</a> and in that case, run the main function.  We can test (and time) the script on the sample CSV file <a href="sysimages_part_1.html#man-tutorial-sysimage">from the first tutorial</a></p><pre><code class="nohighlight hljs">❯ time julia MyApp.jl FL_insurance_sample.csv
+FL_insurance_sample.csv: 36634x18
+julia MyApp.jl FL_insurance_sample.csv  12.51s user 0.38s system 104% cpu 12.385 total</code></pre><h2 id="Create-the-sysimage"><a class="docs-heading-anchor" href="#Create-the-sysimage">Create the sysimage</a><a id="Create-the-sysimage-1"></a><a class="docs-heading-anchor-permalink" href="#Create-the-sysimage" title="Permalink"></a></h2><p>As in the previous tutorial, we do a &quot;sample run&quot; of our app to record what functions end up getting compiled.  Here, we simply run the app on the sample CSV file since that should give good &quot;coverage&quot;:</p><pre><code class="nohighlight hljs">julia --startup-file=no --trace-compile=app_precompile.jl MyApp.jl &quot;FL_insurance_sample.csv&quot;</code></pre><p>The <code>custom_sysimage.jl</code> script look similar to before with the exception that we added an include of the app file inside the anonymous module where the precompiliation statements are evaluated in:</p><pre><code class="language-julia hljs">Base.init_depot_path()
+Base.init_load_path()
+
+@eval Module() begin
+    Base.include(@__MODULE__, &quot;MyApp.jl&quot;)
+    for (pkgid, mod) in Base.loaded_modules
+        if !(pkgid.name in (&quot;Main&quot;, &quot;Core&quot;, &quot;Base&quot;))
+            eval(@__MODULE__, :(const $(Symbol(mod)) = $mod))
+        end
+    end
+    for statement in readlines(&quot;app_precompile.jl&quot;)
+        try
+            Base.include_string(@__MODULE__, statement)
+        catch
+            # See julia issue #28808
+            Core.println(&quot;failed to compile statement: &quot;, statement)
+        end
+    end
+end # module
+
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)</code></pre><p>The sysimage is then created as before:</p><pre><code class="nohighlight hljs">❯ julia --startup-file=no -J&quot;/home/kc/julia/lib/julia/sys.so&quot; --output-o sys.o custom_sysimage.jl
+
+❯ gcc -shared -o sys.so -fPIC -Wl,--whole-archive sys.o -Wl,--no-whole-archive -L&quot;/home/kc/julia/lib&quot; -ljulia</code></pre><h3 id="Windows-specific-flags"><a class="docs-heading-anchor" href="#Windows-specific-flags">Windows-specific flags</a><a id="Windows-specific-flags-1"></a><a class="docs-heading-anchor-permalink" href="#Windows-specific-flags" title="Permalink"></a></h3><p>For Windows we need to tell the linker to export all symbols via the flag <code>-Wl,--export-all-symbols</code>. Otherwise, the linker will fail to find <code>julia_main</code> when we build the executable.</p><h2 id="Creating-the-executable"><a class="docs-heading-anchor" href="#Creating-the-executable">Creating the executable</a><a id="Creating-the-executable-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-the-executable" title="Permalink"></a></h2><h3 id="Embedding-code"><a class="docs-heading-anchor" href="#Embedding-code">Embedding code</a><a id="Embedding-code-1"></a><a class="docs-heading-anchor-permalink" href="#Embedding-code" title="Permalink"></a></h3><p>The embedding script is the &quot;driver&quot; of the app. It initializes the julia runtime, does some other initialization, calls into our <code>julia_main</code> and then does some cleanup when it returns.  We can borrow a lot for this embedding script from the embedding manual there are however some things we ne ed to set up &quot;manually&quot; that Julia usually does by itself when starting Julia.  This includes assigning the <code>PROGRAM_FILE</code> variable as well as updating <code>Base.ARGS</code> to contain the correct values. The script <code>MyApp.c</code> ends up looking like:</p><pre><code class="language-c hljs">// Standard headers
+#include &lt;string.h&gt;
+#include &lt;stdint.h&gt;
+
+// Julia headers (for initialization and gc commands)
+#include &quot;uv.h&quot;
+#include &quot;julia.h&quot;
+
+JULIA_DEFINE_FAST_TLS()
+
+// Forward declare C prototype of the C entry point in our application
+int julia_main();
+
+int main(int argc, char *argv[])
+{
+    uv_setup_args(argc, argv);
+
+    // initialization
+    libsupport_init();
+
+    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
+    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
+    julia_init(JL_IMAGE_JULIA_HOME);
+
+    // Initialize Core.ARGS with the full argv.
+    jl_set_ARGS(argc, argv);
+
+    // Set PROGRAM_FILE to argv[0].
+    jl_set_global(jl_base_module,
+        jl_symbol(&quot;PROGRAM_FILE&quot;), (jl_value_t*)jl_cstr_to_string(argv[0]));
+
+    // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
+    jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol(&quot;ARGS&quot;));
+    jl_array_grow_end(ARGS, argc - 1);
+    for (int i = 1; i &lt; argc; i++) {
+        jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
+        jl_arrayset(ARGS, s, i - 1);
+    }
+
+    // call the work function, and get back a value
+    int ret = julia_main();
+
+    // Cleanup and gracefully exit
+    jl_atexit_hook(ret);
+    return ret;
+}</code></pre><h2 id="Building-the-executable"><a class="docs-heading-anchor" href="#Building-the-executable">Building the executable</a><a id="Building-the-executable-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-executable" title="Permalink"></a></h2><p>We now have all the pieces needed to build the executable; a sysimage and a driver script. It is compiled as:</p><pre><code class="nohighlight hljs">❯ gcc -DJULIAC_PROGRAM_LIBNAME=\&quot;sys.so\&quot; -o MyApp MyApp.c sys.so -O2 -fPIE \
+    -I&#39;/home/kc/julia/include/julia&#39; \
+    -L&#39;/home/kc/julia/lib&#39; \
+    -ljulia \
+    -Wl,-rpath,&#39;/home/kc/julia/lib:$ORIGIN&#39;</code></pre><p>where we have added an <code>rpath</code> entry into the executable so that the julia library can be found at runtime as well as the <code>sys.so</code> library (ORIGIN means to look in the same folder as the binary for shared libraries).</p><pre><code class="nohighlight hljs">❯ time ./MyApp FL_insurance_sample.csv
+FL_insurance_sample.csv: 36634x18
+./MyApp FL_insurance_sample.csv  0.19s user 0.09s system 242% cpu 0.115 total
+
+❯ ./MyApp non_existing.csv
+ERROR: could not find file non_existing.csv
+Stacktrace:
+ [1] error(::String) at ./error.jl:33
+ [2] real_main() at /home/kc/MyApp/MyApp.jl:21
+ [3] julia_main() at /home/kc/MyApp/MyApp.jl:7</code></pre><h3 id="macOS-considerations"><a class="docs-heading-anchor" href="#macOS-considerations">macOS considerations</a><a id="macOS-considerations-1"></a><a class="docs-heading-anchor-permalink" href="#macOS-considerations" title="Permalink"></a></h3><p>On macOS, instead of <code>$ORIGIN</code> for the <code>rpath</code>, use <code>@executable_path</code>.</p><h3 id="Windows-considerations"><a class="docs-heading-anchor" href="#Windows-considerations">Windows considerations</a><a id="Windows-considerations-1"></a><a class="docs-heading-anchor-permalink" href="#Windows-considerations" title="Permalink"></a></h3><p>On Windows, it is recommended to increase the size of the stack from the default 1 MB to 8MB which can be done by passing the <code>-Wl,--stack,8388608</code> flag.  Windows doesn&#39;t have (at least in an as simple way as Linux and macOS) the concept of <code>rpath</code>.  The goto solution is to either set the <code>PATH</code> environment variable to the Julia <code>bin</code> folder or alternatively copy paste all the libraries in the Julia <code>bin</code> folder so they sit next to the executable.</p></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.6 on <span class="colophon-date" title="Wednesday 6 October 2021 07:18">Wednesday 6 October 2021</span>. Using Julia version 1.6.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
