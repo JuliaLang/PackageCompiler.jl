@@ -253,7 +253,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
 end
 
 
-function create_sysimg_object_file(object_file::String, 
+function create_sysimg_object_file(object_file::String,
                             packages::Vector{String},
                             packages_sysimg::Set{Base.PkgId};
                             project::String,
@@ -329,6 +329,13 @@ function create_sysimg_object_file(object_file::String,
         Base.init_load_path()
         if isdefined(Base, :init_active_project)
             Base.init_active_project()
+        end
+        let
+            r = get(Base.loaded_modules, Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"), nothing)
+            if r !== nothing
+                # See e.g. https://discourse.julialang.org/t/assertionerror-0-tid-length-thread-rngs-during-compilation-with-packagecompiler/69179
+                r.__init__()
+            end
         end
         Base.init_depot_path()
         """)
