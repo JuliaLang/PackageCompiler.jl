@@ -16,8 +16,6 @@ JL_DLLEXPORT char *dirname(char *);
 
 void setup_args(int argc, char **argv)
 {
-    uv_setup_args(argc, argv);
-    libsupport_init();
     jl_parse_opts(&argc, &argv);
 }
 

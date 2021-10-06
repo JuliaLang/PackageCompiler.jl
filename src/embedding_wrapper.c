@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#if __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 // Julia headers (for initialization and gc commands)
 #include "uv.h"
 #include "julia.h"
@@ -26,11 +30,59 @@ JULIA_DEFINE_FAST_TLS()
 // Declare C prototype of a function defined in Julia
 int julia_main(jl_array_t*);
 
+#if __linux__
+#include <unistd.h>
+static char* get_self_path(void)
+{
+  char self[PATH_MAX] = { 0 };
+  int nchar = readlink("/proc/self/exe", self, sizeof self);
+
+  if (nchar < 0 || nchar >= convert(int, sizeof self))         
+    return NULL;
+  return self;
+}
+#elif HAVE_WINDOWS_H
+static char* get_self_path(void)
+{
+  wchar_t self[MAX_PATH] = { 0 };
+  DWORD nchar;
+
+  SetLastError(0);
+  nchar = GetModuleFileNameW(NULL, self, MAX_PATH);
+
+  if (nchar == 0 ||
+      (nchar == MAX_PATH &&
+       ((GetLastError() == ERROR_INSUFFICIENT_BUFFER) ||
+        (self[MAX_PATH - 1] != 0))))
+    return NULL
+
+  return self;
+}
+#elif __APPLE__
+static char* get_self_path(void)
+{
+  char self[PATH_MAX] = { 0 };
+  uint32_t size = sizeof self;
+
+  if (_NSGetExecutablePath(self, &size) != 0)
+    return NULL;
+  return self;
+}
+#else
+static char* get_self_path(void)
+{
+  char self[PATH_MAX];
+
+  if (argv[0] && realpath(argv[0], self))
+    return self;
+  return NULL
+}
+#endif
+
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
 {
-    uv_setup_args(argc, argv); // no-op on Windows
-
+    char* exe_path = get_self_path();
     // Find where eventual julia arguments start
     int program_argc = argc;
     for (int i = 0; i < argc; i++) {
@@ -45,25 +97,14 @@ int main(int argc, char *argv[])
         jl_parse_opts(&julia_argc, &julia_argv);
     }
 
-    // initialization
-    libsupport_init();
 
     // Get the current exe path so we can compute a relative depot path
-    char *exe_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
-    if (!exe_path) {
-        jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
-        free(exe_path);
-        return 1;
-    }
-    if (uv_exepath(exe_path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving exepath");
-        free(exe_path);
-        return 1;
-    }
+
 
     char* root_dir = dirname(dirname(exe_path));
     char* depot_str = "JULIA_DEPOT_PATH=";
+
     char* load_path_str = "JULIA_LOAD_PATH=";
 #ifdef _WIN32
     char *julia_share_subdir = "\\share\\julia";
@@ -84,8 +125,8 @@ int main(int argc, char *argv[])
     putenv(depot_path_env);
     putenv(load_path_env);
     // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
-    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
-    julia_init(JL_IMAGE_JULIA_HOME);
+
+    jl_init_with_image(NULL, JULIAC_PROGRAM_LIBNAME);
 
     // Initialize Core.ARGS with the full argv.
     jl_set_ARGS(program_argc, argv);
