@@ -1,6 +1,6 @@
 # adopted from https://github.com/JuliaLang/julia/blob/release-0.6/contrib/julia-config.jl
 
-isdebugbuild() = ccall(:jl_is_debugbuild, Cint, ()) != 0 
+isdebugbuild() = ccall(:jl_is_debugbuild, Cint, ()) != 0
 
 function shell_escape(str)
     str = replace(str, "'" => "'\''")
@@ -8,19 +8,19 @@ function shell_escape(str)
 end
 
 function julia_libdir()
-    libname = isdebugbuild() ? "libjulia-debug" : 
+    libname = isdebugbuild() ? "libjulia-debug" :
                                "libjulia"
     return dirname(abspath(Libdl.dlpath(libname)))
 end
 
 function julia_private_libdir()
     if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        if isdebugbuild()
             dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
         else
             joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
         end
-    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+    elseif isdebugbuild()
         dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
     else
         dirname(abspath(Libdl.dlpath("libjulia-internal")))
@@ -41,14 +41,13 @@ function ldflags()
 end
 
 function ldlibs()
-    libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
-                                "-ljulia       -ljulia-internal"
+    libname = isdebugbuild() ? "-ljulia-debug" : "-ljulia"
     if Sys.islinux()
-        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
+        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) $libname"
     elseif Sys.iswindows()
-        return "$libnames -lopenlibm"
+        return "$libname -lopenlibm"
     else
-        return "$libnames"
+        return "$libname"
     end
 end
 
