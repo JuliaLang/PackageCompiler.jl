@@ -663,34 +663,18 @@ function create_sysimg_from_object_file(input_object::String,
                                         compat_level::String="major",
                                         soname=nothing)
 
-    julia_libdir = dirname(Libdl.dlpath("libjulia"))
-
     o_files = [input_object]
     o_init_file !== nothing && push!(o_files, o_init_file)
 
     # Prevent compiler from stripping all symbols from the shared lib.
-    # TODO: On clang on windows this is called something else
     if Sys.isapple()
         o_file_flags = `-Wl,-all_load $o_files`
     else
         o_file_flags = `-Wl,--whole-archive $o_files -Wl,--no-whole-archive`
     end
-
     extra = get_extra_linker_flags(version, compat_level, soname)
-
     m = something(march(), ``)
-    private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
-        else
-            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
-        end
-    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
-    else
-        dirname(abspath(Libdl.dlpath("libjulia-internal")))
-    end
-    cmd = `$(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
+    cmd = `$(bitflag()) $m -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
     run_compiler(cmd)
     return nothing
 end

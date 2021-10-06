@@ -14,10 +14,16 @@ function julia_libdir()
 end
 
 function julia_private_libdir()
-    @static if Sys.iswindows()
-        return julia_libdir()
+    if Base.DARWIN_FRAMEWORK # taken from Libdl tests
+        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
+        else
+            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
+        end
+    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
     else
-        return abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
+        dirname(abspath(Libdl.dlpath("libjulia-internal")))
     end
 end
 
@@ -34,8 +40,7 @@ function ldflags()
     return fl
 end
 
-# TODO
-function ldlibs(relative_path=nothing)
+function ldlibs()
     libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
                                 "-ljulia       -ljulia-internal"
     if Sys.islinux()
