@@ -332,7 +332,7 @@ function create_sysimg_object_file(object_file::String,
         end
         let
             r = get(Base.loaded_modules, Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"), nothing)
-            if r !== nothing
+            if r !== nothing && VERSION < v"1.7.0-"
                 # See e.g. https://discourse.julialang.org/t/assertionerror-0-tid-length-thread-rngs-during-compilation-with-packagecompiler/69179
                 r.__init__()
             end
