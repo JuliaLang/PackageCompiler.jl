@@ -45,9 +45,6 @@ int main(int argc, char *argv[])
         jl_parse_opts(&julia_argc, &julia_argv);
     }
 
-    // initialization
-    libsupport_init();
-
     // Get the current exe path so we can compute a relative depot path
     char *exe_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;

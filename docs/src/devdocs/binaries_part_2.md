@@ -167,9 +167,6 @@ int main(int argc, char *argv[])
 {
     uv_setup_args(argc, argv);
 
-    // initialization
-    libsupport_init();
-
     // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
     jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
