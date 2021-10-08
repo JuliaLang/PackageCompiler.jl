@@ -98,6 +98,9 @@ end
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
             # Check transitive inclusion of dependencies
             @test occursin("is_crayons_loaded() = true", app_output)
+            # Check app is precompiled in a normal process
+            @test occursin("outputo: ok", app_output)
+            @test occursin("myrand: ok", app_output)
             # Check distributed
             @test occursin("n = 20000000", app_output)
             @test occursin("From worker 2:\t8", app_output)
