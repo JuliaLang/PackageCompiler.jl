@@ -3,6 +3,7 @@ module PackageCompiler
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
+using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
 using RelocatableFolders
@@ -1012,7 +1013,7 @@ function _create_app(package_dir::String,
     mkpath(dest_dir)
 
     bundle_julia_libraries(dest_dir)
-    bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=include_lazy_artifacts)
+    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=include_lazy_artifacts)
     isapp && bundle_julia_executable(dest_dir)
     # TODO: Should also bundle project and update load_path for library 
     isapp && bundle_project(ctx, dest_dir)
@@ -1142,7 +1143,7 @@ function bundle_julia_libraries(dest_dir)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=true)
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
@@ -1153,8 +1154,11 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
     ctx.env.pkg.path = dirname(ctx.env.project_file)
     push!(pkgs, ctx.env.pkg)
 
-    # Collect all artifacts needed for the project
-    artifact_paths = Set{String}()
+    # TODO: Allow override platform?
+    platform = Base.BinaryPlatforms.HostPlatform()
+    depot_path = joinpath(dest_dir, "share", "julia")
+    artifact_app_path = joinpath(depot_path, "artifacts")
+   
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
@@ -1163,35 +1167,19 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
             artifacts_toml_path = joinpath(pkg_source_path, f)
             if isfile(artifacts_toml_path)
                 @debug "bundling artifacts for $(pkg.name)"
-                artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
-                for name in keys(artifact_dict)
-                    if !include_lazy_artifacts &&
-                            isa(artifact_dict[name], AbstractDict) &&
-                            get(artifact_dict[name], "lazy", false)
-                        @info "PackageCompiler: skipping lazy artifact \"$name\""
-                        continue
-                    end
-                    meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
-                    meta === nothing && continue
+                artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
+                for name in keys(artifacts)
                     @debug "  \"$name\""
-                    push!(artifact_paths, Pkg.Artifacts.ensure_artifact_installed(name, artifacts_toml_path))
+                    artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
+                    mkpath(artifact_app_path)
+                    cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
                 end
                 break
             end
         end
     end
 
-    # Copy the artifacts needed to the app directory
-    depot_path = joinpath(dest_dir, "share", "julia")
-    artifact_app_path = joinpath(depot_path, "artifacts")
 
-    if !isempty(artifact_paths)
-        mkpath(artifact_app_path)
-    end
-    for artifact_path in artifact_paths
-        artifact_name = basename(artifact_path)
-        cp(artifact_path, joinpath(artifact_app_path, artifact_name))
-    end
     return
 end
 
