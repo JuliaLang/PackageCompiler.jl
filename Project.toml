@@ -1,6 +1,6 @@
 name = "PackageCompiler"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
-version = "1.7.0"
+version = "1.7.1"
 
 [deps]
 LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
