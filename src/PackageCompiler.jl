@@ -256,7 +256,8 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg)
             --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
-    cmd = addenv(cmd, "JULIA_LOAD_PATH" => project)
+    splitter = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     precompile_file === nothing || @info "PackageCompiler: Executing $(precompile_file) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
     precompile_file === nothing || @info "PackageCompiler: Done"
