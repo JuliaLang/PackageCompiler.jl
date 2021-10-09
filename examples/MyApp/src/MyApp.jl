@@ -4,7 +4,14 @@ using Example
 using HelloWorldC_jll
 using Artifacts
 using Distributed
+using Random
 
+const myrand = rand()
+
+const outputo = begin
+    o = Base.JLOptions().outputo
+    o == C_NULL ? "ok" : unsafe_string(o)
+end
 
 fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
@@ -55,6 +62,11 @@ function real_main()
     @show Example.domath(5)
     @show sin(0.0)
 
+    println("outputo: $outputo")
+
+    # Check that the RNG is seeded during precompilation
+    println("myrand: ", myrand == 0.0 ? "fail" : "ok")
+    rand() # Check that RNG state is ok
     if nworkers() != 4
         addprocs(4)
         @eval @everywhere using MyApp

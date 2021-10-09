@@ -235,6 +235,15 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
 
     return tmp_sys_ji
 end
+function ensurecompiled(project, packages, sysimage)
+    length(packages) == 0 && return
+    # TODO: Only precompile `packages` (should be available in Pkg 1.8)
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    splitter = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    run(cmd)
+    return
+end
 
 function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
     tracefile, io = mktemp(precompile_dir; cleanup=false)
@@ -267,6 +276,7 @@ function create_sysimg_object_file(object_file::String,
                             isapp::Bool,
                             sysimage_build_args::Cmd)
 
+    ensurecompiled(project, packages, base_sysimage)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -330,13 +340,6 @@ function create_sysimg_object_file(object_file::String,
         Base.init_load_path()
         if isdefined(Base, :init_active_project)
             Base.init_active_project()
-        end
-        let
-            r = get(Base.loaded_modules, Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"), nothing)
-            if r !== nothing && VERSION < v"1.7.0-"
-                # See e.g. https://discourse.julialang.org/t/assertionerror-0-tid-length-thread-rngs-during-compilation-with-packagecompiler/69179
-                r.__init__()
-            end
         end
         Base.init_depot_path()
         """)
@@ -527,15 +530,9 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
     # Instantiate the project
     ctx = create_pkg_context(project)
 
-    @debug "instantiating and precompiling project at $(repr(project))"
-    old_load_path = copy(LOAD_PATH)
-    # Need to ensure that Pkg can find the source location of the packages:
-    copy!(LOAD_PATH, [project])
-    try
-        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = true)
-    finally
-        copy!(LOAD_PATH, old_load_path)
-    end
+    @debug "instantiating project at $(repr(project))"
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+  
 
     check_packages_in_project(ctx, packages)
 
