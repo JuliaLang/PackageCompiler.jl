@@ -719,7 +719,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `true`.
+  defaults to `false`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a differecnce if some
@@ -743,7 +743,7 @@ function create_app(package_dir::String,
                     force=false,
                     c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
                     cpu_target::String=default_app_cpu_target(),
-                    include_lazy_artifacts::Bool=true,
+                    include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
 
@@ -839,7 +839,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   Linux/UNIX).
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `true`.
+  defaults to `false`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a differecnce if some
@@ -866,7 +866,7 @@ function create_library(package_dir::String,
                         version=nothing,
                         compat_level="major",
                         cpu_target::String=default_app_cpu_target(),
-                        include_lazy_artifacts::Bool=true,
+                        include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true)
 
@@ -943,7 +943,7 @@ function _create_app(package_dir::String,
     mkpath(dest_dir)
 
     bundle_julia_libraries(dest_dir)
-    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=include_lazy_artifacts)
+    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     isapp && bundle_julia_executable(dest_dir)
     # TODO: Should also bundle project and update load_path for library 
     isapp && bundle_project(ctx, dest_dir)
@@ -1073,7 +1073,7 @@ function bundle_julia_libraries(dest_dir)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     @debug "bundling artifacts..."
 
     pkgs = load_all_deps(ctx)
