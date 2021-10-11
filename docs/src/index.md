@@ -64,3 +64,11 @@ For macOS, this can be the built-in Xcode command line tools or `homebrew` and f
 ### Windows
 
 A suitable compiler will be automatically installed the first time it is needed.
+
+## Upgrading from PackageCompiler 1.0.
+
+PackageCompiler 2.0 comes with a few breaking changes.
+
+- The functionality for replacing the default sysimage (`replace_default=true`) has been removed. Instead, you can e.g. 
+  create an alias or shortcut that starts Julia with a custom sysimage by specifying the `--sysimage=<PATH/TO/SYSIMAGE>` 
+  command line option.
