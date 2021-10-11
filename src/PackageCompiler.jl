@@ -579,7 +579,7 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
                 deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
                     ctx.env.project.deps
                 else
-                    ctx.env.manifest.deps[pkgid.uuid].deps
+                    ctx.env.manifest[pkgid.uuid].deps
                 end
                 pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
                 for pkgid_dep in pkgid_deps
