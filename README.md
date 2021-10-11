@@ -16,3 +16,8 @@ For installation and usage instructions, see the [documentation][docs-stable-url
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
 [docs-stable-url]: https://JuliaLang.github.io/PackageCompiler.jl
+
+## Upgrading from PackageCompiler 1.0
+
+PackageCompiler 2.0 comes with a few breaking changes. Read the upgrade guide [here](https://julialang.github.io/PackageCompiler.jl/stable/#Upgrading-from-PackageCompiler-1.0.)
+for instructions on how to upgrade to version 2.0.
