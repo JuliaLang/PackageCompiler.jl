@@ -382,8 +382,6 @@ function create_sysimg_object_file(object_file::String,
         print(julia_code_buffer, app_start_code)
     end
 
-
-
     print(julia_code_buffer, """
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
@@ -394,10 +392,14 @@ function create_sysimg_object_file(object_file::String,
     @info "PackageCompiler: creating system image object file, this might take a while..."
 
     julia_code = String(take!(julia_code_buffer))
+    outputo_file = tempname()
+    write(outputo_file, julia_code)
+    # Read the input via stdin to avoid hitting the maximum command line limit
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
-                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
+                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
     run(cmd)
+    return
 end
 
 default_sysimg_path() = abspath(Sys.BINDIR, "..", "lib", "julia", "sys." * Libdl.dlext)
