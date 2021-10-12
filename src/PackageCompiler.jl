@@ -99,15 +99,9 @@ end
 function run_compiler(cmd::Cmd)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
-    local compiler_cmd
     @static if Sys.iswindows()
-        if Int == Int64
-            path = joinpath(LazyArtifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
-            compiler_cmd = `$path`
-        else # Int == Int32
-            path = joinpath(LazyArtifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
-            compiler_cmd = `$path`
-        end
+        path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int==Int64 ? "mingw64" : "mingw32"), "bin", "gcc.exe")
+        compiler_cmd = `$path`
     end
     if cc !== nothing
         compiler_cmd = Cmd(Base.shell_split(cc))
