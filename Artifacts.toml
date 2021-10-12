@@ -8,12 +8,12 @@ lazy = true
     sha256 = "fe3f401bc936fbe6af940b26c5e0f266f762a3416f979c706e599b24082dc5c7"
     url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.tar.gz"
 
-[[i868-w64-mingw32]]
+[[i686-w64-mingw32]]
 git-tree-sha1 = "bc760d8ef1b4840e55a36bd361587b4975af811f"
 os = "windows"
-arch = "i868"
+arch = "i686"
 lazy = true
 
-    [[i868-w64-mingw32.download]]
+    [[i686-w64-mingw32.download]]
     sha256 = "ab0abb76384ce9b657141d3a54150d0b865f9c06576caa7901a6c8429c9008e5"
     url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/i686-8.1.0-release-posix-sjlj-rt_v6-rev0.tar.gz"
