@@ -1,11 +1,9 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
-
 // Standard headers
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
 
-// Julia headers (for initialization and gc commands)
+// Julia headers
 #include "uv.h"
 #include "julia.h"
 
@@ -24,7 +22,7 @@ JULIA_DEFINE_FAST_TLS()
 // TODO: Windows wmain handling as in repl.c
 
 // Declare C prototype of a function defined in Julia
-int julia_main(jl_array_t*);
+int julia_main();
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
@@ -61,6 +59,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // Set up LOAD_PATH and DEPOT_PATH
     char* root_dir = dirname(dirname(exe_path));
     char* depot_str = "JULIA_DEPOT_PATH=";
     char* load_path_str = "JULIA_LOAD_PATH=";
@@ -82,6 +81,7 @@ int main(int argc, char *argv[])
 
     putenv(depot_path_env);
     putenv(load_path_env);
+
     // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
     jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
     julia_init(JL_IMAGE_JULIA_HOME);
@@ -89,23 +89,14 @@ int main(int argc, char *argv[])
     // Initialize Core.ARGS with the full argv.
     jl_set_ARGS(program_argc, argv);
 
-    // Set PROGRAM_FILE to argv[0].
-    jl_set_global(jl_base_module,
-        jl_symbol("PROGRAM_FILE"), (jl_value_t*)jl_cstr_to_string(argv[0]));
-
-    // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
-    jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
-    jl_array_grow_end(ARGS, program_argc - 1);
-    for (int i = 1; i < program_argc; i++) {
-        jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-        jl_arrayset(ARGS, s, i - 1);
-    }
+    // Update ARGS and PROGRAM_FILE
+    jl_eval_string("append!(empty!(Base.ARGS), Core.ARGS)");
+    jl_eval_string("@eval Base PROGRAM_FILE = popfirst!(ARGS)");
 
     // call the work function, and get back a value
-    int retcode = julia_main(ARGS);
+    int retcode = julia_main();
 
     // Cleanup and gracefully exit
-
     free(depot_path_env);
     free(load_path_env);
     free(exe_path);
