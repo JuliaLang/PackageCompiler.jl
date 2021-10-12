@@ -94,9 +94,9 @@ function run_compiler(cmd::Cmd)
     local compiler_cmd
     @static if Sys.iswindows()
         if Int === Int64
-            path = joinpath(LazyArtifacts.artifact"mingw32", "mingw64", "bin", "gcc.exe")
+            path = joinpath(LazyArtifacts.artifact"mingw", "mingw64", "bin", "gcc.exe")
         else
-            path = joinpath(LazyArtifacts.artifact"mingw32", "mingw32", "bin", "gcc.exe")
+            path = joinpath(LazyArtifacts.artifact"mingw", "mingw32", "bin", "gcc.exe")
         end
             compiler_cmd = `$path`
     end
