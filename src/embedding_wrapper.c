@@ -29,7 +29,7 @@ int julia_main(jl_array_t*);
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
 {
-    uv_setup_args(argc, argv); // no-op on Windows
+    argv = uv_setup_args(argc, argv); // no-op on Windows
 
     // Find where eventual julia arguments start
     int program_argc = argc;
@@ -39,8 +39,10 @@ int main(int argc, char *argv[])
             break;
         }
     }
-    int julia_argc = argc - program_argc - 1;
+    int julia_argc = argc - program_argc;
     if (julia_argc > 0) {
+        // Replace `--julia-args` with the program name
+        argv[program_argc] = argv[0];
         char ** julia_argv = &argv[program_argc];
         jl_parse_opts(&julia_argc, &julia_argv);
     }
