@@ -96,24 +96,26 @@ function move_default_sysimage_if_windows()
     end
 end
 
-function run_compiler(cmd::Cmd)
+function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
     @static if Sys.iswindows()
-        path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int==Int64 ? "mingw64" : "mingw32"), "bin", "gcc.exe")
+        path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int==Int64 ? "mingw64" : "mingw32"), "bin", cplusplus ? "g++.exe" : "gcc.exe")
         compiler_cmd = `$path`
     end
     if cc !== nothing
         compiler_cmd = Cmd(Base.shell_split(cc))
         path = nothing
     elseif !Sys.iswindows()
-        if Sys.which("gcc") !== nothing
-            compiler_cmd = `gcc`
-        elseif Sys.which("clang") !== nothing
-            compiler_cmd = `clang`
-        else
-            error("could not find a compiler, looked for `gcc` and `clang`")
+        found_compiler = false
+        compilers = cplusplus ? ("g++", "clang++") : ("gcc", "clang")
+        for compiler in compilers
+            if Sys.which(compiler) !== nothing
+                compiler_cmd = `$compiler`
+                found_compiler = true
+            end
         end
+        found_compiler || error("could not find a compiler, looked for ", join(compilers, " and "))
     end
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
@@ -677,7 +679,7 @@ function create_sysimg_from_object_file(input_object::String,
     extra = get_extra_linker_flags(version, compat_level, soname)
     m = something(march(), ``)
     cmd = `$(bitflag()) $m -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
-    run_compiler(cmd)
+    run_compiler(cmd; cplusplus=true)
     return nothing
 end
 
