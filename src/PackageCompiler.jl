@@ -362,7 +362,7 @@ function create_sysimg_object_file(object_file::String,
     outputo_file = tempname()
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
+    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
     run(cmd)
