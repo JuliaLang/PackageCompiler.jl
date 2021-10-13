@@ -85,6 +85,8 @@ end
             end
             # Check dependency run
             @test occursin("Example.domath", app_output)
+            # Check PROGRAM_FILE
+            @test occursin("Base.PROGRAM_FILE = $(repr(app_path))", app_output)
             # Check jll package runs
             @test occursin("Hello, World!", app_output)
             # Check artifact runs
