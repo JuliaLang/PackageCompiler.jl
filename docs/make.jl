@@ -9,9 +9,9 @@ makedocs(
         "Home" => "index.md",
 
         "Manual" => [
-            "sysimages.md"
-            "libs.md"
-            "apps.md"
+            "sysimages.md",
+            "apps.md",
+            "libs.md",
         ],
 
         "Examples" => [
@@ -34,5 +34,5 @@ makedocs(
 
 deploydocs(
     repo = "github.com/JuliaLang/PackageCompiler.jl.git",
-    push_preview = true,
+    push_preview = false,
 )

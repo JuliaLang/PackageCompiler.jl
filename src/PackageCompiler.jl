@@ -432,7 +432,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
-   transitive dependencies into the sysimage. This only makes a differecnce if some
+   transitive dependencies into the sysimage. This only makes a difference if some
    packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
@@ -441,7 +441,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    the new sysimage incrementally, instead of the sysimage of the current process. Defaults to `nothing`.
    Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
 
-- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image. Defaults
+  to `nativea`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -723,7 +724,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   defaults to `false`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
-  transitive dependencies into the sysimage. This only makes a differecnce if some
+  transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
@@ -843,7 +844,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   defaults to `false`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
-  transitive dependencies into the sysimage. This only makes a differecnce if some
+  transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
@@ -915,7 +916,7 @@ function _create_app(package_dir::String,
     ctx = create_pkg_context(package_dir)
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
     if isempty(ctx.env.manifest)
-        @warn "it is not recommended to create an app without a preexisting manifest"
+        @warn "it is not recommended to create an app/library without a preexisting manifest"
     end
     if ctx.env.pkg === nothing
         error("expected package to have a `name`-entry")
