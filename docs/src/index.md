@@ -49,6 +49,13 @@ come across.
 
 ## Installation instructions
 
+The package is installed using the standard way with the package manager:
+
+```julia
+using Pkg
+Pkg.add("PackageCompiler")
+```
+
 !!! note
     It is strongly recommended to use the official binaries that are downloaded from 
     https://julialang.org/downloads/. Distribution-provided Julia installations are
@@ -59,7 +66,8 @@ To use PackageCompiler a C-compiler needs to be available:
 ### macOS, Linux
 
 Having a decently modern `gcc` or `clang` available should be enough to use PackageCompiler on Linux or macOS.
-For macOS, this can be the built-in Xcode command line tools or `homebrew` and for Linux, the system package manager should work fine.
+For macOS, this can be the built-in Xcode command line tools or `homebrew` and for Linux, using the system package
+manager to get a compiler should work fine.
 
 ### Windows
 
