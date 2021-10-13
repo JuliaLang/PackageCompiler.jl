@@ -58,8 +58,6 @@ julia> exit()
 ARGS = ["foo", "bar"]
 Base.PROGRAM_FILE = "./bin/MyApp"
 DEPOT_PATH = ["/home/kc/JuliaPkgs/PackageCompiler.jl/MyAppCompiled/share/julia"]
-LOAD_PATH = ["/home/kc/Juli
-
 ...
 Running the artifact
 The result of 2*5^2 - 10 == 40.000000
