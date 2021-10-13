@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - master
+      - release-*
+      - backports-release-*
     tags: '*'
 jobs:
   test:
