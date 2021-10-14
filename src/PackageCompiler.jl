@@ -11,6 +11,7 @@ using RelocatableFolders
 export create_sysimage, create_app, create_library, audit_app
 
 include("juliaconfig.jl")
+include("TerminalSpinners.jl")
 
 const NATIVE_CPU_TARGET = "native"
 const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
@@ -197,27 +198,29 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    @info "PackageCompiler: creating base system image (incremental=false)..."
-    cd(base_dir) do
-        # Create corecompiler.ji
-        cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                  -g0 -O0 $compiler_source_path`
-        @debug "running $cmd"
-        read(cmd)
-
-        # Use that to create sys.ji
-        new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
-        new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
-        new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
-        write(new_sysimage_source_path, new_sysimage_content)
-        try
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                                      --sysimage=$tmp_corecompiler_ji
-                                      -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating base system image (incremental=false)") 
+    TerminalSpinners.@spin spinner begin
+        cd(base_dir) do
+            # Create corecompiler.ji
+            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
+                                    -g0 -O0 $compiler_source_path`
             @debug "running $cmd"
             read(cmd)
-        finally
-            rm(new_sysimage_source_path; force=true)
+
+            # Use that to create sys.ji
+            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
+            new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
+            write(new_sysimage_source_path, new_sysimage_content)
+            try
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                                        --sysimage=$tmp_corecompiler_ji
+                                        -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                @debug "running $cmd"
+                read(cmd)
+            finally
+                rm(new_sysimage_source_path; force=true)
+            end
         end
     end
 
@@ -358,16 +361,17 @@ function create_sysimg_object_file(object_file::String,
 
     # finally, make julia output the resulting object file
     @debug "creating object file at $object_file"
-    @info "PackageCompiler: creating system image object file, this might take a while..."
 
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
+   
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    run(cmd)
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating system image object file") 
+    TerminalSpinners.@spin spinner run(cmd)
     return
 end
 
