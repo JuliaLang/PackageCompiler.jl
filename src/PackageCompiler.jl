@@ -3,6 +3,7 @@ module PackageCompiler
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
+using Printf
 using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
@@ -218,7 +219,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating base system image (incremental=false)") 
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)") 
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
@@ -287,8 +288,6 @@ function create_sysimg_object_file(object_file::String,
                             script::Union{Nothing, String},
                             isapp::Bool,
                             sysimage_build_args::Cmd)
-
-    ensurecompiled(project, packages, base_sysimage)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -379,9 +378,6 @@ function create_sysimg_object_file(object_file::String,
         empty!(DEPOT_PATH)
         """)
 
-    # finally, make julia output the resulting object file
-    @debug "creating object file at $object_file"
-
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
     write(outputo_file, julia_code)
@@ -390,8 +386,7 @@ function create_sysimg_object_file(object_file::String,
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating system image object file") 
-    TerminalSpinners.@spin spinner run(cmd)
+    run(cmd)
     return
 end
 
@@ -512,12 +507,12 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
+    check_packages_in_project(ctx, packages)
+
     # Instantiate the project
 
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-
-    check_packages_in_project(ctx, packages)
 
     if !incremental
         if base_sysimage !== nothing
@@ -535,6 +530,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             base_sysimage = current_process_sysimage_path()
         end
     end
+
+    ensurecompiled(project, packages, base_sysimage)
 
     packages_sysimg = Set{Base.PkgId}()
 
@@ -580,22 +577,24 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Create the sysimage
     object_file = tempname() * ".o"
-    create_sysimg_object_file(object_file, packages, packages_sysimg;
-                              project,
-                              base_sysimage,
-                              precompile_execution_file,
-                              precompile_statements_file,
-                              cpu_target,
-                              script,
-                              isapp,
-                              sysimage_build_args)
-    create_sysimg_from_object_file(object_file,
-                                   sysimage_path;
-                                   o_init_file,
-                                   compat_level,
-                                   version,
-                                   soname)
-
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
+    TerminalSpinners.@spin spinner begin
+        create_sysimg_object_file(object_file, packages, packages_sysimg;
+                                project,
+                                base_sysimage,
+                                precompile_execution_file,
+                                precompile_statements_file,
+                                cpu_target,
+                                script,
+                                isapp,
+                                sysimage_build_args)
+        create_sysimg_from_object_file(object_file,
+                                    sysimage_path;
+                                    o_init_file,
+                                    compat_level,
+                                    version,
+                                    soname)
+    end
 
     rm(object_file; force=true)
     return nothing
@@ -1099,9 +1098,31 @@ function bundle_julia_libraries(dest_dir)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
-    @debug "bundling artifacts..."
+function recursive_dir_size(path)
+    size = 0
+    try
+        for (root, dirs, files) in walkdir(path)
+            for file in files
+                path = joinpath(root, file)
+                try
+                    size += lstat(path).size
+                catch ex
+                    @error("Failed to calculate size of $path", exception=ex)
+                end
+            end
+        end
+    catch ex
+        @error("Failed to calculate size of $path", exception=ex)
+    end
+    return size
+end
 
+function pretty_byte_str(size)
+    bytes, mb = Base.prettyprint_getunits(size, length(Base._mem_units), Int64(1024))
+    return @sprintf("%.3f %s", bytes, Base._mem_units[mb])
+end
+
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     pkgs = load_all_deps(ctx)
 
     # Also want artifacts for the project itself
@@ -1115,27 +1136,57 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
 
+    bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
+
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
+        bundled_artifacts_pkg = Pair{String, String}[]
         # Check to see if this package has an (Julia)Artifacts.toml
         for f in Pkg.Artifacts.artifact_names
             artifacts_toml_path = joinpath(pkg_source_path, f)
             if isfile(artifacts_toml_path)
-                @debug "bundling artifacts for $(pkg.name)"
                 artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
                 for name in keys(artifacts)
-                    @debug "  \"$name\""
                     artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
-                    mkpath(artifact_app_path)
-                    cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
+                    push!(bundled_artifacts_pkg, name => artifact_path)
                 end
                 break
             end
         end
+        if !isempty(bundled_artifacts_pkg)
+            push!(bundled_artifacts, pkg.name => bundled_artifacts_pkg)
+        end
     end
 
+    if !isempty(bundled_artifacts)
+        printstyled("PackageCompiler: bundled artifacts:\n")
+        mkpath(artifact_app_path)
+    end
 
+    total_size = 0
+    sort!(bundled_artifacts)
+
+    for (i, (pkg, artifacts)) in enumerate(bundled_artifacts)
+        last_pkg = i == length(bundled_artifacts)
+        mark_pkg = last_pkg ? "└──" : "├──"
+        print("  $mark_pkg $pkg")
+        for (j, (artifact, artifact_path)) in enumerate(artifacts)
+            size = recursive_dir_size(artifact_path)
+            total_size += size
+            # jlls only have a single artifact with the same name as the package itself
+            if endswith(pkg, "_jll") && length(artifacts) == 1
+                println(" - ", pretty_byte_str(size), "")
+            else
+                println("")
+                mark_artifact = j == length(artifacts) ? "└──" : "├──"
+                mark_init = last_pkg ? " " : "│"
+                println("  $mark_init   ", mark_artifact, " ", artifact, " - ", pretty_byte_str(size), "")
+            end
+            cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
+        end
+    end
+    println("  Total artifact file size: ", pretty_byte_str(total_size))
     return
 end
 
