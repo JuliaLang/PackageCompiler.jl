@@ -285,7 +285,6 @@ function create_sysimg_object_file(object_file::String,
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
-                            isapp::Bool,
                             sysimage_build_args::Cmd)
 
     ensurecompiled(project, packages, base_sysimage)
@@ -587,7 +586,6 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                               precompile_statements_file,
                               cpu_target,
                               script,
-                              isapp,
                               sysimage_build_args)
     create_sysimg_from_object_file(object_file,
                                    sysimage_path;
@@ -773,11 +771,14 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
 
-    _create_app(package_dir, app_dir, app_name, precompile_execution_file,
+    compile_sysimage_and_bundle_files(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=false, c_driver_program, julia_init_c_file=nothing,
+        library_only=false, julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
         include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
+
+
+    create_executable_from_sysimg(app_dir, c_driver_program)
 end
 
 """
@@ -906,14 +907,13 @@ function create_library(package_dir::String,
         version = parse(VersionNumber, version)
     end
 
-    _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
+    compile_sysimage_and_bundle_files(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=true, c_driver_program="", julia_init_c_file,
-        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
-
+        library_only=true, julia_init_c_file, header_files, version, compat_level, include_lazy_artifacts,
+        sysimage_build_args, include_transitive_dependencies)
 end
 
-function _create_app(package_dir::String,
+function compile_sysimage_and_bundle_files(package_dir::String,
                     dest_dir::String,
                     name,
                     precompile_execution_file,
@@ -924,7 +924,6 @@ function _create_app(package_dir::String,
                     force,
                     cpu_target::String;
                     library_only::Bool,
-                    c_driver_program::String,
                     julia_init_c_file,
                     header_files::Vector{String},
                     version,
@@ -1034,29 +1033,23 @@ function _create_app(package_dir::String,
         end
     end
 
-    if !library_only
-        executable_path = joinpath(dest_dir, "bin")
-        mkpath(executable_path)
-        cd(executable_path) do
-            c_driver_program_path = abspath(c_driver_program)
-            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", "julia", sysimg_file)
-            create_executable_from_sysimg(; sysimage_path, executable_path=name,
-                                         c_driver_program_path)
-        end
-    end
-
     return
 end
 
-function create_executable_from_sysimg(;sysimage_path::String,
-                                        executable_path::String,
-                                        c_driver_program_path::String,)
-    flags = join((cflags(), ldflags(), ldlibs()), " ")
-    flags = Base.shell_split(flags)
-    wrapper = c_driver_program_path
-    m = something(march(), ``)
-    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
-    run_compiler(cmd)
+function create_executable_from_sysimg(dest_dir::String,
+                                       name::String
+                                       c_driver_program::String)
+                                        
+    c_driver_program = abspath(c_driver_program)
+    mkpath(executable_path)
+    cd(executable_path) do
+        sysimg_file = "sys." * Libdl.dlext
+        sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", "julia", sysimg_file)
+        flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
+        m = something(march(), ``)
+        cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(name) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+        run_compiler(cmd)
+    end
     return nothing
 end
 
