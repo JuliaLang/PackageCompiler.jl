@@ -27,8 +27,7 @@ function remove_ansi_characters(str::String)
     return replace(str, r => "")
 end
 
-function count_lines_no_ansi(io::IO, str::String)
-    width = displaysize(io)[2]
+function count_lines_without_ansi(width::Int, str::String)
     n_lines = 0
     for line in readlines(IOBuffer(remove_ansi_characters(str)))
         w, f = divrem(textwidth(line), width)
@@ -41,7 +40,7 @@ tostring(msg) = msg
 tostring(f::Function) = f()
 
 Base.@kwdef mutable struct Spinner{IO_t <: IO}
-    frames::Vector{String} = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    frames::Vector{String} =  ["⠋", "⠙", "⠸", "⢰", "⣠", "⣄", "⡆", "⠇"]
     freq::Float64 = 10.0 # [1/s]
     msg::Any = ""
     stream::IO_t = stderr   
@@ -50,6 +49,7 @@ Base.@kwdef mutable struct Spinner{IO_t <: IO}
     silent::Bool=false
     enabled::Bool= silent ? false : stream isa Base.TTY && !haskey(ENV, "CI")
     frame_idx::Int=1
+    start = time()
     color::Symbol = Base.info_color()
     nlines::Int=0
     first::Bool=false
@@ -76,7 +76,18 @@ function getline(s::Spinner, spinner, color)
     ioc = IOContext(s.stream, :displaysize=>displaysize(s.stream)) # https://github.com/JuliaLang/julia/issues/42649
     return sprint(; context=ioc) do io
         s.first || erase_and_reset(io, s.nlines)
-        printstyled(io, spinner; color)
+        printstyled(io, spinner; color, bold=true)
+
+        elapsed = time() - s.start
+        (minutes, seconds) = fldmod(elapsed, 60)
+        (hours, minutes) = fldmod(minutes, 60)
+
+        if hours == 0
+            printstyled(io, @sprintf(" [%02dm:%02ds]", minutes, seconds); color, bold=true)
+        else
+            printstyled(io, @sprintf(" [%02dh:%02dm:%02ds]", hours, minutes, seconds); color, bold=true)
+        end
+
         msg = tostring(s.msg)
         print(io, " ", msg)
     end
@@ -85,13 +96,16 @@ end
 function render(s::Spinner, spinner=getframe(s), color=s.color)
     s.silent && return
     str = getline(s, spinner, color)
-    s.nlines = count_lines_no_ansi(s.stream, str)
+    s.nlines = count_lines_without_ansi(displaysize(s.stream)[2], str)
     print(s.stream, str)
     return
 end
 
 function start!(s::Spinner)
     s.silent && return
+    s.frame_idx = 1
+    s.first = true
+    s.start = time()
     
     if !s.enabled
         println(s.stream, "- ", s.msg)
@@ -106,8 +120,8 @@ function start!(s::Spinner)
             s.first = false
             advance_frame!(s)
         catch e
-            close(timer)
-            @show "internal error in spinner: $e"
+            @error "internal error in spinner" exception=(e, catch_backtrace())
+            stop!(s)
         end
     end
     s.timer = t
@@ -118,8 +132,6 @@ function stop!(s::Spinner)
     if s.timer !== nothing
         close(s.timer)
     end
-    s.frame_idx = 1
-    s.first=true
     if !s.enabled || s.silent 
         return
     end
@@ -128,12 +140,15 @@ function stop!(s::Spinner)
 end
 
 function success!(s)
-    render(s, "✓", :light_green)
+    if s.enabled && !s.silent
+        render(s, "✔", :light_green)
+    end
     stop!(s)
-
 end
 function fail!(s)
-    render(s, "✖", :light_red)
+    if s.enabled && !s.silent
+        render(s, "✖", :light_red)
+    end
     stop!(s)
 end
 

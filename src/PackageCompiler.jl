@@ -11,7 +11,7 @@ using RelocatableFolders
 export create_sysimage, create_app, create_library, audit_app
 
 include("juliaconfig.jl")
-include("TerminalSpinners.jl")
+include("../ext/TerminalSpinners.jl")
 
 const NATIVE_CPU_TARGET = "native"
 const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
