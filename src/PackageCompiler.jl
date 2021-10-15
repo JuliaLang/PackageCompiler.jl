@@ -9,42 +9,64 @@ using LazyArtifacts
 using UUIDs: UUID, uuid1
 using RelocatableFolders
 
-export create_sysimage, create_app, create_library, audit_app
+export create_sysimage, create_app, create_library
 
 include("juliaconfig.jl")
 include("../ext/TerminalSpinners.jl")
+
+
+##############
+# Arch utils #
+##############
 
 const NATIVE_CPU_TARGET = "native"
 const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
 
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
-const DEFAULT_JULIA_INIT = @path joinpath(@__DIR__, "julia_init.c")
+const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
 const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
-
 
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
-    if Sys.ARCH === :i686
-        return "pentium4;sandybridge,-xsaveopt,clone_all"
-    elseif Sys.ARCH === :x86_64
-        return "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
-    elseif Sys.ARCH === :arm
-        return "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"
-    elseif Sys.ARCH === :aarch64
-        return "generic" # is this really the best here?
-    elseif Sys.ARCH === :powerpc64le
-        return "pwr8"
-    else
-        return "generic"
-    end
+    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                        :
+    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"  :
+    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                          :
+    Sys.ARCH === :aarch64     ?  "generic"   #= is this really the best here? =#                   :
+    Sys.ARCH === :powerpc64le ?  "pwr8"                                                            :
+        "generic"
 end
 
-current_process_sysimage_path() = unsafe_string(Base.JLOptions().image_file)
+function bitflag()
+    Sys.ARCH === :i686   ? `-m32` :
+    Sys.ARCH === :x86_64 ? `-m64` : 
+        ``
+end
 
-all_stdlibs() = readdir(Sys.STDLIB)
-sysimage_modules() = map(x->x.name, Base._sysimage_modules)
-stdlibs_in_sysimage() = intersect(all_stdlibs(), sysimage_modules())
-stdlibs_not_in_sysimage() = setdiff(all_stdlibs(), sysimage_modules())
+function march()
+    Sys.ARCH === :i686        ? `-march=pentium4`            :
+    Sys.ARCH === :x86_64      ? `-march=x86-64`              :
+    Sys.ARCH === :arm         ? `-march=armv7-a+simd`        :
+    Sys.ARCH === :aarch64     ? `-march=armv8-a+crypto+simd` :
+    Sys.ARCH === :powerpc64le ? ``                           :
+        ``
+end
+
+
+#############
+# Pkg utils #
+#############
+
+function create_pkg_context(project)
+    project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
+    if project_toml_path === nothing
+        error("could not find project at $(repr(project))")
+    end
+    ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
+    if isempty(ctx.env.manifest)
+        @warn "it is not recommended to create an app/library without a preexisting manifest"
+    end
+    return ctx
+end
 
 function load_all_deps(ctx)
     ctx_or_env = VERSION <= v"1.7.0-" ? ctx : ctx.env
@@ -56,6 +78,7 @@ function load_all_deps(ctx)
     end
     return pkgs
 end
+
 function source_path(ctx, pkg)
     if VERSION <= v"1.7.0-"
         Pkg.Operations.source_path(ctx, pkg)
@@ -64,33 +87,34 @@ function source_path(ctx, pkg)
     end
 end
 
-function bitflag()
-    if Sys.ARCH == :i686
-        return `-m32`
-    elseif Sys.ARCH == :x86_64
-        return `-m64`
-    else
-        return ``
+const _STDLIBS = readdir(Sys.STDLIB)
+sysimage_modules() = map(x->x.name, Base._sysimage_modules)
+stdlibs_in_sysimage() = intersect(_STDLIBS, sysimage_modules())
+
+# TODO: Also check UUIDs for stdlibs, not only names
+function gather_stdlibs_project(ctx)
+    @assert ctx.env.manifest !== nothing
+    sysimage_stdlibs = stdlibs_in_sysimage()
+    return String[pkg.name for (_, pkg) in ctx.env.manifest if pkg.name in sysimage_stdlibs]
+end
+
+function check_packages_in_project(ctx, packages)
+    packages_in_project = collect(keys(ctx.env.project.deps))
+    if ctx.env.pkg !== nothing
+        push!(packages_in_project, ctx.env.pkg.name)
+    end
+    packages_not_in_project = setdiff(string.(packages), packages_in_project)
+    if !isempty(packages_not_in_project)
+        error("package(s) $(join(packages_not_in_project, ", ")) not in project")
     end
 end
 
-function march()
-    if Sys.ARCH === :i686
-        return "-march=pentium4"
-    elseif Sys.ARCH === :x86_64
-        return "-march=x86-64"
-    elseif Sys.ARCH === :arm
-        return "-march=armv7-a+simd"
-    elseif Sys.ARCH === :aarch64
-        return "-march=armv8-a+crypto+simd"
-    elseif Sys.ARCH === :powerpc64le
-        return nothing
-    else
-        return nothing
-    end
-end
 
-const warned_cpp_compiler = Ref{Bool}(false)
+##############
+# Misc utils #
+##############
+
+const WARNED_CPP_COMPILER = Ref{Bool}(false)
 
 function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
@@ -120,9 +144,9 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
                 if Sys.which(compiler) !== nothing
                     compiler_cmd = `$compiler`
                     found_compiler = true
-                    if cplusplus && !warned_cpp_compiler[]
+                    if cplusplus && !WARNED_CPP_COMPILER[]
                         @warn "could not find a c++ compiler (g++ or clang++), falling back to $compiler, this might cause link errors"
-                        warned_cpp_compiler[] = true
+                        WARNED_CPP_COMPILER[] = true
                     end
                     break
                 end
@@ -141,59 +165,8 @@ end
 
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
-    return `$julia_path --color=yes --startup-file=no`
-end
-
-function get_compat_version(version::VersionNumber, level::String)
-    level == "full" ? version :
-    level == "patch" ? VersionNumber(version.major, version.minor, version.patch) :
-    level == "minor" ? VersionNumber(version.major, version.minor) :
-    level == "major" ? VersionNumber(version.major) :
-    error("Unknown level: $level")
-end
-
-function get_compat_version_str(version::VersionNumber, level::String)
-    level == "full" ? "$(version)" :
-    level == "patch" ? "$(version.major).$(version.minor).$(version.patch)" :
-    level == "minor" ? "$(version.major).$(version.minor)" :
-    level == "major" ? "$(version.major)" :
-    error("Unknown level: $level")
-end
-
-function get_sysimg_file(name::String;
-                     library_only::Bool=false,
-                     version::Union{VersionNumber, Nothing}=nothing,
-                     compat_level::String="patch")
-
-    dlext = Libdl.dlext
-    (!library_only || Sys.iswindows()) && return "sys.$dlext"
-
-    # For libraries on Unix/Apple, make sure the name starts with "lib"
-    if !startswith(name, "lib")
-        name = "lib" * name
-    end
-
-    if version === nothing
-        return "$name.$dlext"
-    end
-
-    version = get_compat_version_str(version, compat_level)
-    sysimg_file = (
-        Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
-        Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
-        error("Unable to determine sysimage_file; system is not Windows, Apple, or UNIX!")
-    )
-
-    return sysimg_file
-end
-
-function get_soname(name::String;
-                library_only::Bool=false,
-                version::Union{VersionNumber, Nothing}=nothing,
-                compat_level::String="major")
-
-    (!Sys.isunix() || Sys.isapple()) && return nothing
-    return get_sysimg_file(name; library_only, version, compat_level)
+    color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
+    return `$julia_path --color=$color --startup-file=no`
 end
 
 
@@ -202,13 +175,8 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
     sysimg_content = read(sysimg_source_path, String)
     # replaces the hardcoded list of stdlibs in sysimg.jl with
     # the stdlibs that is given as argument
-    content = replace(sysimg_content,
+    return replace(sysimg_content,
         r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
-    # Also replace a maximum call which fails for empty collections,
-    # see https://github.com/JuliaLang/julia/pull/34727
-    content = replace(content, "maximum(textwidth.(string.(stdlibs)))" =>
-                               "reduce(max, textwidth.(string.(stdlibs)); init=0)")
-    return content
 end
 
 function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
@@ -247,6 +215,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
 
     return tmp_sys_ji
 end
+
 function ensurecompiled(project, packages, sysimage)
     length(packages) == 0 && return
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
@@ -260,22 +229,16 @@ end
 function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
-    if precompile_file === nothing
-        arg = `-e ''`
-    else
-        arg = `$precompile_file`
-    end
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg)
-            --compile=all --trace-compile=$tracefile $arg`
+    arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
-    precompile_file === nothing || @info "PackageCompiler: Executing $(precompile_file) => $(tracefile)"
+    precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
     precompile_file === nothing || @info "PackageCompiler: Done"
     return tracefile
 end
-
 
 function create_sysimg_object_file(object_file::String,
                             packages::Vector{String},
@@ -286,7 +249,6 @@ function create_sysimg_object_file(object_file::String,
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
-                            isapp::Bool,
                             sysimage_build_args::Cmd)
     # Handle precompilation
     precompile_files = String[]
@@ -296,7 +258,7 @@ function create_sysimg_object_file(object_file::String,
         tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
         push!(precompile_files, tracefile)
     end
-    append!(precompile_files, precompile_statements_file)
+    append!(precompile_files, abspath.(precompile_statements_file))
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
@@ -386,38 +348,9 @@ function create_sysimg_object_file(object_file::String,
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    run(cmd)
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
+    TerminalSpinners.@spin spinner run(cmd)
     return
-end
-
-
-# TODO: Also check UUIDs for stdlibs, not only names
-gather_stdlibs_project(project::String) = gather_stdlibs_project(create_pkg_context(project))
-function gather_stdlibs_project(ctx)
-    @assert ctx.env.manifest !== nothing
-    sysimage_stdlibs = stdlibs_in_sysimage()
-    non_sysimage_stdlibs = stdlibs_not_in_sysimage()
-    sysimage_stdlibs_project = String[]
-    non_sysimage_stdlibs_project = String[]
-    for (_, pkg) in ctx.env.manifest
-        if pkg.name in sysimage_stdlibs
-            push!(sysimage_stdlibs_project, pkg.name)
-        elseif pkg.name in non_sysimage_stdlibs
-            push!(non_sysimage_stdlibs_project, pkg.name)
-        end
-    end
-    return sysimage_stdlibs_project, non_sysimage_stdlibs_project
-end
-
-function check_packages_in_project(ctx, packages)
-    packages_in_project = collect(keys(ctx.env.project.deps))
-    if ctx.env.pkg !== nothing
-        push!(packages_in_project, ctx.env.pkg.name)
-    end
-    packages_not_in_project = setdiff(string.(packages), packages_in_project)
-    if !isempty(packages_not_in_project)
-        error("package(s) $(join(packages_not_in_project, ", ")) not in project")
-    end
 end
 
 """
@@ -481,13 +414,11 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
-                         isapp::Bool=false,
                          julia_init_c_file=nothing,
                          version=nothing,
+                         soname=nothing,
                          compat_level::String="major",
-                         soname=nothing)
-    precompile_statements_file = abspath.(precompile_statements_file)
-    precompile_execution_file = abspath.(precompile_execution_file)
+                         )
 
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
@@ -502,7 +433,6 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         end
     end
 
-    # Functions lower down handles `packages` and precompilation file as arrays so convert here
     packages = string.(vcat(packages))
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
@@ -518,17 +448,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        if filter_stdlibs
-            sysimage_stdlibs, non_sysimage_stdlibs = gather_stdlibs_project(ctx)
-        else
-            sysimage_stdlibs = stdlibs_in_sysimage()
-            non_sysimage_stdlibs = stdlibs_not_in_sysimage()
-        end
+        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()    
         base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target)
     else
-        if isnothing(base_sysimage)
-            base_sysimage = current_process_sysimage_path()
-        end
+        base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
 
     ensurecompiled(project, packages, base_sysimage)
@@ -573,42 +496,56 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         end
     end
 
-    o_init_file = julia_init_c_file === nothing ? nothing : compile_c_init_julia(julia_init_c_file, sysimage_path)
-
     # Create the sysimage
     object_file = tempname() * ".o"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
-    TerminalSpinners.@spin spinner begin
-        create_sysimg_object_file(object_file, packages, packages_sysimg;
-                                project,
-                                base_sysimage,
-                                precompile_execution_file,
-                                precompile_statements_file,
-                                cpu_target,
-                                script,
-                                isapp,
-                                sysimage_build_args)
-        create_sysimg_from_object_file(object_file,
-                                    sysimage_path;
-                                    o_init_file,
-                                    compat_level,
-                                    version,
-                                    soname)
+   
+    create_sysimg_object_file(object_file, packages, packages_sysimg;
+                            project,
+                            base_sysimage,
+                            precompile_execution_file,
+                            precompile_statements_file,
+                            cpu_target,
+                            script,
+                            sysimage_build_args)
+    object_files = [object_file]
+    if julia_init_c_file !== nothing
+        push!(object_files, compile_c_init_julia(julia_init_c_file, sysimage_path))
     end
+    create_sysimg_from_object_file(object_files,
+                                sysimage_path;
+                                compat_level,
+                                version,
+                                soname)
 
     rm(object_file; force=true)
+
+    if Sys.isapple()
+        cd(dirname(sysimage_path)) do
+            sysimage_file = basename(sysimage_path)
+            cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
+            run(cmd)
+        end
+    end
+
     return nothing
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
-    @debug "Compiling $julia_init_c_file"
-    m = something(march(), ``)
-    flags = Base.shell_split(cflags())
-
-    o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
-    run_compiler(cmd)
-    return o_init_file
+function create_sysimg_from_object_file(object_files::Vector{String},
+                                        sysimage_path::String;
+                                        version,
+                                        compat_level::String,
+                                        soname::Union{Nothing, String})
+ 
+    if soname === nothing && (Sys.isunix() && !Sys.isapple())
+        soname = basename(sysimage_path)
+    end
+    mkpath(dirname(sysimage_path))
+    # Prevent compiler from stripping all symbols from the shared lib.
+    o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
+    extra = get_extra_linker_flags(version, compat_level, soname)
+    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
+    run_compiler(cmd; cplusplus=true)
+    return nothing
 end
 
 function get_extra_linker_flags(version, compat_level, soname)
@@ -624,74 +561,39 @@ function get_extra_linker_flags(version, compat_level, soname)
     soname_arg = soname === nothing ? `` : `-Wl,-soname,$soname`
     rpath_args = rpath_sysimage()
 
-    extra = (
-        Sys.iswindows() ? `-Wl,--export-all-symbols` :
-        Sys.isapple() ? `-fPIC $compat_ver_arg $current_ver_arg $rpath_args` :
-        Sys.isunix() ? `-fPIC $soname_arg $rpath_args` :
-        error("What kind of machine is this?")
-    )
+    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` :
+            Sys.isapple() ? `-fPIC $compat_ver_arg $current_ver_arg $rpath_args` :
+            Sys.isunix() ? `-fPIC $soname_arg $rpath_args` :
+                error("unknown machine type, not windows, macOS not UNIX")
 
     return extra
 end
 
-function create_sysimg_from_object_file(input_object::String,
-                                        sysimage_path::String;
-                                        o_init_file=nothing,
-                                        version=nothing,
-                                        compat_level::String="major",
-                                        soname=nothing)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
+    @debug "Compiling $julia_init_c_file"
+    flags = Base.shell_split(cflags())
 
-    o_files = [input_object]
-    o_init_file !== nothing && push!(o_files, o_init_file)
-
-    # Prevent compiler from stripping all symbols from the shared lib.
-    if Sys.isapple()
-        o_file_flags = `-Wl,-all_load $o_files`
-    else
-        o_file_flags = `-Wl,--whole-archive $o_files -Wl,--no-whole-archive`
-    end
-    extra = get_extra_linker_flags(version, compat_level, soname)
-    m = something(march(), ``)
-    cmd = `$(bitflag()) $m -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
-    run_compiler(cmd; cplusplus=true)
-    return nothing
+    o_init_file = splitext(julia_init_c_file)[1] * ".o"
+    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    run_compiler(cmd)
+    return o_init_file
 end
 
 
-function create_pkg_context(project)
-    project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
-    if project_toml_path === nothing
-        error("could not find project at $(repr(project))")
-    end
-    return Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
-end
-
-"""
-    audit_app(app_dir::String)
-
-Check for possible problems with regards to relocatability for
-the project at `app_dir`.
-
-!!! warning
-    This cannot guarantee that the project is free of relocatability problems,
-    it can only detect some known bad cases and warn about those.
-"""
-audit_app(app_dir::String) = audit_app(create_pkg_context(app_dir))
-function audit_app(ctx::Pkg.Types.Context)
-    # Check for build script usage
-    if isfile(joinpath(dirname(ctx.env.project_file), "deps", "build.jl"))
-        @warn "Project has a build script, this might indicate that it is not relocatable"
-    end
-    pkgs = load_all_deps(ctx)
-    for pkg in pkgs
-        pkg_source = source_path(ctx, pkg)
-        pkg_source === nothing && continue
-        if isfile(joinpath(pkg_source, "deps", "build.jl"))
-            @warn "Package $(pkg.name) has a build script, this might indicate that it is not relocatable"
+function try_rm_dir(dest_dir; force)
+    if isdir(dest_dir)
+        if !force
+            error("directory $(repr(dest_dir)) already exists, use `force=true` to overwrite (will completely",
+                " remove the directory)")
         end
+        rm(dest_dir; force=true, recursive=true)
     end
-    return
 end
+
+
+#######
+# App #
+#######
 
 """
     create_app(package_dir::String, compiled_app::String; kwargs...)
@@ -738,9 +640,6 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `audit::Bool`: Warn about eventual relocatability problems with the app, defaults
-  to `true`.
-
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
@@ -764,7 +663,6 @@ function create_app(package_dir::String,
                     precompile_statements_file::Union{String, Vector{String}}=String[],
                     incremental::Bool=false,
                     filter_stdlibs::Bool=false,
-                    audit::Bool=true,
                     force::Bool=false,
                     c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
                     cpu_target::String=default_app_cpu_target(),
@@ -772,12 +670,44 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
 
-    _create_app(package_dir, app_dir, app_name, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=false, c_driver_program, julia_init_c_file=nothing,
-        header_files=String[], version=nothing, compat_level="major",
-        include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
+    ctx = create_pkg_context(package_dir)
+    ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+
+    app_name = something(app_name, ctx.env.pkg.name)
+    try_rm_dir(app_dir; force)
+    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
+    bundle_julia_libraries(app_dir)
+    bundle_julia_executable(app_dir)
+    bundle_project(ctx, app_dir)
+
+    sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
+    create_sysimage_workaround(ctx, sysimage_path, precompile_execution_file,
+        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
+        julia_init_c_file=nothing,
+        version=nothing, soname=nothing, sysimage_build_args, include_transitive_dependencies)
+
+    create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), sysimage_path, c_driver_program)
 end
+
+
+function create_executable_from_sysimg(exe_path::String,
+                                       sysimage_path::String,
+                                       c_driver_program::String)      
+    c_driver_program = abspath(c_driver_program)
+    mkpath(dirname(exe_path))
+    flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
+    m = something(march(), ``)
+    cmd = `$TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    run_compiler(cmd)
+
+    return nothing
+end
+
+
+###########
+# Library #
+###########
 
 """
     create_library(package_dir::String, dest_dir::String; kwargs...)
@@ -844,9 +774,6 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `audit::Bool`: Warn about eventual relocatability problems with the library, defaults
-  to `true`.
-
 - `force::Bool`: Remove the folder `compiled_lib` if it exists before creating the library.
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
@@ -882,14 +809,13 @@ function create_library(package_dir::String,
                         lib_name=nothing,
                         precompile_execution_file::Union{String, Vector{String}}=String[],
                         precompile_statements_file::Union{String, Vector{String}}=String[],
-                        incremental=false,
-                        filter_stdlibs=false,
-                        audit=true,
-                        force=false,
+                        incremental::Bool=false,
+                        filter_stdlibs::Bool=false,
+                        force::Bool=false,
                         header_files::Vector{String} = String[],
                         julia_init_c_file::String=String(DEFAULT_JULIA_INIT),
-                        version=nothing,
-                        compat_level="major",
+                        version::Union{String,VersionNumber,Nothing}=nothing,
+                        compat_level::String="major",
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
@@ -905,161 +831,123 @@ function create_library(package_dir::String,
         version = parse(VersionNumber, version)
     end
 
-    _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
-        library_only=true, c_driver_program="", julia_init_c_file,
-        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
-
-end
-
-function _create_app(package_dir::String,
-                    dest_dir::String,
-                    name,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    incremental,
-                    filter_stdlibs,
-                    audit,
-                    force,
-                    cpu_target::String;
-                    library_only::Bool,
-                    c_driver_program::String,
-                    julia_init_c_file,
-                    header_files::Vector{String},
-                    version,
-                    compat_level::String,
-                    include_lazy_artifacts::Bool,
-                    sysimage_build_args::Cmd,
-                    include_transitive_dependencies::Bool)
-    isapp = !library_only
-
-    precompile_statements_file = abspath.(precompile_statements_file)
-    precompile_execution_file = abspath.(precompile_execution_file)
-    package_dir = abspath(package_dir)
     ctx = create_pkg_context(package_dir)
+    ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-    if isempty(ctx.env.manifest)
-        @warn "it is not recommended to create an app/library without a preexisting manifest"
-    end
-    if ctx.env.pkg === nothing
-        error("expected package to have a `name`-entry")
-    end
-    project_name = ctx.env.pkg.name
-    if name === nothing
-        name = project_name
-    end
 
-    sysimg_file = get_sysimg_file(name; library_only, version)
-    soname = get_soname(name;
-                        library_only,
-                        version,
-                        compat_level)
-
-    if isdir(dest_dir)
-        if !force
-            error("directory $(repr(dest_dir)) already exists, use `force=true` to overwrite (will completely",
-                  " remove the directory)")
-        end
-        rm(dest_dir; force=true, recursive=true)
-    end
-
-    audit && audit_app(ctx)
-
+    lib_name = something(lib_name, ctx.env.pkg.name)
+    try_rm_dir(dest_dir; force)
     mkpath(dest_dir)
-
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
-    isapp && bundle_julia_executable(dest_dir)
-    # TODO: Should also bundle project and update load_path for library
-    isapp && bundle_project(ctx, dest_dir)
+    bundle_headers(dest_dir, header_files)
 
-    library_only && bundle_headers(dest_dir, header_files)
+    lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
-    # TODO: Create in a temp dir and then move it into place?
-    sysimage_path = if Sys.isunix()
-        isapp ? joinpath(dest_dir, "lib", "julia") : joinpath(dest_dir, "lib")
+    sysimg_file = get_sysimg_file(lib_name; version)
+    sysimg_path = joinpath(lib_dir, sysimg_file)
+    compat_file = get_sysimg_file(lib_name; version, compat_level)
+    soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
+
+    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
+        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
+        sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
+        soname)
+
+    if version !== nothing && Sys.isunix()
+        base_file = get_sysimg_file(name)
+        @debug "creating symlinks for $compat_file and $base_file"
+        symlink(sysimg_path, joinpath(lib_dir, compat_file))
+        symlink(sysimg_path, joinpath(lib_dir, base_file))
+    end
+end
+
+get_compat_version(version::VersionNumber, level::String) = VersionNumber(get_compat_version_str(version, level))
+function get_compat_version_str(version::VersionNumber, level::String)
+    level == "full"  ? "$(version)" :
+    level == "patch" ? "$(version.major).$(version.minor).$(version.patch)" :
+    level == "minor" ? "$(version.major).$(version.minor)" :
+    level == "major" ? "$(version.major)" :
+        error("Unknown level: $level")
+end
+
+function get_sysimg_file(name::String;
+                         version::Union{VersionNumber, Nothing}=nothing,
+                         compat_level::String="patch")
+
+    dlext = Libdl.dlext
+    Sys.iswindows() && return "sys.$dlext"
+
+    # For libraries on Unix/Apple, make sure the name starts with "lib"
+    if !startswith(name, "lib")
+        name = "lib" * name
+    end
+
+    version === nothing && return "$name.$dlext"
+
+    version = get_compat_version_str(version, compat_level)
+    
+    sysimg_file = (
+        Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
+        Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
+        error("unable to determine sysimage_file; system is not Windows, macOS, or UNIX")
+    )
+
+    return sysimg_file
+end
+
+
+
+# Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
+# by first creating a normal "empty" sysimage and then use that to finally create the one
+# with the @ccallable function.
+# This function can be removed when https://github.com/JuliaLang/julia/pull/37530 is merged
+function create_sysimage_workaround(
+                    ctx,
+                    sysimage_path::String,
+                    precompile_execution_file::Union{String, Vector{String}},
+                    precompile_statements_file::Union{String, Vector{String}},
+                    incremental::Bool,
+                    filter_stdlibs::Bool,
+                    cpu_target::String;
+                    sysimage_build_args::Cmd,
+                    include_transitive_dependencies::Bool,
+                    julia_init_c_file::Union{Nothing,String},
+                    version::Union{Nothing,VersionNumber},
+                    soname::Union{Nothing,String}
+                    )
+    package_name = ctx.env.pkg.name
+    project = dirname(ctx.env.project_file)
+
+    if !incremental
+        base_sysimage = tempname()
+        create_sysimage(String[]; sysimage_path=base_sysimage, project,
+                        incremental=false, filter_stdlibs, cpu_target)
     else
-        joinpath(dest_dir, "bin")
-    end
-    mkpath(sysimage_path)
-    cd(sysimage_path) do
-        if !incremental
-            tmp = mktempdir()
-            # Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
-            # by first creating a normal "empty" sysimage and then use that to finally create the one
-            # with the @ccallable function
-            tmp_base_sysimage = joinpath(tmp, "tmp_sys.so")
-            create_sysimage(String[]; sysimage_path=tmp_base_sysimage, project=package_dir,
-                            incremental=false, filter_stdlibs, cpu_target)
-
-            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
-                            incremental=true,
-                            precompile_execution_file,
-                            precompile_statements_file,
-                            cpu_target,
-                            base_sysimage=tmp_base_sysimage,
-                            isapp,
-                            julia_init_c_file,
-                            version,
-                            soname,
-                            sysimage_build_args,
-                            include_transitive_dependencies)
-        else
-            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
-                                         incremental, filter_stdlibs,
-                                         precompile_execution_file,
-                                         precompile_statements_file,
-                                         cpu_target,
-                                         isapp,
-                                         julia_init_c_file,
-                                         version,
-                                         soname,
-                                         sysimage_build_args,
-                                         include_transitive_dependencies)
-        end
-
-        if Sys.isapple()
-            cmd = `install_name_tool -id @rpath/$sysimg_file $sysimg_file`
-            @debug "running $cmd"
-            run(cmd)
-        end
-
-        if library_only && version !== nothing && Sys.isunix()
-            compat_file = get_sysimg_file(name; library_only, version, compat_level)
-            base_file = get_sysimg_file(name)
-            @debug "creating symlinks for $compat_file and $base_file"
-            symlink(sysimg_file, compat_file)
-            symlink(sysimg_file, base_file)
-        end
+        base_sysimage = nothing
     end
 
-    if !library_only
-        executable_path = joinpath(dest_dir, "bin")
-        mkpath(executable_path)
-        cd(executable_path) do
-            c_driver_program_path = abspath(c_driver_program)
-            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", "julia", sysimg_file)
-            create_executable_from_sysimg(; sysimage_path, executable_path=name,
-                                         c_driver_program_path)
-        end
-    end
+    create_sysimage([package_name]; sysimage_path, project,
+                    incremental=true,
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    cpu_target,
+                    base_sysimage,
+                    julia_init_c_file,
+                    version,
+                    soname,
+                    sysimage_build_args,
+                    include_transitive_dependencies)
 
     return
 end
 
-function create_executable_from_sysimg(;sysimage_path::String,
-                                        executable_path::String,
-                                        c_driver_program_path::String,)
-    flags = join((cflags(), ldflags(), ldlibs()), " ")
-    flags = Base.shell_split(flags)
-    wrapper = c_driver_program_path
-    m = something(march(), ``)
-    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
-    run_compiler(cmd)
-    return nothing
-end
 
-# One of the main reason for bunlding the project file is
+############
+# Bundling #
+############
+
+# One of the main reason for bundling the project file is
 # for Distributed to work. When using Distributed we need to
 # load packages on other workers and that requires the Project file.
 # See https://github.com/JuliaLang/julia/issues/42296 for some discussion.

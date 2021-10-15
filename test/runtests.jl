@@ -52,8 +52,6 @@ end
 
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
-    # TODO: Also test something that actually gives audit warnings
-    @test_logs PackageCompiler.audit_app(app_source_dir)
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
     for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
