@@ -101,9 +101,11 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
         compiler_cmd = Cmd(Base.shell_split(cc))
         path = nothing
     elseif !Sys.iswindows()
+        compilers_cpp = ("g++", "clang++")
+        compilers_c = ("gcc", "clang")
         found_compiler = false
         if cplusplus
-            for compiler in ("g++", "clang++")
+            for compiler in compilers_cpp
                 if Sys.which(compiler) !== nothing
                     compiler_cmd = `$compiler`
                     found_compiler = true
@@ -112,7 +114,7 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
             end
         end
         if !found_compiler
-            for compiler in ("gcc", "clang")
+            for compiler in compilers_c
                 if Sys.which(compiler) !== nothing
                     compiler_cmd = `$compiler`
                     found_compiler = true
@@ -123,8 +125,9 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
                     break
                 end
             end
-        end
-        found_compiler || error("could not find a compiler, looked for ", join(compilers, " and "))
+        end 
+        found_compiler || error("could not find a compiler, looked for ", 
+            join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
     end
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
