@@ -96,6 +96,8 @@ function move_default_sysimage_if_windows()
     end
 end
 
+const warned_cpp_compiler = Ref{Bool}(false)
+
 function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
@@ -107,15 +109,33 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
         compiler_cmd = Cmd(Base.shell_split(cc))
         path = nothing
     elseif !Sys.iswindows()
+        compilers_cpp = ("g++", "clang++")
+        compilers_c = ("gcc", "clang")
         found_compiler = false
-        compilers = cplusplus ? ("g++", "clang++") : ("gcc", "clang")
-        for compiler in compilers
-            if Sys.which(compiler) !== nothing
-                compiler_cmd = `$compiler`
-                found_compiler = true
+        if cplusplus
+            for compiler in compilers_cpp
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    break
+                end
             end
         end
-        found_compiler || error("could not find a compiler, looked for ", join(compilers, " and "))
+        if !found_compiler
+            for compiler in compilers_c
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    if cplusplus && !warned_cpp_compiler[]
+                        @warn "could not find a c++ compiler (g++ or clang++), falling back to $compiler, this might cause link errors"
+                        warned_cpp_compiler[] = true
+                    end
+                    break
+                end
+            end
+        end 
+        found_compiler || error("could not find a compiler, looked for ", 
+            join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
     end
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
