@@ -88,6 +88,8 @@ function march()
     end
 end
 
+const warned_cpp_compiler = Ref{Bool}(false)
+
 function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
@@ -100,11 +102,26 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
         path = nothing
     elseif !Sys.iswindows()
         found_compiler = false
-        compilers = cplusplus ? ("g++", "clang++") : ("gcc", "clang")
-        for compiler in compilers
-            if Sys.which(compiler) !== nothing
-                compiler_cmd = `$compiler`
-                found_compiler = true
+        if cplusplus
+            for compiler in ("g++", "clang++")
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    break
+                end
+            end
+        end
+        if !found_compiler
+            for compiler in ("gcc", "clang")
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    if cplusplus && !warned_cpp_compiler[]
+                        @warn "could not find a c++ compiler (g++ or clang++), falling back to $compiler, this might cause link errors"
+                        warned_cpp_compiler[] = true
+                    end
+                    break
+                end
             end
         end
         found_compiler || error("could not find a compiler, looked for ", join(compilers, " and "))
