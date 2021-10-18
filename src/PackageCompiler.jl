@@ -3,15 +3,24 @@ module PackageCompiler
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
+using Printf
+using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
+using RelocatableFolders
 
-export create_sysimage, create_app, create_library, audit_app, restore_default_sysimage
+export create_sysimage, create_app, create_library, audit_app
 
 include("juliaconfig.jl")
+include("../ext/TerminalSpinners.jl")
 
 const NATIVE_CPU_TARGET = "native"
 const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
+
+const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
+const DEFAULT_JULIA_INIT = @path joinpath(@__DIR__, "julia_init.c")
+const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
+
 
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
@@ -81,40 +90,53 @@ function march()
     end
 end
 
-# Overwriting an open file is problematic in Windows
-# so move it out of the way first
-function move_default_sysimage_if_windows()
-    if Sys.iswindows() && isfile(default_sysimg_path())
-        mv(default_sysimg_path(), tempname())
-    end
-end
+const warned_cpp_compiler = Ref{Bool}(false)
 
-function run_with_env(cmd, compiler)
-    if Sys.iswindows()
-        env = copy(ENV)
-        env["PATH"] = string(env["PATH"], ";", dirname(compiler))
-        run(Cmd(cmd; env=env))
-    else
-        run(cmd)
-    end
-end
-
-function get_compiler()
+function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
+    path = nothing
+    @static if Sys.iswindows()
+        path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int==Int64 ? "mingw64" : "mingw32"), "bin", cplusplus ? "g++.exe" : "gcc.exe")
+        compiler_cmd = `$path`
+    end
     if cc !== nothing
-        return cc
+        compiler_cmd = Cmd(Base.shell_split(cc))
+        path = nothing
+    elseif !Sys.iswindows()
+        compilers_cpp = ("g++", "clang++")
+        compilers_c = ("gcc", "clang")
+        found_compiler = false
+        if cplusplus
+            for compiler in compilers_cpp
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    break
+                end
+            end
+        end
+        if !found_compiler
+            for compiler in compilers_c
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    if cplusplus && !warned_cpp_compiler[]
+                        @warn "could not find a c++ compiler (g++ or clang++), falling back to $compiler, this might cause link errors"
+                        warned_cpp_compiler[] = true
+                    end
+                    break
+                end
+            end
+        end 
+        found_compiler || error("could not find a compiler, looked for ", 
+            join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
     end
-    @static if Sys.iswindows() && Int==Int64
-        return joinpath(LazyArtifacts.artifact"x86_64-w64-mingw32", "mingw64", "bin", "gcc.exe")
-    elseif Sys.iswindows() && Int==Int32
-        return joinpath(LazyArtifacts.artifact"i868-w64-mingw32", "mingw32", "bin", "gcc.exe")
+    if path !== nothing
+        compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
     end
-    if Sys.which("gcc") !== nothing
-        return "gcc"
-    elseif Sys.which("clang") !== nothing
-        return "clang"
-    end
-    error("could not find a compiler, looked for `gcc` and `clang`")
+    full_cmd = `$compiler_cmd $cmd`
+    @debug "running $full_cmd"
+    run(full_cmd)
 end
 
 function get_julia_cmd()
@@ -141,13 +163,12 @@ end
 function get_sysimg_file(name::String;
                      library_only::Bool=false,
                      version::Union{VersionNumber, Nothing}=nothing,
-                     level::String="patch")
+                     compat_level::String="patch")
 
     dlext = Libdl.dlext
-    (!library_only || Sys.iswindows()) && return "$name.$dlext"
+    (!library_only || Sys.iswindows()) && return "sys.$dlext"
 
     # For libraries on Unix/Apple, make sure the name starts with "lib"
-
     if !startswith(name, "lib")
         name = "lib" * name
     end
@@ -156,7 +177,7 @@ function get_sysimg_file(name::String;
         return "$name.$dlext"
     end
 
-    version = get_compat_version_str(version, level)
+    version = get_compat_version_str(version, compat_level)
     sysimg_file = (
         Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
         Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
@@ -166,19 +187,13 @@ function get_sysimg_file(name::String;
     return sysimg_file
 end
 
-function get_depot_path(root_dir::String, library_only::Bool)
-    # Use <root>/share/julia as the depot path when creating libraries
-    library_only && return joinpath(root_dir, "share", "julia")
-    return root_dir
-end
-
 function get_soname(name::String;
                 library_only::Bool=false,
                 version::Union{VersionNumber, Nothing}=nothing,
                 compat_level::String="major")
 
     (!Sys.isunix() || Sys.isapple()) && return nothing
-    return get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
+    return get_sysimg_file(name; library_only, version, compat_level)
 end
 
 
@@ -204,52 +219,67 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    @info "PackageCompiler: creating base system image (incremental=false)..."
-    cd(base_dir) do
-        # Create corecompiler.ji
-        cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                  -g0 -O0 $compiler_source_path`
-        @debug "running $cmd"
-        read(cmd)
-
-        # Use that to create sys.ji
-        new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
-        new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
-        new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
-        write(new_sysimage_source_path, new_sysimage_content)
-        try
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                                      --sysimage=$tmp_corecompiler_ji
-                                      -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)") 
+    TerminalSpinners.@spin spinner begin
+        cd(base_dir) do
+            # Create corecompiler.ji
+            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
+                                    -g0 -O0 $compiler_source_path`
             @debug "running $cmd"
             read(cmd)
-        finally
-            rm(new_sysimage_source_path; force=true)
+
+            # Use that to create sys.ji
+            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
+            new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
+            write(new_sysimage_source_path, new_sysimage_content)
+            try
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                                        --sysimage=$tmp_corecompiler_ji
+                                        -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                @debug "running $cmd"
+                read(cmd)
+            finally
+                rm(new_sysimage_source_path; force=true)
+            end
         end
     end
 
     return tmp_sys_ji
 end
+function ensurecompiled(project, packages, sysimage)
+    length(packages) == 0 && return
+    # TODO: Only precompile `packages` (should be available in Pkg 1.8)
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    splitter = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    run(cmd)
+    return
+end
 
-function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing})
-    tracefile = tempname()
+function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
+    tracefile, io = mktemp(precompile_dir; cleanup=false)
+    close(io)
     if precompile_file === nothing
         arg = `-e ''`
     else
         arg = `$precompile_file`
     end
-    touch(tracefile)
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --project=$project
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg)
             --compile=all --trace-compile=$tracefile $arg`
-    @debug "run_precompilation_script: running $cmd"
-    precompile_file === nothing || @info "===== Start precompile execution ====="
+    # --project is not propagated well with Distributed, so use environment
+    splitter = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    precompile_file === nothing || @info "PackageCompiler: Executing $(precompile_file) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
-    precompile_file === nothing || @info "===== End precompile execution ====="
+    precompile_file === nothing || @info "PackageCompiler: Done"
     return tracefile
 end
 
 
-function create_sysimg_object_file(object_file::String, packages::Vector{String};
+function create_sysimg_object_file(object_file::String,
+                            packages::Vector{String},
+                            packages_sysimg::Set{Base.PkgId};
                             project::String,
                             base_sysimage::String,
                             precompile_execution_file::Vector{String},
@@ -258,16 +288,15 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
                             script::Union{Nothing, String},
                             isapp::Bool,
                             sysimage_build_args::Cmd)
-
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
+    precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file)
+        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, precompile_statements_file)
-
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
@@ -313,68 +342,54 @@ function create_sysimg_object_file(object_file::String, packages::Vector{String}
         end # module
         """
 
+    julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
-    julia_code = """
+    print(julia_code_buffer, """
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
-        Base.init_load_path()
-        if isdefined(Base, :init_active_project)
-            Base.init_active_project()
-        end
+        copy!(LOAD_PATH, [$(repr(project))]) # Only allow loading packages from current project
         Base.init_depot_path()
-        """
+        """)
 
-    for pkg in packages
-        julia_code *= """
-            import $pkg
-            """
+    for pkg in packages_sysimg
+        print(julia_code_buffer, """
+            Base.require(Base.PkgId(Base.UUID("$(string(pkg.uuid))"), $(repr(pkg.name))))
+            """)
     end
 
-    julia_code *= precompile_code
+    # Make packages available in Main. It is unclear if this is the right thing to do.
+    for pkg in packages
+        print(julia_code_buffer, """
+            import $pkg
+            """)
+    end
+
+    print(julia_code_buffer, precompile_code)
 
     if script !== nothing
-        julia_code *= """
+        print(julia_code_buffer, """
         include($(repr(abspath(script))))
-        """
+        """)
     end
 
-    if isapp
-        # If it is an app, there is only one packages
-        @assert length(packages) == 1
-        packages[1]
-        app_start_code = """
-        Base.@ccallable function julia_main()::Cint
-            try
-                $(packages[1]).julia_main()
-            catch
-                Core.print("julia_main() threw an unhandled exception")
-                return 1
-            end
-        end
-        """
-        julia_code *= app_start_code
-    end
-
-    julia_code *= """
+    print(julia_code_buffer, """
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
-        """
+        """)
 
-    # finally, make julia output the resulting object file
-    @debug "creating object file at $object_file"
-    @info "PackageCompiler: creating system image object file, this might take a while..."
-
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
-                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) -e $julia_code`
+    julia_code = String(take!(julia_code_buffer))
+    outputo_file = tempname()
+    write(outputo_file, julia_code)
+    # Read the input via stdin to avoid hitting the maximum command line limit
+   
+    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
     run(cmd)
+    return
 end
 
-default_sysimg_path() = abspath(Sys.BINDIR, "..", "lib", "julia", "sys." * Libdl.dlext)
-default_sysimg_name() = basename(default_sysimg_path())
-backup_default_sysimg_path() = default_sysimg_path() * ".backup"
-backup_default_sysimg_name() = basename(backup_default_sysimg_path())
 
 # TODO: Also check UUIDs for stdlibs, not only names
 gather_stdlibs_project(project::String) = gather_stdlibs_project(create_pkg_context(project))
@@ -384,7 +399,7 @@ function gather_stdlibs_project(ctx)
     non_sysimage_stdlibs = stdlibs_not_in_sysimage()
     sysimage_stdlibs_project = String[]
     non_sysimage_stdlibs_project = String[]
-    for (uuid, pkg) in ctx.env.manifest
+    for (_, pkg) in ctx.env.manifest
         if pkg.name in sysimage_stdlibs
             push!(sysimage_stdlibs_project, pkg.name)
         elseif pkg.name in non_sysimage_stdlibs
@@ -408,16 +423,17 @@ end
 """
     create_sysimage(packages::Vector{String}; kwargs...)
 
-Create a system image that includes the package(s) in `packages` given as a
-string or vector). An attempt to automatically find a compiler will be done but
-can also be given explicitly by setting the environment variable `JULIA_CC` to a
-path to a compiler.
+Create a system image that includes the package(s) in `packages` (given as a
+string or vector). If the `packages` argument is not passed, all packages in the
+project will be put into the sysimage.
+
+An attempt to automatically find a compiler will be done but can also be given
+explicitly by setting the environment variable `JULIA_CC` to a path to a
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
-- `sysimage_path::Union{String,Nothing}`: The path to where
-  the resulting sysimage should be saved. If set to `nothing` the keyword argument
-  `replace_default` needs to be set to `true`.
+- `sysimage_path::String`: The path to where the resulting sysimage should be saved.
 
 - `project::String`: The project that should be active when the sysimage is created,
   defaults to the currently active project.
@@ -434,92 +450,76 @@ path to a compiler.
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `replace_default::Bool`: If `true`, replace the default system image which is automatically
-  used when Julia starts. To replace with the one Julia ships with, use [`restore_default_sysimage()`](@ref)
-
-- `julia_init_c_file::String`: File to include in the system image with functions for
-  initializing julia from external code. Used when creating a shared library.
-
-- `version::VersionNumber`: Shared library version number (optional). Added to the sysimg
-  `.so` name on Linux/UNIX, and the `.dylib` name on Apple platforms, and to set the internal
-  `current_version` on Apple. Ignored on Windows.
-
-- `compat_level::String`: compatibility level for library. One of "major", "minor".
-  With `version`, used to determine the `compatibility_version` on Apple.
-
-- `soname`: On linux, used to set the internal soname for the system image.
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+   transitive dependencies into the sysimage. This only makes a difference if some
+   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
 
-- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
+- `base_sysimage::Union{Nothing, String}`: If a `String`, names an existing sysimage upon which to build
+   the new sysimage incrementally, instead of the sysimage of the current process. Defaults to `nothing`.
+   Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
+
+- `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image. Defaults
+  to `nativea`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}=String[];
-                         sysimage_path::Union{String,Nothing}=nothing,
+function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
+                         sysimage_path::String,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
                          precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
-                         filter_stdlibs=false,
-                         replace_default::Bool=false,
+                         filter_stdlibs::Bool=false,
+                         cpu_target::String=NATIVE_CPU_TARGET,
+                         script::Union{Nothing, String}=nothing,
+                         sysimage_build_args::Cmd=``,
+                         include_transitive_dependencies::Bool=true,
+                         # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          isapp::Bool=false,
                          julia_init_c_file=nothing,
                          version=nothing,
                          compat_level::String="major",
-                         soname=nothing,
-                         cpu_target::String=NATIVE_CPU_TARGET,
-                         script::Union{Nothing, String}=nothing,
-                         sysimage_build_args::Cmd=``)
+                         soname=nothing)
     precompile_statements_file = abspath.(precompile_statements_file)
     precompile_execution_file = abspath.(precompile_execution_file)
-    if replace_default==true
-        if sysimage_path !== nothing
-            error("cannot specify `sysimage_path` when `replace_default` is `true`")
-        end
-    end
-    if sysimage_path === nothing
-        if replace_default == false
-            error("`sysimage_path` cannot be `nothing` if `replace_default` is `false`")
-        end
-        # We will replace the default sysimage so just put it somewhere for now
-        tmp = mktempdir()
-        sysimage_path = joinpath(tmp, string("sys.", Libdl.dlext))
-    end
+
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
 
+    ctx = create_pkg_context(project)
+
+    if packages === nothing
+        packages = collect(keys(ctx.env.project.deps))
+        if ctx.env.pkg !== nothing
+            push!(packages, ctx.env.pkg.name)
+        end
+    end
+
     # Functions lower down handles `packages` and precompilation file as arrays so convert here
-    packages = string.(vcat(packages)) # Package names are often used as string inside Julia
+    packages = string.(vcat(packages))
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
-    # Instantiate the project
-    ctx = create_pkg_context(project)
-
-    @debug "instantiating and precompiling project at $(repr(project))"
-    old_load_path = copy(LOAD_PATH)
-    # Need to ensure that Pkg can find the source location of the packages:
-    copy!(LOAD_PATH, [project])
-    try
-        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-        if VERSION >= v"1.8.0-DEV.611" # TODO: Add 1.6.x & 1.7.x once https://github.com/JuliaLang/Pkg.jl/pull/2739 is backported
-            # if the kwarg is available, disable warning about precompiling packages that are already loaded given work will be done in new
-            # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
-            Pkg.precompile(ctx, warn_loaded = false)
-        else
-            Pkg.precompile(ctx)
-        end
-    finally
-        copy!(LOAD_PATH, old_load_path)
-    end
-
     check_packages_in_project(ctx, packages)
+            
+    # Instantiate and precompile the project
+    
+    @debug "instantiating and precompiling project at $(repr(project))"
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    if VERSION >= v"1.8.0-DEV.611" # TODO: Add 1.6.x & 1.7.x once https://github.com/JuliaLang/Pkg.jl/pull/2739 is backported
+        # if the kwarg is available, disable warning about precompiling packages that are already loaded given work will be done in new
+        # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
+        Pkg.precompile(ctx, warn_loaded = false)
+    else
+        Pkg.precompile(ctx)
+    end
 
     if !incremental
         if base_sysimage !== nothing
@@ -538,51 +538,83 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
         end
     end
 
+    ensurecompiled(project, packages, base_sysimage)
+
+    packages_sysimg = Set{Base.PkgId}()
+
+    if include_transitive_dependencies
+        # We are not sure that packages actually load their dependencies on `using`
+        # but we still want them to end up in the sysimage. Therefore, explicitly
+        # collect their dependencies, recursively.
+
+        frontier = Set{Base.PkgId}()
+        deps = ctx.env.project.deps
+        for pkg in packages
+            # Add all dependencies of the package
+            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
+                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
+            else
+                uuid = ctx.env.project.deps[pkg]
+                push!(frontier, Base.PkgId(uuid, pkg))
+            end
+        end
+        copy!(packages_sysimg, frontier)
+        new_frontier = Set{Base.PkgId}()
+        while !(isempty(frontier))
+            for pkgid in frontier
+                deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
+                    ctx.env.project.deps
+                else
+                    ctx.env.manifest[pkgid.uuid].deps
+                end
+                pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
+                for pkgid_dep in pkgid_deps
+                    if !(pkgid_dep in packages_sysimg) #
+                        push!(packages_sysimg, pkgid_dep)
+                        push!(new_frontier, pkgid_dep)
+                    end
+                end
+            end
+            copy!(frontier, new_frontier)
+            empty!(new_frontier)
+        end
+    end
+
     o_init_file = julia_init_c_file === nothing ? nothing : compile_c_init_julia(julia_init_c_file, sysimage_path)
 
     # Create the sysimage
     object_file = tempname() * ".o"
-    create_sysimg_object_file(object_file, packages;
-                              project,
-                              base_sysimage,
-                              precompile_execution_file,
-                              precompile_statements_file,
-                              cpu_target,
-                              script,
-                              isapp,
-                              sysimage_build_args)
-    create_sysimg_from_object_file(object_file,
-                                   sysimage_path;
-                                   o_init_file,
-                                   compat_level,
-                                   version,
-                                   soname)
-
-    # Maybe replace default sysimage
-    if replace_default
-        if !isfile(backup_default_sysimg_path())
-            @debug "making a backup of default sysimg"
-            cp(default_sysimg_path(), backup_default_sysimg_path())
-        end
-        move_default_sysimage_if_windows()
-        mv(sysimage_path, default_sysimg_path(); force=true)
-        @info "PackageCompiler: default sysimg replaced, restart Julia for the new sysimg to be in effect"
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
+    TerminalSpinners.@spin spinner begin
+        create_sysimg_object_file(object_file, packages, packages_sysimg;
+                                project,
+                                base_sysimage,
+                                precompile_execution_file,
+                                precompile_statements_file,
+                                cpu_target,
+                                script,
+                                isapp,
+                                sysimage_build_args)
+        create_sysimg_from_object_file(object_file,
+                                    sysimage_path;
+                                    o_init_file,
+                                    compat_level,
+                                    version,
+                                    soname)
     end
+
     rm(object_file; force=true)
     return nothing
 end
 
 function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
     @debug "Compiling $julia_init_c_file"
-    compiler = get_compiler()
     m = something(march(), ``)
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `$compiler -c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
-
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $m -o $o_init_file $julia_init_c_file`
+    run_compiler(cmd)
     return o_init_file
 end
 
@@ -616,55 +648,22 @@ function create_sysimg_from_object_file(input_object::String,
                                         compat_level::String="major",
                                         soname=nothing)
 
-    julia_libdir = dirname(Libdl.dlpath("libjulia"))
-
     o_files = [input_object]
     o_init_file !== nothing && push!(o_files, o_init_file)
 
     # Prevent compiler from stripping all symbols from the shared lib.
-    # TODO: On clang on windows this is called something else
     if Sys.isapple()
         o_file_flags = `-Wl,-all_load $o_files`
     else
         o_file_flags = `-Wl,--whole-archive $o_files -Wl,--no-whole-archive`
     end
-
     extra = get_extra_linker_flags(version, compat_level, soname)
-
-    compiler = get_compiler()
     m = something(march(), ``)
-    private_libdir = if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
-            dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
-        else
-            joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
-        end
-    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
-        dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
-    else
-        dirname(abspath(Libdl.dlpath("libjulia-internal")))
-    end
-    cmd = `$compiler $(bitflag()) $m -shared -L$(julia_libdir) -L$(private_libdir) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `$(bitflag()) $m -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags -ljulia-internal -ljulia $extra`
+    run_compiler(cmd; cplusplus=true)
     return nothing
 end
 
-"""
-    restore_default_sysimage()
-
-Restores the default system image to the one that Julia shipped with.
-Useful after running [`create_sysimage`](@ref) with `replace_default=true`.
-"""
-function restore_default_sysimage()
-    if !isfile(backup_default_sysimg_path())
-        error("did not find a backup sysimg")
-    end
-    move_default_sysimage_if_windows()
-    mv(backup_default_sysimg_path(), default_sysimg_path(); force=true)
-    @info "PackageCompiler: default sysimg restored, restart Julia for the new sysimg to be in effect"
-    return nothing
-end
 
 function create_pkg_context(project)
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
@@ -726,7 +725,7 @@ argument, for example:
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler.
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
@@ -752,7 +751,11 @@ compiler.
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `true`.
+  defaults to `false`.
+
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+  transitive dependencies into the sysimage. This only makes a difference if some
+  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
 
@@ -766,20 +769,21 @@ function create_app(package_dir::String,
                     app_name=nothing,
                     precompile_execution_file::Union{String, Vector{String}}=String[],
                     precompile_statements_file::Union{String, Vector{String}}=String[],
-                    incremental=false,
-                    filter_stdlibs=false,
-                    audit=true,
-                    force=false,
-                    c_driver_program::String=joinpath(@__DIR__, "embedding_wrapper.c"),
+                    incremental::Bool=false,
+                    filter_stdlibs::Bool=false,
+                    audit::Bool=true,
+                    force::Bool=false,
+                    c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
                     cpu_target::String=default_app_cpu_target(),
-                    include_lazy_artifacts::Bool=true,
-                    sysimage_build_args::Cmd=``)
+                    include_lazy_artifacts::Bool=false,
+                    sysimage_build_args::Cmd=``,
+                    include_transitive_dependencies::Bool=true)
 
     _create_app(package_dir, app_dir, app_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=false, c_driver_program, julia_init_c_file=nothing,
         header_files=String[], version=nothing, compat_level="major",
-        include_lazy_artifacts, sysimage_build_args)
+        include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
 end
 
 """
@@ -826,7 +830,7 @@ simply calls `jl_atexit_hook(retcode)`.)
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler.
+compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
@@ -867,7 +871,11 @@ compiler.
   Linux/UNIX).
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `true`.
+  defaults to `false`.
+
+- `include_transitive_dependencies::Bool`: If `true`, explicitly put all
+  transitive dependencies into the sysimage. This only makes a difference if some
+  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 ### Advanced keyword arguments
 
@@ -886,14 +894,15 @@ function create_library(package_dir::String,
                         audit=true,
                         force=false,
                         header_files::Vector{String} = String[],
-                        julia_init_c_file::String=joinpath(@__DIR__, "julia_init.c"),
+                        julia_init_c_file::String=String(DEFAULT_JULIA_INIT),
                         version=nothing,
                         compat_level="major",
                         cpu_target::String=default_app_cpu_target(),
-                        include_lazy_artifacts::Bool=true,
-                        sysimage_build_args::Cmd=``)
+                        include_lazy_artifacts::Bool=false,
+                        sysimage_build_args::Cmd=``,
+                        include_transitive_dependencies::Bool=true)
 
-    julia_init_h_file::String=joinpath(@__DIR__, "julia_init.h")
+    julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
 
     if !(julia_init_h_file in header_files)
         push!(header_files, julia_init_h_file)
@@ -906,7 +915,7 @@ function create_library(package_dir::String,
     _create_app(package_dir, dest_dir, lib_name, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, audit, force, cpu_target;
         library_only=true, c_driver_program="", julia_init_c_file,
-        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args)
+        header_files, version, compat_level, include_lazy_artifacts, sysimage_build_args, include_transitive_dependencies)
 
 end
 
@@ -927,7 +936,8 @@ function _create_app(package_dir::String,
                     version,
                     compat_level::String,
                     include_lazy_artifacts::Bool,
-                    sysimage_build_args::Cmd)
+                    sysimage_build_args::Cmd,
+                    include_transitive_dependencies::Bool)
     isapp = !library_only
 
     precompile_statements_file = abspath.(precompile_statements_file)
@@ -936,21 +946,21 @@ function _create_app(package_dir::String,
     ctx = create_pkg_context(package_dir)
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
     if isempty(ctx.env.manifest)
-        @warn "it is not recommended to create an app without a preexisting manifest"
+        @warn "it is not recommended to create an app/library without a preexisting manifest"
     end
     if ctx.env.pkg === nothing
         error("expected package to have a `name`-entry")
     end
-    sysimg_name = ctx.env.pkg.name
+    project_name = ctx.env.pkg.name
     if name === nothing
-        name = sysimg_name
+        name = project_name
     end
 
-    sysimg_file = get_sysimg_file(name, library_only=library_only, version=version)
-    soname = get_soname(name,
-                        library_only=library_only,
-                        version=version,
-                        compat_level=compat_level)
+    sysimg_file = get_sysimg_file(name; library_only, version)
+    soname = get_soname(name;
+                        library_only,
+                        version,
+                        compat_level)
 
     if isdir(dest_dir)
         if !force
@@ -964,13 +974,20 @@ function _create_app(package_dir::String,
 
     mkpath(dest_dir)
 
-    bundle_julia_libraries(dest_dir, library_only)
-    bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=include_lazy_artifacts)
+    bundle_julia_libraries(dest_dir)
+    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
+    isapp && bundle_julia_executable(dest_dir)
+    # TODO: Should also bundle project and update load_path for library
+    isapp && bundle_project(ctx, dest_dir)
 
     library_only && bundle_headers(dest_dir, header_files)
 
     # TODO: Create in a temp dir and then move it into place?
-    sysimage_path = Sys.isunix() ? joinpath(dest_dir, "lib") : joinpath(dest_dir, "bin")
+    sysimage_path = if Sys.isunix()
+        isapp ? joinpath(dest_dir, "lib", "julia") : joinpath(dest_dir, "lib")
+    else
+        joinpath(dest_dir, "bin")
+    end
     mkpath(sysimage_path)
     cd(sysimage_path) do
         if !incremental
@@ -982,7 +999,7 @@ function _create_app(package_dir::String,
             create_sysimage(String[]; sysimage_path=tmp_base_sysimage, project=package_dir,
                             incremental=false, filter_stdlibs, cpu_target)
 
-            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
                             incremental=true,
                             precompile_execution_file,
                             precompile_statements_file,
@@ -992,9 +1009,10 @@ function _create_app(package_dir::String,
                             julia_init_c_file,
                             version,
                             soname,
-                            sysimage_build_args)
+                            sysimage_build_args,
+                            include_transitive_dependencies)
         else
-            create_sysimage([sysimg_name]; sysimage_path=sysimg_file, project=package_dir,
+            create_sysimage([project_name]; sysimage_path=sysimg_file, project=package_dir,
                                          incremental, filter_stdlibs,
                                          precompile_execution_file,
                                          precompile_statements_file,
@@ -1003,7 +1021,8 @@ function _create_app(package_dir::String,
                                          julia_init_c_file,
                                          version,
                                          soname,
-                                         sysimage_build_args)
+                                         sysimage_build_args,
+                                         include_transitive_dependencies)
         end
 
         if Sys.isapple()
@@ -1013,8 +1032,8 @@ function _create_app(package_dir::String,
         end
 
         if library_only && version !== nothing && Sys.isunix()
-            compat_file = get_sysimg_file(name, library_only=library_only, version=version, level=compat_level)
-            base_file = get_sysimg_file(name, library_only=library_only)
+            compat_file = get_sysimg_file(name; library_only, version, compat_level)
+            base_file = get_sysimg_file(name)
             @debug "creating symlinks for $compat_file and $base_file"
             symlink(sysimg_file, compat_file)
             symlink(sysimg_file, base_file)
@@ -1026,7 +1045,7 @@ function _create_app(package_dir::String,
         mkpath(executable_path)
         cd(executable_path) do
             c_driver_program_path = abspath(c_driver_program)
-            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", sysimg_file)
+            sysimage_path = Sys.iswindows() ? sysimg_file : joinpath("..", "lib", "julia", sysimg_file)
             create_executable_from_sysimg(; sysimage_path, executable_path=name,
                                          c_driver_program_path)
         end
@@ -1041,20 +1060,42 @@ function create_executable_from_sysimg(;sysimage_path::String,
     flags = join((cflags(), ldflags(), ldlibs()), " ")
     flags = Base.shell_split(flags)
     wrapper = c_driver_program_path
-    compiler = get_compiler()
     m = something(march(), ``)
-    cmd = `$compiler -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
-    @debug "running $cmd"
-    run_with_env(cmd, compiler)
+    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $m -o $(executable_path) $(wrapper) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    run_compiler(cmd)
     return nothing
 end
 
-function bundle_julia_libraries(dest_dir, library_only)
+# One of the main reason for bunlding the project file is
+# for Distributed to work. When using Distributed we need to
+# load packages on other workers and that requires the Project file.
+# See https://github.com/JuliaLang/julia/issues/42296 for some discussion.
+function bundle_project(ctx, dir)
+    julia_share =  joinpath(dir, "share", "julia")
+    mkpath(julia_share)
+    # We do not want to bundle some potentially sensitive data, only data that
+    # is already trivially retrievable from the sysimage.
+    d = Dict{String, Any}()
+    d["name"] = ctx.env.project.name
+    d["uuid"] = ctx.env.project.uuid
+    d["deps"] = ctx.env.project.deps
+
+    Pkg.Types.write_project(d, joinpath(julia_share, "Project.toml"))
+end
+
+function bundle_julia_executable(dir::String)
+    bindir = joinpath(dir, "bin")
+    name = Sys.iswindows() ? "julia.exe" : "julia"
+    mkpath(bindir)
+    cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
+end
+
+function bundle_julia_libraries(dest_dir)
     app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     cp(julia_libdir(), app_libdir; force=true)
-    # We do not want to bundle the sysimg (nor the backup sysimage):
-    rm(joinpath(app_libdir, "julia", default_sysimg_name()); force=true)
-    rm(joinpath(app_libdir, "julia", backup_default_sysimg_name()); force=true)
+    # We do not want to bundle the sysimg
+    default_sysimg_name = "sys." * Libdl.dlext
+    rm(joinpath(app_libdir, "julia", default_sysimg_name); force=true)
     # Remove debug symbol libraries
     if Sys.isapple()
         v = string(VERSION.major, ".", VERSION.minor)
@@ -1064,9 +1105,31 @@ function bundle_julia_libraries(dest_dir, library_only)
     return
 end
 
-function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=true)
-    @debug "bundling artifacts..."
+function recursive_dir_size(path)
+    size = 0
+    try
+        for (root, dirs, files) in walkdir(path)
+            for file in files
+                path = joinpath(root, file)
+                try
+                    size += lstat(path).size
+                catch ex
+                    @error("Failed to calculate size of $path", exception=ex)
+                end
+            end
+        end
+    catch ex
+        @error("Failed to calculate size of $path", exception=ex)
+    end
+    return size
+end
 
+function pretty_byte_str(size)
+    bytes, mb = Base.prettyprint_getunits(size, length(Base._mem_units), Int64(1024))
+    return @sprintf("%.3f %s", bytes, Base._mem_units[mb])
+end
+
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     pkgs = load_all_deps(ctx)
 
     # Also want artifacts for the project itself
@@ -1075,45 +1138,62 @@ function bundle_artifacts(ctx, dest_dir, library_only; include_lazy_artifacts=tr
     ctx.env.pkg.path = dirname(ctx.env.project_file)
     push!(pkgs, ctx.env.pkg)
 
-    # Collect all artifacts needed for the project
-    artifact_paths = Set{String}()
+    # TODO: Allow override platform?
+    platform = Base.BinaryPlatforms.HostPlatform()
+    depot_path = joinpath(dest_dir, "share", "julia")
+    artifact_app_path = joinpath(depot_path, "artifacts")
+
+    bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
+
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
+        bundled_artifacts_pkg = Pair{String, String}[]
         # Check to see if this package has an (Julia)Artifacts.toml
         for f in Pkg.Artifacts.artifact_names
             artifacts_toml_path = joinpath(pkg_source_path, f)
             if isfile(artifacts_toml_path)
-                @debug "bundling artifacts for $(pkg.name)"
-                artifact_dict = Pkg.Artifacts.load_artifacts_toml(artifacts_toml_path)
-                for name in keys(artifact_dict)
-                    if !include_lazy_artifacts &&
-                            isa(artifact_dict[name], AbstractDict) &&
-                            get(artifact_dict[name], "lazy", false)
-                        @info "skipping lazy artifact \"$name\""
-                        continue
-                    end
-                    meta = Pkg.Artifacts.artifact_meta(name, artifacts_toml_path)
-                    meta === nothing && continue
-                    @debug "  \"$name\""
-                    push!(artifact_paths, Pkg.Artifacts.ensure_artifact_installed(name, artifacts_toml_path))
+                artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
+                for name in keys(artifacts)
+                    artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
+                    push!(bundled_artifacts_pkg, name => artifact_path)
                 end
                 break
             end
         end
+        if !isempty(bundled_artifacts_pkg)
+            push!(bundled_artifacts, pkg.name => bundled_artifacts_pkg)
+        end
     end
 
-    # Copy the artifacts needed to the app directory
-    depot_path = get_depot_path(dest_dir, library_only)
-    artifact_app_path = joinpath(depot_path, "artifacts")
-
-    if !isempty(artifact_paths)
+    if !isempty(bundled_artifacts)
+        printstyled("PackageCompiler: bundled artifacts:\n")
         mkpath(artifact_app_path)
     end
-    for artifact_path in artifact_paths
-        artifact_name = basename(artifact_path)
-        cp(artifact_path, joinpath(artifact_app_path, artifact_name))
+
+    total_size = 0
+    sort!(bundled_artifacts)
+
+    for (i, (pkg, artifacts)) in enumerate(bundled_artifacts)
+        last_pkg = i == length(bundled_artifacts)
+        mark_pkg = last_pkg ? "└──" : "├──"
+        print("  $mark_pkg $pkg")
+        for (j, (artifact, artifact_path)) in enumerate(artifacts)
+            size = recursive_dir_size(artifact_path)
+            total_size += size
+            # jlls only have a single artifact with the same name as the package itself
+            if endswith(pkg, "_jll") && length(artifacts) == 1
+                println(" - ", pretty_byte_str(size), "")
+            else
+                println("")
+                mark_artifact = j == length(artifacts) ? "└──" : "├──"
+                mark_init = last_pkg ? " " : "│"
+                println("  $mark_init   ", mark_artifact, " ", artifact, " - ", pretty_byte_str(size), "")
+            end
+            cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
+        end
     end
+    println("  Total artifact file size: ", pretty_byte_str(total_size))
     return
 end
 

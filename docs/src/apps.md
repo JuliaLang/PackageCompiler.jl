@@ -12,6 +12,113 @@ original Julia source code for apps since everything gets baked into the
 sysimage.
 
 
+## Creating an app
+
+The source of an app is a package with a project and manifest file.
+You can easily create this using the package manager:
+
+```julia
+using Pkg
+Pkg.generate("MyApp")
+```
+
+In the code for the package, there should be a function with the signature
+
+```julia
+Base.@ccallable function julia_main()::Cint
+  # do something based on ARGS?
+  return 0 # if things finished successfully
+end
+```
+
+defined, which will be the entry point of the app (the function that runs when the
+executable in the app is run). A skeleton of an app to start working from can
+be found [here](https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp).
+
+The app is then compiled using the [`create_app`](@ref) function that takes a
+path to the source code of the app and the destination where the app should be
+compiled to. This will bundle all required libraries for the app to run on
+another machine where the same Julia that created the app can run.  As an
+example, in the code snippet below, the example app linked above is compiled and run:
+
+```
+~/PackageCompiler.jl/examples
+❯ julia -q --project
+
+julia> using PackageCompiler
+
+julia> create_app("MyApp", "MyAppCompiled")
+[ Info: PackageCompiler: creating base system image (incremental=false), this might take a while...
+[ Info: PackageCompiler: creating system image object file, this might take a while...
+
+julia> exit()
+
+~/PackageCompiler.jl/examples
+❯ MyAppCompiled/bin/MyApp foo bar --julia-args -t4
+ARGS = ["foo", "bar"]
+Base.PROGRAM_FILE = "./bin/MyApp"
+DEPOT_PATH = ["/home/kc/JuliaPkgs/PackageCompiler.jl/MyAppCompiled/share/julia"]
+...
+Running the artifact
+The result of 2*5^2 - 10 == 40.000000
+```
+
+Note that the arguments passed to the executable are available in the global variable `ARGS`.
+Standard julia arguments (like how many threads should be used) are passed in after the
+`--julia-args` argument.
+
+The resulting executable is found in the `bin` folder in the compiled app
+directory.  The compiled app directory `MyAppCompiled` could now be put into an
+archive and sent to another machine or an installer could be wrapped around the
+directory, perhaps providing a better user experience than just an archive of
+files.
+
+### Compilation of functions
+
+In the same way as [files for precompilation could be given when creating
+sysimages](@ref tracing), the same keyword arguments are used to add precompilation to apps.
+
+### Incremental vs non-incremental sysimage
+
+In the section about creating sysimages, there was a short discussion about
+incremental vs non-incremental sysimages. In short, an incremental sysimage is
+built on top of another sysimage, while a non-incremental is created from
+scratch. For sysimages, it makes sense to use an incremental sysimage built on
+top of Julia's default sysimage since we wanted the benefit of having a responsive
+REPL that it provides.  For apps, this is no longer the case, the sysimage is
+not meant to be used when working interactively, it only needs to be
+specialized for the specific app.  Therefore, by default, `incremental=false` is
+used for `create_app`. If, for some reason, one wants an incremental sysimage,
+`incremental=true` could be passed to `create_app`. With the example app, a
+non-incremental sysimage is about 70MB smaller than the default sysimage.
+
+### Filtering stdlibs
+
+By default, all standard libraries are included in the sysimage. It is
+possible to only include those standard libraries that the project needs.  This
+is done by passing the keyword argument `filter_stdlibs=true` to `create_app`.
+This causes the sysimage to be smaller, and possibly load faster. The reason
+this is not the default is that it is possible to "accidentally" depend on a
+standard library without it being reflected in the Project file. For example,
+it is possible to call `rand()` from a package without depending on Random,
+even though that is where the method is defined. If Random was excluded from
+the sysimage that call would then error. As another example, matrix
+multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
+`LinearAlgebra` and `Random` This is because these standard libraries practice
+["type-piracy"](https://docs.julialang.org/en/v1/manual/style-guide/#Avoid-type-piracy), 
+just loading those packages can cause code to change behavior.
+
+Nevertheless, the option is there to use. Just make sure to properly test the
+app with the resulting sysimage.
+
+
+### Custom binary name
+
+By default, the binary in the `bin` directory take the name of the project,
+as defined in `Project.toml`.  If you want to change the name, you can pass
+`app_name="some_app_name"` to `create_app`.
+
+
 ## [Relocatability](@id relocatability)
 
 Since we want to send the app to other machines the app we create must be
@@ -70,109 +177,8 @@ relocatable way?"  The answer is to use the "artifact system" introduced in
 Julia 1.3, and described in the following [blog
 post](https://julialang.org/blog/2019/11/artifacts). The artifact system is a
 declarative way of downloading and using "external files" like binaries and
-libraries.  How this is used in practice is described later.
-
-
-## Creating an app
-
-The source of an app is a package with a project and manifest file.
-It should define a function with the signature
-
-```julia
-function julia_main()::Cint
-  # do something based on ARGS?
-  return 0 # if things finished successfully
-end
-```
-
-which will be the entry point of the app (the function that runs when the
-executable in the app is run). A skeleton of an app to start working from can
-be found [here](https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp).
-
-Regarding relocatability, PackageCompiler provides a function
-[`audit_app(app_dir::String)`](@ref) that tries to find common problems with
-relocatability in the app.
-
-The app is then compiled using the [`create_app`](@ref) function that takes a
-path to the source code of the app and the destination where the app should be
-compiled to. This will bundle all required libraries for the app to run on
-another machine where the same Julia that created the app can run.  As an
-example, in the code snippet below, the example app linked above is compiled and run:
-
-```
-~/PackageCompiler.jl/examples
-❯ julia -q --project
-
-julia> using PackageCompiler
-
-julia> create_app("MyApp", "MyAppCompiled")
-[ Info: PackageCompiler: creating base system image (incremental=false), this might take a while...
-[ Info: PackageCompiler: creating system image object file, this might take a while...
-
-julia> exit()
-
-~/PackageCompiler.jl/examples
-❯ MyAppCompiled/bin/MyApp
-ARGS = ["foo", "bar"]
-Base.PROGRAM_FILE = "MyAppCompiled/bin/MyApp"
-...
-Hello, World!
-
-Running the artifact
-The result of 2*5^2 - 10 == 40.000000
-unsafe_string((Base.JLOptions()).image_file) = "/Users/kristoffer/PackageCompiler.jl/examples/MyAppCompiled/bin/MyApp.dylib"
-Example.domath(5) = 10
-```
-
-The resulting executable is found in the `bin` folder in the compiled app
-directory.  The compiled app directory `MyAppCompiled` could now be put into an
-archive and sent to another machine or an installer could be wrapped around the
-directory, perhaps providing a better user experience than just an archive of
-files.
-
-### Compilation of functions
-
-In the same way as [files for precompilation could be given when creating
-sysimages](@ref tracing), the same keyword arguments are used to add precompilation to apps.
-
-### Incremental vs non-incremental sysimage
-
-In the section about creating sysimages, there was a short discussion about
-incremental vs non-incremental sysimages. In short, an incremental sysimage is
-built on top of another sysimage, while a non-incremental is created from
-scratch. For sysimages, it makes sense to use an incremental sysimage built on
-top of Julia's default sysimage since we wanted the benefit of having a responsive
-REPL that it provides.  For apps, this is no longer the case, the sysimage is
-not meant to be used when working interactively, it only needs to be
-specialized for the specific app.  Therefore, by default, `incremental=false` is
-used for `create_app`. If, for some reason, one wants an incremental sysimage,
-`incremental=true` could be passed to `create_app`.  With the example app, a
-non-incremental sysimage is about 70MB smaller than the default sysimage.
-
-### Filtering stdlibs
-
-By default, all standard libraries are included in the sysimage.  It is
-possible to only include those standard libraries that the project needs.  This
-is done by passing the keyword argument `filter_stdlibs=true` to `create_app`.
-This causes the sysimage to be smaller, and possibly load faster.  The reason
-this is not the default is that it is possible to "accidentally" depend on a
-standard library without it being reflected in the Project file.  For example,
-it is possible to call `rand()` from a package without depending on Random,
-even though that is where the method is defined. If Random was excluded from
-the sysimage that call would then error. As another example, matrix
-multiplication, `rand(3,3) * rand(3,3)` requires both the standard libraries
-`LinearAlgebra` and `Random` This is because these standard libraries practice
-["type-piracy"](https://docs.julialang.org/en/v1/manual/style-guide/#Avoid-type-piracy), 
-just loading those packages can cause code to change behavior.
-
-Nevertheless, the option is there to use. Just make sure to properly test the
-app with the resulting sysimage.
-
-### Custom binary name
-
-By default, the binary in the `bin` directory take the name of the project,
-as defined in `Project.toml`.  If you want to change the name, you can pass
-`app_name="some_app_name"` to `create_app`.
+libraries.  How this is used in practice is described later. Another useful
+tool is the Julia package [RelocatableFolders.jl](https://github.com/JuliaPackaging/RelocatableFolders.jl).
 
 ### Artifacts
 
@@ -214,46 +220,53 @@ This is a problem that the Julia standard libraries themselves have:
 
 ```julia-repl
 julia> @which rand()
-rand() in Random at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/v1.3/Random/src/Random.jl:256
+rand() in Random at /buildworker/worker/package_linux64/build/usr/share/julia/stdlib/1.7/Random/src/Random.jl:256
 ```
 
 #### Using reflection and finding lowered code
 
 There is nothing preventing someone from starting Julia with the sysimage that
-comes with the app.  And while the source code is not available one can read
+comes with the app. In fact, to support distributed computing that needs to
+start up new Julia processes, there is also a `julia` executable in the `bin` folder
+that uses the custom sysimage. While the source code is not available one can read
 the "lowered code" and use reflection to find things like the name of fields in
 structs and global variables etc:
 
 ```julia-repl
-~/PackageCompiler.jl/examples/MyAppCompiled/bin kc/docs_apps*
-❯ julia -q -JMyApp.so
-julia> MyApp = Base.loaded_modules[Base.PkgId(Base.UUID("f943f3d7-887a-4ed5-b0c0-a1d6899aa8f5"), "MyApp")]
-MyApp
+~/PackageCompiler.jl/examples/MyAppCompiled/bin
+❯ ./julia -q
 
 julia> names(MyApp; all=true)
-10-element Array{Symbol,1}:
+18-element Vector{Symbol}:
+ Symbol("#1#3")
+ Symbol("#2#4")
  Symbol("#eval")
+ Symbol("#fooifier_path")
  Symbol("#include")
+ Symbol("#is_crayons_loaded")
  Symbol("#julia_main")
  Symbol("#real_main")
  :MyApp
  :eval
+ :fooifier_path
  :include
+ :is_crayons_loaded
  :julia_main
+ :myrand
+ :o
+ :outputo
  :real_main
- :socrates
 
 julia> @code_lowered MyApp.real_main()
 CodeInfo(
-1 ─ %1  = MyApp.ARGS
-│         value@_2 = %1
-│   %3  = Base.repr(%1)
-│         Base.println("ARGS = ", %3)
-│         value@_2
-│   %6  = Base.PROGRAM_FILE
-│         value@_3 = %6
-│   %8  = Base.repr(%6)
-│         Base.println("Base.PROGRAM_FILE = ", %8)
-│         value@_3
-│   %11 = MyApp.DEPOT_PATH
-```
+1 ─        Core.NewvarNode(:(#2))
+│          Core.NewvarNode(:(n))
+│   %3   = MyApp.ARGS
+│          value@_17 = %3
+│   %5   = Base.repr(%3)
+│          Base.println("ARGS = ", %5)
+│          value@_17
+│   %8   = Base.PROGRAM_FILE
+│          value@_16 = %8
+│   %10  = Base.repr(%8)
+...

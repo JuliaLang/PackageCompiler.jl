@@ -35,7 +35,7 @@ the sysimage.
 Putting packages in the sysimage is therefore only recommended if the load time
 of those packages is a significant problem and when these packages
 are not frequently updated. In addition, compiling "workflow packages" like
-Revise.jl and OhMyREPL.jl and using that as a default sysimage might make sense.
+Revise.jl and OhMyREPL.jl into a sysimage might make sense.
 
 ## Creating a sysimage using PackageCompiler
 
@@ -43,10 +43,10 @@ PackageCompiler provides the function [`create_sysimage`](@ref) to create a
 sysimage. It takes as the first argument a package or a list of packages that
 should be embedded in the resulting sysimage. By default, the given packages are
 loaded from the active project but a specific project can be specified by
-giving a path with the `project` keyword. The location of the resulting
+giving a path to it with the `project` keyword. The location of the resulting
 sysimage is given by the `sysimage_path` keyword. After the sysimage is
-created, giving the command flag `-Jpath/to/sysimage` will start Julia with the
-given sysimage.
+created, giving the command flag `-Jpath/to/sysimage` (or `--sysimage=path/to/sysimage`)
+will start Julia with the given sysimage.
 
 Below is an example of a new sysimage, from a separate project, being created
 with the package Example.jl in it. Using `Base.loaded_modules` it can be seen
@@ -59,13 +59,12 @@ that the package is loaded without having to explicitly `import` it.
 ~
 ❯ cd NewSysImageEnv
 
-~/NewSysImageEnv 29s
+~/NewSysImageEnv
 ❯ julia -q
 
 julia> using PackageCompiler
-[ Info: Precompiling PackageCompiler [dffaa6cc-da53-48e5-b007-4292dfcc27f1]
 
-(v1.3) pkg> activate .
+(1.7) pkg> activate .
 Activating new environment at `~/NewSysImageEnv/Project.toml`
 
 (NewSysImageEnv) pkg> add Example
@@ -96,28 +95,8 @@ Dict{Base.PkgId,Module} with 34 entries:
 ...
 ```
 
-Alternatively, instead of giving a path to where the new sysimage should appear, one
-can choose to replace the default sysimage. **This is
-[_not_ recommended](https://github.com/JuliaLang/PackageCompiler.jl/issues/434#issuecomment-675563737)
-as this can
-cause compatibility issues with other packages that depend on the default sysimage
-such as Julia-VSCode.** Replacing the default sysimage is done by omitting the
-`sysimage_path` keyword and instead adding `replace_default=true`, for example:
-
-```julia
-# This is not recommended and may cause compatibility issues since external
-# packages such as Julia-VSCode may depend on the default sysimage.
-create_sysimage(["Debugger", "OhMyREPL"]; replace_default=true)
-```
-
-If this is the first time `create_sysimage` is called with `replace_default`, a
-backup of the default sysimage is created. The default sysimage can then be
-restored with [`restore_default_sysimage()`](@ref).
-
-Note that sysimages are created "incrementally" in the sense that they add to
-the sysimage of the process running PackageCompiler. If the default sysimage
-has been replaced, the next `create_sysimage` call will create a new sysimage
-based on the replaced sysimage. It is possible to create a sysimage
+Note that sysimages are by default created "incrementally" in the sense that they add to
+the sysimage of the process running PackageCompiler. It is possible to create a sysimage
 non-incrementally by passing the `incremental=false` keyword. This will create
 a new system image from scratch. However, it will lose the special
 precompilation that the Julia bundled sysimage provides which is what makes the
@@ -167,7 +146,7 @@ the file shown just above:
 
 julia> using PackageCompiler
 
-(v1.3) pkg> activate .
+(1.7) pkg> activate .
 Activating environment at `~/NewSysImageEnv/Project.toml`
 
 julia> PackageCompiler.create_sysimage(["Example"]; sysimage_path="ExampleSysimagePrecompile.so",
@@ -215,3 +194,9 @@ include(joinpath(pkgdir(Example), "test", "runtests.jl"))
 
 in the precompile file. Note that you need to have any test dependencies installed
 in your current project.
+
+#### Advanced options to `create_sysimage`
+
+- When creating a sysimage incrementally, you can use a different sysimage as the "base sysimage" by passing the `base_sysimage` keyword argument.
+- The "cpu target" can be specified with the `cpu_target` keyword. For more information about the syntax of this option, see the [Julia manual](https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets).
+- If you need to run some code in the process creating the sysimage, the `script` argument that points to a file can be passed.

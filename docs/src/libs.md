@@ -48,8 +48,7 @@ julia> create_library("MyLib", "MyLibCompiled";
                       lib_name="libinc",
                       precompile_execution_file="MyLib/build/generate_precompile.jl",
                       precompile_statements_file="MyLib/build/additional_precompile.jl",
-                      header_files = ["MyLib/inc.h"])
-┌ Warning: it is not recommended to create an app without a preexisting manifest
+                      header_files = ["MyLib/build/mylib.h"])
 └ @ PackageCompiler ~/.julia/dev/PackageCompiler/src/PackageCompiler.jl:903
 [ Info: PackageCompiler: creating base system image (incremental=false)...
 [ Info: PackageCompiler: creating system image object file, this might take a while...

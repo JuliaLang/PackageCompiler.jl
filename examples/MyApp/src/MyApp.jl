@@ -2,11 +2,20 @@ module MyApp
 
 using Example
 using HelloWorldC_jll
-using Pkg.Artifacts
+using Artifacts
+using Distributed
+using Random
+
+const myrand = rand()
+
+const outputo = begin
+    o = Base.JLOptions().outputo
+    o == C_NULL ? "ok" : unsafe_string(o)
+end
 
 fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
-function julia_main()
+Base.@ccallable function julia_main()::Cint
     try
         real_main()
     catch
@@ -14,6 +23,10 @@ function julia_main()
         return 1
     end
     return 0
+end
+
+function is_crayons_loaded()
+    Base.PkgId(Base.UUID("a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"), "Crayons") in keys(Base.loaded_modules)
 end
 
 function real_main()
@@ -39,6 +52,8 @@ function real_main()
     end
     println()
 
+    @show is_crayons_loaded()
+
     println("Running the artifact")
     res = read(`$(fooifier_path()) 5 10`, String)
     println("The result of 2*5^2 - 10 == $res")
@@ -46,6 +61,23 @@ function real_main()
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
     @show sin(0.0)
+
+    println("outputo: $outputo")
+
+    # Check that the RNG is seeded during precompilation
+    println("myrand: ", myrand == 0.0 ? "fail" : "ok")
+    rand() # Check that RNG state is ok
+    if nworkers() != 4
+        addprocs(4)
+        @eval @everywhere using MyApp
+    end
+   
+    n = @distributed (+) for i = 1:20000000
+        1
+    end
+    println("n = $n")
+    @eval @everywhere using Example
+    @everywhere println(Example.domath(3))
     return
 end
 

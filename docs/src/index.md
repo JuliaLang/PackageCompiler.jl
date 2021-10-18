@@ -49,6 +49,13 @@ come across.
 
 ## Installation instructions
 
+The package is installed using the standard way with the package manager:
+
+```julia
+using Pkg
+Pkg.add("PackageCompiler")
+```
+
 !!! note
     It is strongly recommended to use the official binaries that are downloaded from 
     https://julialang.org/downloads/. Distribution-provided Julia installations are
@@ -59,8 +66,22 @@ To use PackageCompiler a C-compiler needs to be available:
 ### macOS, Linux
 
 Having a decently modern `gcc` or `clang` available should be enough to use PackageCompiler on Linux or macOS.
-For macOS, this can be the built-in Xcode command line tools or `homebrew` and for Linux, the system package manager should work fine.
+For macOS, this can be the built-in Xcode command line tools or `homebrew` and for Linux, using the system package
+manager to get a compiler should work fine.
 
 ### Windows
 
 A suitable compiler will be automatically installed the first time it is needed.
+
+## Upgrading from PackageCompiler 1.0.
+
+PackageCompiler 2.0 comes with a few breaking changes.
+
+- The functionality for replacing the default sysimage (`replace_default=true`) has been removed. Instead, you can e.g. 
+  create an alias or shortcut that starts Julia with a custom sysimage by specifying the `--sysimage=<PATH/TO/SYSIMAGE>` 
+  command line option.
+- Apps now need to make their "main"-functions ccallable by adding `Base.@ccallable` before the function and `::Cint` as a return type,
+  for example `Base.@ccallable julia_main()::Cint ...`.
+- Lazy artifacts (those not downloaded until used) are not included in apps by default anymore. Use `include_lazy_artifacts=true` to re-enable this.
+- Passing no packages to `create_sysimage` will now include all packages in the given project instead of a syimage with no packages.
+  Use `String[]` as a first argument if you want the old behavior.

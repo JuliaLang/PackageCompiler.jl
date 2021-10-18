@@ -35,7 +35,7 @@ end
     opt_during_sysimage = Base.JLOptions().opt_level
     print_opt() = println("opt: -O\$opt_during_sysimage")
     """)
-    create_sysimage(["Example"]; sysimage_path=sysimage_path,
+    create_sysimage(; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                               precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
@@ -43,6 +43,7 @@ end
                               script=script,
                               sysimage_build_args = `-O1`
                               )
+
     # Check we can load sysimage and that Example is available in Main
     str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
     @test occursin("Hello, foo", str)
@@ -84,6 +85,8 @@ end
             end
             # Check dependency run
             @test occursin("Example.domath", app_output)
+            # Check PROGRAM_FILE
+            @test occursin("Base.PROGRAM_FILE = $(repr(app_path))", app_output)
             # Check jll package runs
             @test occursin("Hello, World!", app_output)
             # Check artifact runs
@@ -93,9 +96,20 @@ end
             # Check ARGS
             @test occursin("""ARGS = ["I", "get", "--args"]""", app_output)
             # Check julia-args
-            @test occursin("(Base.JLOptions()).opt_level = 2", app_output)
+            @test occursin("(Base.JLOptions()).opt_level = 1", app_output)
             @test occursin("(Base.JLOptions()).nthreads = 3", app_output)
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
+            # Check transitive inclusion of dependencies
+            @test occursin("is_crayons_loaded() = true", app_output)
+            # Check app is precompiled in a normal process
+            @test occursin("outputo: ok", app_output)
+            @test occursin("myrand: ok", app_output)
+            # Check distributed
+            @test occursin("n = 20000000", app_output)
+            @test occursin("From worker 2:\t8", app_output)
+            @test occursin("From worker 3:\t8", app_output)
+            @test occursin("From worker 4:\t8", app_output)
+            @test occursin("From worker 5:\t8", app_output)
         end
     end
 
@@ -117,14 +131,12 @@ end
         rm(tmp_lib_src_dir; recursive=true)
     end
 
-
-
     # Test creating an empty sysimage
     if !is_slow_ci
         tmp = mktempdir()
         sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
         foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
-        create_sysimage(; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
+        create_sysimage(String[]; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
     end
