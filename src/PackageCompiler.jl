@@ -127,8 +127,8 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
                     break
                 end
             end
-        end 
-        found_compiler || error("could not find a compiler, looked for ", 
+        end
+        found_compiler || error("could not find a compiler, looked for ",
             join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
     end
     if path !== nothing
@@ -219,7 +219,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)") 
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
@@ -382,7 +382,7 @@ function create_sysimg_object_file(object_file::String,
     outputo_file = tempname()
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
-   
+
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
@@ -508,17 +508,24 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     precompile_statements_file = vcat(precompile_statements_file)
 
     check_packages_in_project(ctx, packages)
-            
+
     # Instantiate and precompile the project
-    
+
     @debug "instantiating and precompiling project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-    if VERSION >= v"1.8.0-DEV.611" # TODO: Add 1.6.x & 1.7.x once https://github.com/JuliaLang/Pkg.jl/pull/2739 is backported
-        # if the kwarg is available, disable warning about precompiling packages that are already loaded given work will be done in new
-        # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
-        Pkg.precompile(ctx, warn_loaded = false)
-    else
-        Pkg.precompile(ctx)
+    old_load_path = copy(LOAD_PATH)
+    # Need to ensure that Pkg can find the source location of the packages:
+    copy!(LOAD_PATH, [project])
+    try
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+        if VERSION >= v"1.8.0-DEV.611" # TODO: Add 1.6.x & 1.7.x once https://github.com/JuliaLang/Pkg.jl/pull/2739 is backported
+            # if the kwarg is available, disable warning about precompiling packages that are already loaded given work will be done in new
+            # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
+            Pkg.precompile(ctx, warn_loaded = false)
+        else
+            Pkg.precompile(ctx)
+        end
+    finally
+        copy!(LOAD_PATH, old_load_path)
     end
 
     if !incremental
@@ -584,7 +591,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Create the sysimage
     object_file = tempname() * ".o"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image")
     TerminalSpinners.@spin spinner begin
         create_sysimg_object_file(object_file, packages, packages_sysimg;
                                 project,
