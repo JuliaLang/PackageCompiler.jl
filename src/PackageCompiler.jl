@@ -508,7 +508,7 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
     copy!(LOAD_PATH, [project])
     try
         Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-        if :warn_loaded in Base.kwarg_decl(first(methods(Pkg.precompile, Tuple{Pkg.Types.Context})))
+        if VERSION >= v"1.8.0-DEV.611" # TODO: Add 1.6.x & 1.7.x once https://github.com/JuliaLang/Pkg.jl/pull/2739 is backported
             # if the kwarg is available, disable warning about precompiling packages that are already loaded given work will be done in new
             # julia sessions. The `warn_loaded` kwarg was introduced in https://github.com/JuliaLang/Pkg.jl/pull/2739
             Pkg.precompile(ctx, warn_loaded = false)
