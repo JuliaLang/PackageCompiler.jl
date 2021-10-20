@@ -2,3 +2,6 @@ name = "MyLib"
 uuid = "a1a1a4a2-71b6-406f-b13d-8701d2765a5f"
 authors = ["Kevin Squire <kevin.squire@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"

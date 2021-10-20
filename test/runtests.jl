@@ -149,7 +149,7 @@ end
                     precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
                     lib_name=lib_name, version=v"1.0.0")
 
-        lib_path = joinpath(lib_target_dir, "lib", "libinc." * Libdl.dlext)
+        lib_path = joinpath(lib_target_dir, (Sys.iswindows() ? "bin" : "lib"), "libinc." * Libdl.dlext)
         pythoncontent = """
         from ctypes import *
         lib = CDLL($(repr(lib_path)))
@@ -158,6 +158,8 @@ end
         lib.increment32.restype = c_int
         lib.increment32.argtypes = (c_int,)
         lib.increment32(5)
+        lib.run_artifact.restype = None
+        lib.run_artifact()
         """
 
         pythonfile = tempname()
@@ -165,6 +167,8 @@ end
         py_output = read(`python $pythonfile`, String)
 
         @test occursin("Incremented count: 6 (Cint)", py_output)
+        @test occursin("The result of 2*5^2 - 10 == 40.000000", py_output)
+
         rm(tmp_lib_src_dir; recursive=true)
     end
 
