@@ -624,8 +624,12 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
-- `app_name::String`: an alternative name for the compiled app. If not provided,
-  the name of the package (as specified in `Project.toml`) is used.
+- executables::`Vector{Pair{String, String}}:`: A list of executables to
+  produce, given as pairs of `executable_name => julia_main` where
+  `executable_name` is the name of the produced executable with the
+  (`Base.@ccallable`) julia function `julia_main`. If not provided, the name
+  of the package (as specified in `Project.toml`) is used and the main function
+  in julia is taken as `julia_main`.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
   files that contain code from which precompilation statements should be recorded.
@@ -658,7 +662,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 """
 function create_app(package_dir::String,
                     app_dir::String;
-                    app_name=nothing,
+                    executables::Union{Nothing, Vector{Pair{String, String}}}=nothing,
                     precompile_execution_file::Union{String, Vector{String}}=String[],
                     precompile_statements_file::Union{String, Vector{String}}=String[],
                     incremental::Bool=false,
@@ -674,7 +678,9 @@ function create_app(package_dir::String,
     ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
-    app_name = something(app_name, ctx.env.pkg.name)
+    if executables === nothing
+        executables = [ctx.env.pkg.name => "julia_main"]
+    end
     try_rm_dir(app_dir; force)
     bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     bundle_julia_libraries(app_dir)
@@ -688,21 +694,23 @@ function create_app(package_dir::String,
         julia_init_c_file=nothing,
         version=nothing, soname=nothing, sysimage_build_args, include_transitive_dependencies)
 
-    create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), sysimage_path, c_driver_program)
+    for (app_name, julia_main) in executables
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), sysimage_path, c_driver_program, julia_main)
+    end
 end
 
 
 function create_executable_from_sysimg(exe_path::String,
                                        sysimage_path::String,
-                                       c_driver_program::String)      
+                                       c_driver_program::String,
+                                       julia_main::String)      
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
     relsysimg = relpath(sysimage_path, dirname(exe_path))
-    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=$julia_main DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     run_compiler(cmd)
-
     return nothing
 end
 

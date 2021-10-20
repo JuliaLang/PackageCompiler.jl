@@ -22,7 +22,7 @@ JULIA_DEFINE_FAST_TLS()
 // TODO: Windows wmain handling as in repl.c
 
 // Declare C prototype of a function defined in Julia
-int julia_main();
+int JULIA_MAIN();
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
     jl_eval_string("@eval Base PROGRAM_FILE = popfirst!(ARGS)");
 
     // call the work function, and get back a value
-    int retcode = julia_main();
+    int retcode = JULIA_MAIN();
 
     // Cleanup and gracefully exit
     free(depot_path_env);

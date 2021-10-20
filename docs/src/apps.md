@@ -31,7 +31,7 @@ Base.@ccallable function julia_main()::Cint
 end
 ```
 
-defined, which will be the entry point of the app (the function that runs when the
+defined ([you can customize this](@ref multiple)), which will be the entry point of the app (the function that runs when the
 executable in the app is run). A skeleton of an app to start working from can
 be found [here](https://github.com/JuliaLang/PackageCompiler.jl/tree/master/examples/MyApp).
 
@@ -112,12 +112,23 @@ Nevertheless, the option is there to use. Just make sure to properly test the
 app with the resulting sysimage.
 
 
-### Custom binary name
+### [Multiple executables](@id multiple)
 
-By default, the binary in the `bin` directory take the name of the project,
-as defined in `Project.toml`.  If you want to change the name, you can pass
-`app_name="some_app_name"` to `create_app`.
+By default, the binary in the `bin` directory takes the name of the project, as
+defined in `Project.toml` and the julia function that will be called when
+running it is `julia_main`. You can change the executable name and the julia
+function using the `executables` keyword argument to `create_app`. As an
+example, if you want to have two executables called `A` and `B` calling the
+julia functions `main_A` and `main_B`, respectively, you would pass
+`executables= ["A" => "main_A", "B" => "main_B"]`.  Note that `main_A` and `main_B`
+both need to be annotated with `Base.@ccallable`, not take any arguments and be
+annotated to return a `Cint`, for example:
 
+```jl
+Base.@ccallable function main_A()::Cint
+    ...
+end
+```
 
 ## [Relocatability](@id relocatability)
 

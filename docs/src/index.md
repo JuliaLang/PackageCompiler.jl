@@ -86,3 +86,5 @@ PackageCompiler 2.0 comes with a few breaking changes.
 - Passing no packages to `create_sysimage` will now include all packages in the given project instead of a syimage with no packages.
   Use `String[]` as a first argument if you want the old behavior.
 - The `audit_app` function has been removed. It caught too few problems to be of useful in practice.
+- The keyword `app_name` in `create_app` has been removed and replaced with a more flexible version.
+  If you used `app_name="Foo"`, replace it with `executables=["Foo"=>"julia_main"]`.

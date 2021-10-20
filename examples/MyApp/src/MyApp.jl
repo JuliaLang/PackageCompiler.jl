@@ -25,6 +25,11 @@ Base.@ccallable function julia_main()::Cint
     return 0
 end
 
+Base.@ccallable function second_main()::Cint
+    println("Hello from second main")
+    return 0
+end
+
 function is_crayons_loaded()
     Base.PkgId(Base.UUID("a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"), "Crayons") in keys(Base.loaded_modules)
 end
