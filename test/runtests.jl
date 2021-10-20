@@ -148,6 +148,23 @@ end
                     precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
                     precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
                     lib_name=lib_name, version=v"1.0.0")
+
+        lib_path = joinpath(lib_target_dir, "lib", "libinc." * Libdl.dlext)
+        pythoncontent = """
+        from ctypes import *
+        lib = CDLL($(repr(lib_path)))
+        lib.init_julia.restype = None
+        lib.init_julia(None, None) # Not really accurate
+        lib.increment32.restype = c_int
+        lib.increment32.argtypes = (c_int,)
+        lib.increment32(5)
+        """
+
+        pythonfile = tempname()
+        write(pythonfile, pythoncontent)
+        py_output = read(`python $pythonfile`, String)
+
+        @test occursin("Incremented count: 6 (Cint)", py_output)
         rm(tmp_lib_src_dir; recursive=true)
     end
 
