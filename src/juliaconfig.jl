@@ -64,13 +64,13 @@ function cflags()
 end
 
 function rpath_executable()
-    Sys.iswindows() ? "" :
-    Sys.isapple()   ? "-Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'" :
-                      "-Wl,-rpath,\$ORIGIN/../lib:\$ORIGIN/../lib/julia"
+    Sys.iswindows() ? `` :
+    Sys.isapple()   ? `-Wl,-rpath,'@executable_path/../lib' -Wl,-rpath,'@executable_path/../lib/julia'` :
+                      `-Wl,-rpath,\$ORIGIN/../lib:\$ORIGIN/../lib/julia`
 end
 
 function rpath_sysimage()
-    Sys.iswindows() ? "" :
-    Sys.isapple()   ? "-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/julia'" :
-                      "-Wl,-rpath,\$ORIGIN:\$ORIGIN/julia"
+    Sys.iswindows() ? `` :
+    Sys.isapple()   ? `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/julia'` :
+                      `-Wl,-rpath,\$ORIGIN:\$ORIGIN/julia`
 end

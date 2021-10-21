@@ -82,7 +82,9 @@ int main(int argc, char *argv[])
     putenv(depot_path_env);
     putenv(load_path_env);
 
-    jl_init();
+    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
+    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
+    julia_init(JL_IMAGE_JULIA_HOME);
 
     // Initialize Core.ARGS with the full argv.
     jl_set_ARGS(program_argc, argv);

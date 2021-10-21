@@ -498,7 +498,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Create the sysimage
     object_file = tempname() * ".o"
-   
+    
     create_sysimg_object_file(object_file, packages, packages_sysimg;
                             project,
                             base_sysimage,
@@ -681,7 +681,8 @@ function create_app(package_dir::String,
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
 
-    sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
+    sysimage_path = joinpath(app_dir, Sys.iswindows() ? "bin" : joinpath("lib", "julia"), "sys." * Libdl.dlext)
+
     create_sysimage_workaround(ctx, sysimage_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         julia_init_c_file=nothing,
@@ -698,7 +699,8 @@ function create_executable_from_sysimg(exe_path::String,
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    cmd = `$TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    relsysimg = relpath(sysimage_path, dirname(exe_path))
+    cmd = `-DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     run_compiler(cmd)
 
     return nothing
@@ -920,7 +922,8 @@ function create_sysimage_workaround(
     project = dirname(ctx.env.project_file)
 
     if !incremental
-        base_sysimage = tempname()
+        tmp = mktempdir()
+        base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
         create_sysimage(String[]; sysimage_path=base_sysimage, project,
                         incremental=false, filter_stdlibs, cpu_target)
     else
