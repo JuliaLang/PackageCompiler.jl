@@ -71,6 +71,6 @@ end
 
 function rpath_sysimage()
     Sys.iswindows() ? `` :
-    Sys.isapple()   ? `-Wl,-rpath,'@executable_path' -Wl,-rpath,'@executable_path/julia'` :
+    Sys.isapple()   ? `-Wl,-rpath,'@loader_path' -Wl,-rpath,'@loader_path/julia'` :
                       `-Wl,-rpath,\$ORIGIN:\$ORIGIN/julia`
 end
