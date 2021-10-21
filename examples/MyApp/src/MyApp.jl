@@ -15,7 +15,7 @@ end
 
 fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
 
-Base.@ccallable function julia_main()::Cint
+function julia_main()::Cint
     try
         real_main()
     catch
@@ -25,10 +25,6 @@ Base.@ccallable function julia_main()::Cint
     return 0
 end
 
-Base.@ccallable function second_main()::Cint
-    println("Hello from second main")
-    return 0
-end
 
 function is_crayons_loaded()
     Base.PkgId(Base.UUID("a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"), "Crayons") in keys(Base.loaded_modules)
@@ -89,5 +85,22 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     real_main()
 end
+
+# Used for testing
+function second_main()::Cint
+    println("Hello from second main")
+    return 0
+end
+
+function wrong_return_type()
+    return "oops"
+end
+
+function erroring()
+    1 + "foo"
+    return 0
+end
+
+
 
 end # module

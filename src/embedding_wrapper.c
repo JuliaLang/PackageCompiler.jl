@@ -21,8 +21,22 @@ JULIA_DEFINE_FAST_TLS()
 
 // TODO: Windows wmain handling as in repl.c
 
-// Declare C prototype of a function defined in Julia
-int JULIA_MAIN();
+jl_value_t *checked_eval_string(const char* code)
+{
+    jl_value_t *result = jl_eval_string(code);
+    if (jl_exception_occurred()) {
+        // none of these allocate, so a gc-root (JL_GC_PUSH) is not necessary
+        jl_call2(
+                jl_get_function(jl_base_module, "showerror"),
+                jl_stderr_obj(),
+                jl_exception_occurred());
+        jl_printf(jl_stderr_stream(), "\n");
+        jl_atexit_hook(1);
+        exit(1);
+    }
+    assert(result && "Missing return value but no exception occurred!");
+    return result;
+}
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
@@ -82,19 +96,24 @@ int main(int argc, char *argv[])
     putenv(depot_path_env);
     putenv(load_path_env);
 
-    // JULIAC_PROGRAM_LIBNAME defined on command-line for compilation
-    jl_options.image_file = JULIAC_PROGRAM_LIBNAME;
-    julia_init(JL_IMAGE_JULIA_HOME);
+    jl_init();
 
     // Initialize Core.ARGS with the full argv.
     jl_set_ARGS(program_argc, argv);
 
     // Update ARGS and PROGRAM_FILE
-    jl_eval_string("append!(empty!(Base.ARGS), Core.ARGS)");
-    jl_eval_string("@eval Base PROGRAM_FILE = popfirst!(ARGS)");
+    checked_eval_string("append!(empty!(Base.ARGS), Core.ARGS)");
+    checked_eval_string("@eval Base PROGRAM_FILE = popfirst!(ARGS)");
 
     // call the work function, and get back a value
-    int retcode = JULIA_MAIN();
+    jl_value_t *jl_retcode = checked_eval_string(JULIA_MAIN "()");
+    int32_t retcode = 0;
+    if (!jl_typeis(jl_retcode, jl_int32_type)) {
+        fprintf(stderr, "ERROR: expected a Cint return value from function " JULIA_MAIN "\n");
+        retcode = 1;
+    } else {
+        retcode = jl_unbox_int32(jl_retcode);
+    }
 
     // Cleanup and gracefully exit
     free(depot_path_env);

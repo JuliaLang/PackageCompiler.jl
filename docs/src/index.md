@@ -80,8 +80,6 @@ PackageCompiler 2.0 comes with a few breaking changes.
 - The functionality for replacing the default sysimage (`replace_default=true`) has been removed. Instead, you can e.g. 
   create an alias or shortcut that starts Julia with a custom sysimage by specifying the `--sysimage=<PATH/TO/SYSIMAGE>` 
   command line option.
-- Apps now need to make their "main"-functions ccallable by adding `Base.@ccallable` before the function and `::Cint` as a return type,
-  for example `Base.@ccallable julia_main()::Cint ...`.
 - Lazy artifacts (those not downloaded until used) are not included in apps by default anymore. Use `include_lazy_artifacts=true` to re-enable this.
 - Passing no packages to `create_sysimage` will now include all packages in the given project instead of a syimage with no packages.
   Use `String[]` as a first argument if you want the old behavior.

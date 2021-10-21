@@ -19,7 +19,7 @@ The library is expected to provide C-callable functions for the functionality it
 is providing, defined using the `Base.@ccallable` macro:
 
 ```julia
-Base.@ccallable function increment(count::Cint)::Cint
+function increment(count::Cint)::Cint
     count += 1
     println("Incremented count: $count")
     return count
