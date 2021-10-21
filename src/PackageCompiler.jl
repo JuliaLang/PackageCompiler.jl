@@ -709,7 +709,7 @@ function create_executable_from_sysimg(exe_path::String,
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
     relsysimg = relpath(sysimage_path, dirname(exe_path))
-    cmd = `-DJULIA_MAIN=$julia_main DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=$julia_main -DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
