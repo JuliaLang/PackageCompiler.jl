@@ -154,7 +154,7 @@ end
             lib_path = joinpath(lib_target_dir, (Sys.iswindows() ? "bin" : "lib"), "$(prefix)inc." * Libdl.dlext)
             orig_pwd = pwd()
             if Sys.isapple()
-                cd(dirname(lib_path))
+                cd(dirname(lib_path)) # Why is this
                 lib_path = basename(lib_path)
             end
             try
