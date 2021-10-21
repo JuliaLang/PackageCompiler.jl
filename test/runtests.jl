@@ -56,22 +56,20 @@ end
     for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
-            binary_name_args = ("CustomName", nothing)
         else
             filter_stdlibs = (false,)
-            binary_name_args = (nothing,)
         end
-        for (filter, name) in zip(filter_stdlibs, binary_name_args)
+        for filter in filter_stdlibs
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), app_name=name)
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), executables=["MyApp" => "julia_main", "SecondApp" => "second_main"])
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
             rm(joinpath(new_depot, "packages"); recursive=true)
             rm(joinpath(new_depot, "compiled"); recursive=true)
             rm(joinpath(new_depot, "artifacts"); recursive=true)
-            app_name = name !== nothing ? name : "MyApp"
+            app_name = "MyApp"
             app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$app_path I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
 
@@ -108,6 +106,12 @@ end
             @test occursin("From worker 3:\t8", app_output)
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
+
+            # Test second app
+            app_name = "SecondApp"
+            app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
+            app_output = read(`$app_path`, String)
+            @test occursin("Hello from second main", app_output)
         end
     end
 
