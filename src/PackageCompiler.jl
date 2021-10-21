@@ -21,7 +21,6 @@ const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c"
 const DEFAULT_JULIA_INIT = @path joinpath(@__DIR__, "julia_init.c")
 const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
 
-
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
     if Sys.ARCH === :i686
@@ -895,11 +894,13 @@ function create_library(package_dir::String,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true)
 
-    julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
+    julia_init_h_file = RelocatableFolders.getpath(DEFAULT_JULIA_INIT_HEADER)
 
     if !(julia_init_h_file in header_files)
         push!(header_files, julia_init_h_file)
     end
+
+    @info "Header files" header_files
 
     if version isa String
         version = parse(VersionNumber, version)
