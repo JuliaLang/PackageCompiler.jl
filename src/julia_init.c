@@ -24,19 +24,26 @@ const char *get_sysimage_path(const char *libname)
 {
     if (libname == NULL)
     {
-        jl_error("Please specify `libname` when requesting the sysimage path");
+        jl_error("julia: Specify `libname` when requesting the sysimage path");
         exit(1);
     }
 
-    void *handle;
-    const char *libpath;
+    void *handle = jl_load_dynamic_library(libname, JL_RTLD_DEFAULT, 0);
+    if (handle == NULL)
+    {
+        jl_errorf("julia: Failed to load library at %s", libname);
+        exit(1);
+    }
 
-    handle = jl_load_dynamic_library(libname, JL_RTLD_DEFAULT, 0);
-    libpath = jl_pathname_for_handle(handle);
+    const char *libpath = jl_pathname_for_handle(handle);
+    if (libpath == NULL)
+    {
+        jl_errorf("julia: Failed to retrieve path name for library at %s", libname);
+        exit(1);
+    }
 
     return libpath;
 }
-
 void set_depot_path(char *sysimage_path)
 {
     // dirname mutates the original string on some systems,
