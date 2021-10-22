@@ -881,10 +881,12 @@ function create_library(package_dir::String,
         soname)
 
     if version !== nothing && Sys.isunix()
-        base_file = get_sysimg_file(lib_name)
-        @debug "creating symlinks for $compat_file and $base_file"
-        symlink(sysimg_path, joinpath(lib_dir, compat_file))
-        symlink(sysimg_path, joinpath(lib_dir, base_file))
+        cd(dirname(sysimg_path)) do
+            base_file = get_sysimg_file(lib_name)
+            @debug "creating symlinks for $compat_file and $base_file"
+            symlink(sysimg_file, compat_file)
+            symlink(sysimg_file, base_file)
+        end
     end
 end
 
