@@ -35,6 +35,7 @@ end
     opt_during_sysimage = Base.JLOptions().opt_level
     print_opt() = println("opt: -O\$opt_during_sysimage")
     """)
+    #=
     create_sysimage(; sysimage_path=sysimage_path,
                               project=new_project,
                               precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
@@ -132,13 +133,14 @@ end
             @test p.exitcode == 1
         end
     end
+    =#
 
     if !is_slow_ci
         # Test library creation
         lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
         lib_target_dir = joinpath(tmp, "MyLibCompiled")
 
-        incremental = false
+        incremental = true
         filter = true
         lib_name = "inc"
 
@@ -151,7 +153,7 @@ end
     
         prefix = Sys.iswindows() ? "" : "lib"
         lib_path = joinpath(lib_target_dir, (Sys.iswindows() ? "bin" : "lib"), "$(prefix)inc." * Libdl.dlext)
-        if Sys.iswindows() || Sys.islinux()
+        if false # Sys.iswindows() || Sys.islinux()
             # TODO: Figure out why linux is failing
             # Windows fails when trying to load libpcre...
             @test_broken false
@@ -176,7 +178,7 @@ end
                 pythonfile = tempname()
                 write(pythonfile, pythoncontent)
           
-                py_output = read(`python $pythonfile`, String)
+                py_output = run(`python $pythonfile`)
 
                 @test occursin("Incremented count: 6 (Cint)", py_output)
                 @test occursin("The result of 2*5^2 - 10 == 40.000000", py_output)
@@ -188,6 +190,7 @@ end
         rm(tmp_lib_src_dir; recursive=true)
     end
 
+    #=
     # Test creating an empty sysimage
     if !is_slow_ci
         tmp = mktempdir()
@@ -197,4 +200,5 @@ end
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
     end
+    =#
 end
