@@ -63,15 +63,20 @@ end
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), executables=["MyApp" => "julia_main", "SecondApp" => "second_main"])
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), 
+                       executables=["MyApp" => "julia_main", 
+                                    "SecondApp" => "second_main",
+                                    "ReturnType" => "wrong_return_type",
+                                    "Error" => "erroring",
+                                    "Undefined" => "undefined",
+                                    ])
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
             rm(joinpath(new_depot, "packages"); recursive=true)
             rm(joinpath(new_depot, "compiled"); recursive=true)
             rm(joinpath(new_depot, "artifacts"); recursive=true)
-            app_name = "MyApp"
-            app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
-            app_output = read(`$app_path I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
+            app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
+            app_output = read(`$(app_path("MyApp")) I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
 
             # Check stdlib filtering
             if filter == true
@@ -82,7 +87,7 @@ end
             # Check dependency run
             @test occursin("Example.domath", app_output)
             # Check PROGRAM_FILE
-            @test occursin("Base.PROGRAM_FILE = $(repr(app_path))", app_output)
+            @test occursin("Base.PROGRAM_FILE = $(repr(app_path("MyApp")))", app_output)
             # Check jll package runs
             @test occursin("Hello, World!", app_output)
             # Check artifact runs
@@ -108,10 +113,23 @@ end
             @test occursin("From worker 5:\t8", app_output)
 
             # Test second app
-            app_name = "SecondApp"
-            app_path = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
-            app_output = read(`$app_path`, String)
+            app_output = read(`$(app_path("SecondApp"))`, String)
             @test occursin("Hello from second main", app_output)
+
+            io = IOBuffer()
+            p = run(pipeline(ignorestatus(`$(app_path("ReturnType"))`), stderr=io;))
+            @test occursin("ERROR: expected a Cint return value from function MyApp.wrong_return_type", String(take!(io)))
+            @test p.exitcode == 1
+
+            io = IOBuffer()
+            p = run(pipeline(ignorestatus(`$(app_path("Error"))`), stderr=io;))
+            @test occursin("MethodError: no method matching +(", String(take!(io)))
+            @test p.exitcode == 1
+
+            io = IOBuffer()
+            p = run(pipeline(ignorestatus(`$(app_path("Undefined"))`), stderr=io;))
+            @test occursin("UndefVarError: undefined not defined", String(take!(io)))
+            @test p.exitcode == 1
         end
     end
 

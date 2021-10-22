@@ -627,7 +627,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - executables::`Vector{Pair{String, String}}:`: A list of executables to
   produce, given as pairs of `executable_name => julia_main` where
   `executable_name` is the name of the produced executable with the
-  (`Base.@ccallable`) julia function `julia_main`. If not provided, the name
+  julia function `julia_main`. If not provided, the name
   of the package (as specified in `Project.toml`) is used and the main function
   in julia is taken as `julia_main`.
 
@@ -687,29 +687,34 @@ function create_app(package_dir::String,
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
 
-    sysimage_path = joinpath(app_dir, Sys.iswindows() ? "bin" : joinpath("lib", "julia"), "sys." * Libdl.dlext)
+    sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
-    create_sysimage_workaround(ctx, sysimage_path, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        julia_init_c_file=nothing,
-        version=nothing, soname=nothing, sysimage_build_args, include_transitive_dependencies)
+    package_name = ctx.env.pkg.name
+    project = dirname(ctx.env.project_file)
+
+    create_sysimage([package_name]; sysimage_path, project,
+                    incremental,
+                    filter_stdlibs,
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    cpu_target,
+                    sysimage_build_args,
+                    include_transitive_dependencies)
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), sysimage_path, c_driver_program, julia_main)
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
     end
 end
 
 
 function create_executable_from_sysimg(exe_path::String,
-                                       sysimage_path::String,
                                        c_driver_program::String,
                                        julia_main::String)      
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    relsysimg = relpath(sysimage_path, dirname(exe_path))
-    cmd = `-DJULIA_MAIN=$julia_main -DJULIAC_PROGRAM_LIBNAME=$(repr(relsysimg)) $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(sysimage_path) -O2 $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
@@ -906,8 +911,6 @@ function get_sysimg_file(name::String;
     return sysimg_file
 end
 
-
-
 # Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
 # by first creating a normal "empty" sysimage and then use that to finally create the one
 # with the @ccallable function.
@@ -952,8 +955,6 @@ function create_sysimage_workaround(
 
     return
 end
-
-
 ############
 # Bundling #
 ############
