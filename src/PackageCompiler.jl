@@ -595,6 +595,13 @@ end
 # App #
 #######
 
+const IS_OFFICIAL = occursin("Official https://julialang.org/ release", sprint(Base.banner))
+function warn_official()
+    if !IS_OFFICIAL
+        @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
+    end
+end
+
 """
     create_app(package_dir::String, compiled_app::String; kwargs...)
 
@@ -673,6 +680,7 @@ function create_app(package_dir::String,
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
+    warn_official()
 
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
@@ -835,6 +843,9 @@ function create_library(package_dir::String,
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true)
+
+                            
+    warn_official()
 
     julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
 
