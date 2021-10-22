@@ -1097,7 +1097,9 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
             cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
         end
     end
-    println("  Total artifact file size: ", pretty_byte_str(total_size))
+    if total_size > 0
+        println("  Total artifact file size: ", pretty_byte_str(total_size))
+    end
     return
 end
 
