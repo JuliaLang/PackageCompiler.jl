@@ -44,49 +44,37 @@ const char *get_sysimage_path(const char *libname)
 
     return libpath;
 }
-void set_depot_path(char *sysimage_path)
+
+void set_depot_load_path(const char *root_dir)
 {
-    // dirname mutates the original string on some systems,
-    // so make a copy
-    char *_sysimage_path = strdup(sysimage_path);
-    char *root_dir = dirname(dirname(_sysimage_path));
-    int root_dir_len = strlen(root_dir);
+    #ifdef _WIN32
+        char *julia_share_subdir = "\\share\\julia";
+    #else
+        char *julia_share_subdir = "/share/julia";
+    #endif
+    char *share_dir = calloc(sizeof(char), strlen(root_dir) + strlen(julia_share_subdir) + 1);
+    strcat(share_dir, root_dir);
+    strcat(share_dir, julia_share_subdir);
 
-    // for library bundles, we create the depot path under
-    // <root_dir>/share/julia
-#ifdef _WIN32
-    char *depot_subdir = "\\share\\julia";
-#else
-    char *depot_subdir = "/share/julia";
-#endif
-    int depot_dir_len = strlen(depot_subdir);
-
-    int full_path_len = root_dir_len + depot_dir_len + 1;
-    char *dir = calloc(sizeof(char), full_path_len);
-
-    strcpy(dir, root_dir);
-    strcat(dir, depot_subdir);
-    dir[full_path_len] = '\0';
-
-#ifdef _WIN32
-    _putenv_s("JULIA_DEPOT_PATH", dir);
-    _putenv_s("JULIA_LOAD_PATH", "@");
-#else
-    setenv("JULIA_DEPOT_PATH", dir, 1);
-    setenv("JULIA_LOAD_PATH", "@", 1);
-#endif
-    free(_sysimage_path);
-    free(dir);
+    #ifdef _WIN32
+        _putenv_s("JULIA_DEPOT_PATH", share_dir);
+        _putenv_s("JULIA_LOAD_PATH", share_dir);
+    #else
+        setenv("JULIA_DEPOT_PATH", share_dir, 1);
+        setenv("JULIA_LOAD_PATH", share_dir, 1);
+    #endif
+    free(share_dir);
 }
 
 void init_julia(int argc, char **argv)
 {
     setup_args(argc, argv);
 
-    const char *sysimage_path;
-    sysimage_path = get_sysimage_path(JULIAC_PROGRAM_LIBNAME);
-
-    set_depot_path((char *)sysimage_path);
+    const char *sysimage_path = get_sysimage_path(JULIAC_PROGRAM_LIBNAME);
+    char *_sysimage_path = strdup(sysimage_path);
+    char *root_dir = dirname(dirname(_sysimage_path));
+    set_depot_load_path(root_dir);
+    free(_sysimage_path);
 
     jl_options.image_file = sysimage_path;
     julia_init(JL_IMAGE_CWD);

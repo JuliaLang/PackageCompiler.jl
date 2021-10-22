@@ -38,6 +38,26 @@ jl_value_t *checked_eval_string(const char* code)
     return result;
 }
 
+void set_depot_load_path(const char *root_dir)
+{
+    #ifdef _WIN32
+        char *julia_share_subdir = "\\share\\julia";
+    #else
+        char *julia_share_subdir = "/share/julia";
+    #endif
+        char *share_dir = calloc(sizeof(char), strlen(root_dir) + strlen(julia_share_subdir) + 1);
+        strcat(share_dir, root_dir);
+        strcat(share_dir, julia_share_subdir);
+
+    #ifdef _WIN32
+        _putenv_s("JULIA_DEPOT_PATH", share_dir);
+        _putenv_s("JULIA_LOAD_PATH", share_dir);
+    #else
+        setenv("JULIA_DEPOT_PATH", share_dir, 1);
+        setenv("JULIA_LOAD_PATH", share_dir, 1);
+    #endif
+}
+
 // main function (windows UTF16 -> UTF8 argument conversion code copied from julia's ui/repl.c)
 int main(int argc, char *argv[])
 {
@@ -75,26 +95,7 @@ int main(int argc, char *argv[])
 
     // Set up LOAD_PATH and DEPOT_PATH
     char* root_dir = dirname(dirname(exe_path));
-    char* depot_str = "JULIA_DEPOT_PATH=";
-    char* load_path_str = "JULIA_LOAD_PATH=";
-#ifdef _WIN32
-    char *julia_share_subdir = "\\share\\julia";
-#else
-    char *julia_share_subdir = "/share/julia";
-#endif
-    char *depot_path_env = calloc(sizeof(char), strlen(depot_str)    + strlen(root_dir) + strlen(julia_share_subdir) + 1);
-    char *load_path_env  = calloc(sizeof(char), strlen(load_path_str)+ strlen(root_dir) + strlen(julia_share_subdir) + 1);
-
-    strcat(depot_path_env, depot_str);
-    strcat(depot_path_env, root_dir);
-    strcat(depot_path_env, julia_share_subdir);
-
-    strcat(load_path_env, load_path_str);
-    strcat(load_path_env, root_dir);
-    strcat(load_path_env, julia_share_subdir); 
-
-    putenv(depot_path_env);
-    putenv(load_path_env);
+    set_depot_load_path(root_dir);
 
     jl_init();
 
@@ -116,8 +117,6 @@ int main(int argc, char *argv[])
     }
 
     // Cleanup and gracefully exit
-    free(depot_path_env);
-    free(load_path_env);
     free(exe_path);
     jl_atexit_hook(retcode);
     return retcode;
