@@ -509,7 +509,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             sysimage_build_args)
     object_files = [object_file]
     if julia_init_c_file !== nothing
-        push!(object_files, compile_c_init_julia(julia_init_c_file, sysimage_path))
+        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
     end
     create_sysimg_from_object_file(object_files,
                                 sysimage_path;
@@ -569,12 +569,12 @@ function get_extra_linker_flags(version, compat_level, soname)
     return extra
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_path::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String)
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_path)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -881,10 +881,12 @@ function create_library(package_dir::String,
         soname)
 
     if version !== nothing && Sys.isunix()
-        base_file = get_sysimg_file(name)
-        @debug "creating symlinks for $compat_file and $base_file"
-        symlink(sysimg_path, joinpath(lib_dir, compat_file))
-        symlink(sysimg_path, joinpath(lib_dir, base_file))
+        cd(dirname(sysimg_path)) do
+            base_file = get_sysimg_file(lib_name)
+            @debug "creating symlinks for $compat_file and $base_file"
+            symlink(sysimg_file, compat_file)
+            symlink(sysimg_file, base_file)
+        end
     end
 end
 
