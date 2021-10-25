@@ -998,6 +998,7 @@ end
 
 function bundle_julia_libraries(dest_dir)
     app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
+    mkpath(app_libdir)
     cp(julia_libdir(), app_libdir; force=true)
     # We do not want to bundle the sysimg
     default_sysimg_name = "sys." * Libdl.dlext
