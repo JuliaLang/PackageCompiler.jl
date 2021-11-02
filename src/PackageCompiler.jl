@@ -1081,23 +1081,33 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     total_size = 0
     sort!(bundled_artifacts)
 
+    bundled_shas = Set{String}()
     for (i, (pkg, artifacts)) in enumerate(bundled_artifacts)
         last_pkg = i == length(bundled_artifacts)
         mark_pkg = last_pkg ? "└──" : "├──"
         print("  $mark_pkg $pkg")
+        # jlls often only have a single artifact with the same name as the package itself
+        std_jll = endswith(pkg, "_jll") && length(artifacts) == 1
+        if !std_jll
+            println()
+        end
         for (j, (artifact, artifact_path)) in enumerate(artifacts)
-            size = recursive_dir_size(artifact_path)
+            git_tree_sha_artifact = basename(artifact_path)
+            already_bundled = git_tree_sha_artifact in bundled_shas
+            size = already_bundled ? 0 : recursive_dir_size(artifact_path)
             total_size += size
-            # jlls only have a single artifact with the same name as the package itself
-            if endswith(pkg, "_jll") && length(artifacts) == 1
-                println(" - ", pretty_byte_str(size), "")
+            size_str = already_bundled ? "[already bundled]" : pretty_byte_str(size)
+            if std_jll
+                println(" - ", size_str, "")
             else
-                println("")
                 mark_artifact = j == length(artifacts) ? "└──" : "├──"
                 mark_init = last_pkg ? " " : "│"
-                println("  $mark_init   ", mark_artifact, " ", artifact, " - ", pretty_byte_str(size), "")
+                println("  $mark_init   ", mark_artifact, " ", artifact, " - ", size_str, "")
             end
-            cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
+            if !already_bundled
+                cp(artifact_path, joinpath(artifact_app_path, git_tree_sha_artifact))
+                push!(bundled_shas, git_tree_sha_artifact)
+            end
         end
     end
     if total_size > 0
