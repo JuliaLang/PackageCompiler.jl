@@ -2,10 +2,12 @@ name: Run tests
 on:
   pull_request:
     branches:
-      - master
+      - 'master'
+      - 'release-*'
   push:
     branches:
-      - master
+      - 'master'
+      - 'release-*'
     tags: '*'
 jobs:
   test:
