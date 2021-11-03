@@ -551,7 +551,7 @@ function create_sysimage(packages::Union{Symbol, Vector{String}, Vector{Symbol}}
 
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-  
+
 
     check_packages_in_project(ctx, packages)
 
@@ -1031,7 +1031,7 @@ function _create_app(package_dir::String,
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=include_lazy_artifacts)
     isapp && bundle_julia_executable(dest_dir)
-    # TODO: Should also bundle project and update load_path for library 
+    # TODO: Should also bundle project and update load_path for library
     isapp && bundle_project(ctx, dest_dir)
 
     library_only && bundle_headers(dest_dir, header_files)
@@ -1174,7 +1174,8 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
     platform = Base.BinaryPlatforms.HostPlatform()
     depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
-   
+
+    bundled_shas = Set{String}()
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
@@ -1187,14 +1188,17 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
                 for name in keys(artifacts)
                     @debug "  \"$name\""
                     artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
-                    mkpath(artifact_app_path)
-                    cp(artifact_path, joinpath(artifact_app_path, basename(artifact_path)))
+                    git_tree_sha_artifact = basename(artifact_path)
+                    if !(git_tree_sha_artifact in bundled_shas)
+                        mkpath(artifact_app_path)
+                        cp(artifact_path, joinpath(artifact_app_path, git_tree_sha_artifact))
+                        push!(bundled_shas, git_tree_sha_artifact)
+                    end
                 end
                 break
             end
         end
     end
-
 
     return
 end
