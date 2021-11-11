@@ -394,7 +394,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image. Defaults
-  to `nativea`.
+  to `native`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
