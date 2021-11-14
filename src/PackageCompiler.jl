@@ -520,7 +520,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     rm(object_file; force=true)
 
     if Sys.isapple()
-        cd(dirname(sysimage_path)) do
+        cd(dirname(abspath(sysimage_path))) do
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
             run(cmd)
