@@ -25,7 +25,7 @@ Pkg.generate("MyApp")
 In the code for the package, there should be a function with the signature
 
 ```julia
-Base.@ccallable function julia_main()::Cint
+function julia_main()::Cint
   # do something based on ARGS?
   return 0 # if things finished successfully
 end
@@ -121,11 +121,10 @@ function using the `executables` keyword argument to `create_app`. As an
 example, if you want to have two executables called `A` and `B` calling the
 julia functions `main_A` and `main_B`, respectively, you would pass
 `executables= ["A" => "main_A", "B" => "main_B"]`.  Note that `main_A` and `main_B`
-both need to be annotated with `Base.@ccallable`, not take any arguments and be
-annotated to return a `Cint`, for example:
+both need to not take any arguments and be annotated to return a `Cint`, for example:
 
 ```jl
-Base.@ccallable function main_A()::Cint
+function main_A()::Cint
     ...
 end
 ```
