@@ -23,7 +23,7 @@ There are three main workflows:
    as its entry point.
 
 3. Alternatively, you can create a [C library](@ref libraries). In this case, your package should
-   define c-callable functions to be included in the sysimage. As with apps, generating a
+   define C-callable functions to be included in the sysimage. As with apps, generating a
    library bundles together Julia and all dependencies in a (hopefully) redistributable
    directory structure that can be moved to other machines (of the same architecture).
 
