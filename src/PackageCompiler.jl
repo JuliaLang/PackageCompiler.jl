@@ -543,7 +543,7 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     # Prevent compiler from stripping all symbols from the shared lib.
     o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
     extra = get_extra_linker_flags(version, compat_level, soname)
-    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(ldlibs()) $extra`
+    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
     run_compiler(cmd; cplusplus=true)
     return nothing
 end

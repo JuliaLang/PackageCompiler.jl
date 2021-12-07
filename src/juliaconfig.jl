@@ -41,14 +41,14 @@ function ldflags()
 end
 
 function ldlibs()
-    libnames = isdebugbuild() ? `-ljulia-debug -ljulia-internal-debug` : 
-                                `-ljulia       -ljulia-internal`
+    libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
+                                "-ljulia       -ljulia-internal"
     if Sys.islinux()
-        return `-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames`
+        return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
     elseif Sys.iswindows()
-        return `$libnames -lopenlibm`
+        return "$libnames -lopenlibm"
     else
-        return `$libnames`
+        return "$libnames"
     end
 end
 
