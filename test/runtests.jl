@@ -8,7 +8,6 @@ ENV["JULIA_DEBUG"] = "PackageCompiler"
 # Make a new depot
 new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
-cp(joinpath(DEPOT_PATH[1], "registries", "General"), joinpath(new_depot, "registries", "General"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
