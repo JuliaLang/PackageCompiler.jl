@@ -249,7 +249,8 @@ function create_sysimg_object_file(object_file::String,
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
-                            sysimage_build_args::Cmd)
+                            sysimage_build_args::Cmd,
+                            extra_precompiles::String)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -300,6 +301,9 @@ function create_sysimg_object_file(object_file::String,
                     # See julia issue #28808
                     @debug "failed to execute \$statement"
                 end
+            end
+            @eval PrecompileStagingArea begin
+                $extra_precompiles
             end
         end # module
         """
@@ -418,6 +422,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          version=nothing,
                          soname=nothing,
                          compat_level::String="major",
+                         extra_precompiles::String = "",
                          )
 
     if filter_stdlibs && incremental
@@ -506,7 +511,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             precompile_statements_file,
                             cpu_target,
                             script,
-                            sysimage_build_args)
+                            sysimage_build_args,
+                            extra_precompiles)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
@@ -700,6 +706,15 @@ function create_app(package_dir::String,
     package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
 
+    # add precompile statements for functions that will be called from the C main() wrapper
+    precompiles = String[]
+    for (_, julia_main) in executables
+        push!(precompiles, "isdefined($package_name, :$julia_main) && precompile(Tuple{typeof($package_name.$julia_main)})")
+    end
+    push!(precompiles, "precompile(Tuple{typeof(append!), Vector{String}, Vector{Any}})")
+    push!(precompiles, "precompile(Tuple{typeof(empty!), Vector{String}})")
+    push!(precompiles, "precompile(Tuple{typeof(popfirst!), Vector{String}})")
+
     create_sysimage([package_name]; sysimage_path, project,
                     incremental,
                     filter_stdlibs,
@@ -707,7 +722,8 @@ function create_app(package_dir::String,
                     precompile_statements_file,
                     cpu_target,
                     sysimage_build_args,
-                    include_transitive_dependencies)
+                    include_transitive_dependencies,
+                    extra_precompiles = join(precompiles, "\n"))
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
@@ -717,7 +733,7 @@ end
 
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
-                                       julia_main::String)      
+                                       julia_main::String)
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))

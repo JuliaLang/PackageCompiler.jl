@@ -102,7 +102,10 @@ int main(int argc, char *argv[]) {
 
     // Update ARGS and PROGRAM_FILE
     checked_eval_string("append!(empty!(Base.ARGS), Core.ARGS)");
-    checked_eval_string("@eval Base PROGRAM_FILE = popfirst!(ARGS)");
+    jl_value_t *firstarg = checked_eval_string("popfirst!(ARGS)");
+    JL_GC_PUSH1(&firstarg);
+    jl_set_global(jl_base_module, jl_symbol("PROGRAM_FILE"), firstarg);
+    JL_GC_POP();
 
     // call the work function, and get back a value
     jl_value_t *jl_retcode = checked_eval_string(JULIA_MAIN "()");
