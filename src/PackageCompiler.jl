@@ -672,6 +672,12 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `c_driver_program`: The C wrapper which serves as an entry point around each target in `executables`. 
+  Defaults to PackageCompiler's embedding_wrapper.c
+
+- `c_defines`: C definitions provided on the CLI for `c_driver_program`. This is only useful for users who are 
+  providing their own `c_driver_program` and wish to provide it definitions at compile time.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -682,6 +688,7 @@ function create_app(package_dir::String,
                     filter_stdlibs::Bool=false,
                     force::Bool=false,
                     c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
+                    c_defines::Dict{String, String}=Dict{String, String}(),
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
@@ -726,19 +733,28 @@ function create_app(package_dir::String,
                     extra_precompiles = join(precompiles, "\n"))
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, c_defines, string(package_name, ".", julia_main))
     end
 end
 
 
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
+                                       c_defines::Dict{String, String},
                                        julia_main::String)
     c_driver_program = abspath(c_driver_program)
+
+    c_defines["JULIA_MAIN"] = julia_main
+
+    define_flags = ""
+    for (key, val) in c_defines
+        define_flags = define_flags * "-D$(key)=\"$(val)\" "
+    end
+
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
+    cmd = `$define_flags $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
