@@ -55,6 +55,7 @@ end
 function cflags()
     flags = IOBuffer()
     print(flags, "-std=gnu99")
+    print(flags, " -DJULIA_HAS_IFUNC_SUPPORT=1")
     include = shell_escape(julia_includedir())
     print(flags, " -I", include)
     if Sys.isunix()
