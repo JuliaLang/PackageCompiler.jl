@@ -38,7 +38,7 @@ end
 
 function bitflag()
     Sys.ARCH === :i686   ? `-m32` :
-    Sys.ARCH === :x86_64 ? `-m64` : 
+    Sys.ARCH === :x86_64 ? `-m64` :
         ``
 end
 
@@ -151,8 +151,8 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
                     break
                 end
             end
-        end 
-        found_compiler || error("could not find a compiler, looked for ", 
+        end
+        found_compiler || error("could not find a compiler, looked for ",
             join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
     end
     if path !== nothing
@@ -187,7 +187,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)") 
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
@@ -348,11 +348,11 @@ function create_sysimg_object_file(object_file::String,
     outputo_file = tempname()
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
-   
+
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image") 
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image")
     TerminalSpinners.@spin spinner run(cmd)
     return
 end
@@ -453,7 +453,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()    
+        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
         base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
@@ -503,7 +503,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Create the sysimage
     object_file = tempname() * ".o"
-    
+
     create_sysimg_object_file(object_file, packages, packages_sysimg;
                             project,
                             base_sysimage,
@@ -541,7 +541,7 @@ function create_sysimg_from_object_file(object_files::Vector{String},
                                         version,
                                         compat_level::String,
                                         soname::Union{Nothing, String})
- 
+
     if soname === nothing && (Sys.isunix() && !Sys.isapple())
         soname = basename(sysimage_path)
     end
@@ -860,7 +860,7 @@ function create_library(package_dir::String,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true)
 
-                            
+
     warn_official()
 
     julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
@@ -930,7 +930,7 @@ function get_library_filename(name::String;
     version === nothing && return "$name.$dlext"
 
     version = get_compat_version_str(version, compat_level)
-    
+
     sysimg_file = (
         Sys.isapple() ? "$name.$version.$dlext" :  # libname.1.2.3.dylib
         Sys.isunix() ? "$name.$dlext.$version" :   # libname.so.1.2.3
