@@ -886,9 +886,9 @@ function create_library(package_dir::String,
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
-    sysimg_file = get_sysimg_file(lib_name; version)
+    sysimg_file = get_library_filename(lib_name; version)
     sysimg_path = joinpath(lib_dir, sysimg_file)
-    compat_file = get_sysimg_file(lib_name; version, compat_level)
+    compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
@@ -898,7 +898,7 @@ function create_library(package_dir::String,
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
-            base_file = get_sysimg_file(lib_name)
+            base_file = get_library_filename(lib_name)
             @debug "creating symlinks for $compat_file and $base_file"
             symlink(sysimg_file, compat_file)
             symlink(sysimg_file, base_file)
@@ -915,12 +915,12 @@ function get_compat_version_str(version::VersionNumber, level::String)
         error("Unknown level: $level")
 end
 
-function get_sysimg_file(name::String;
-                         version::Union{VersionNumber, Nothing}=nothing,
-                         compat_level::String="patch")
+function get_library_filename(name::String;
+                              version::Union{VersionNumber, Nothing}=nothing,
+                              compat_level::String="patch")
 
     dlext = Libdl.dlext
-    Sys.iswindows() && return "sys.$dlext"
+    Sys.iswindows() && return "$name.$dlext"
 
     # For libraries on Unix/Apple, make sure the name starts with "lib"
     if !startswith(name, "lib")
