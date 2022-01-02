@@ -389,7 +389,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
    transitive dependencies into the sysimage. This only makes a difference if some
-   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
+   packages do not load all their dependencies when themselves are loaded. Defaults to `false`.
 
 ### Advanced keyword arguments
 
@@ -415,7 +415,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
-                         include_transitive_dependencies::Bool=true,
+                         include_transitive_dependencies::Bool=false,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
@@ -664,7 +664,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a difference if some
-  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
+  packages do not load all their dependencies when themselves are loaded. Defaults to `false`.
 
 ### Advanced keyword arguments
 
@@ -685,7 +685,7 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
-                    include_transitive_dependencies::Bool=true)
+                    include_transitive_dependencies::Bool=false)
     warn_official()
 
     ctx = create_pkg_context(package_dir)
@@ -834,7 +834,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a difference if some
-  packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
+  packages do not load all their dependencies when themselves are loaded. Defaults to `false`.
 
 ### Advanced keyword arguments
 
@@ -858,7 +858,7 @@ function create_library(package_dir::String,
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
-                        include_transitive_dependencies::Bool=true)
+                        include_transitive_dependencies::Bool=false)
 
                             
     warn_official()
