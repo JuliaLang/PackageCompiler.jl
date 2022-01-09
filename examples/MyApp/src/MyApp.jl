@@ -22,7 +22,7 @@ function julia_main()::Cint
         Base.invokelatest(Base.display_error, Base.catch_stack())
         return 1
     end
-    return 0
+    return Cint(0)
 end
 
 
