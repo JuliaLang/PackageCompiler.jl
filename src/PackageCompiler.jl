@@ -391,6 +391,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    transitive dependencies into the sysimage. This only makes a difference if some
    packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `excluded_dependencies`: A Vector of names of the (tansitive) dependencies to be excluded
+  from the system image.
+
 ### Advanced keyword arguments
 
 - `base_sysimage::Union{Nothing, String}`: If a `String`, names an existing sysimage upon which to build
@@ -416,6 +419,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
                          include_transitive_dependencies::Bool=true,
+                         excluded_transitive_dependencies::Union{Nothing, Vector{String}}=nothing,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
@@ -490,7 +494,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                 end
                 pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
                 for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
+                    if !(pkgid_dep in packages_sysimg) # 
+                        if excluded_transitive_dependencies !== nothing && (pkgid_dep.name in excluded_transitive_dependencies)
+                            continue
+                        end
                         push!(packages_sysimg, pkgid_dep)
                         push!(new_frontier, pkgid_dep)
                     end
@@ -685,7 +692,9 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
-                    include_transitive_dependencies::Bool=true)
+                    include_transitive_dependencies::Bool=true,
+                    excluded_transitive_dependencies::Union{Nothing, Vector{String}}=nothing,
+                    )
     warn_official()
 
     ctx = create_pkg_context(package_dir)
@@ -723,6 +732,7 @@ function create_app(package_dir::String,
                     cpu_target,
                     sysimage_build_args,
                     include_transitive_dependencies,
+                    excluded_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"))
 
     for (app_name, julia_main) in executables
