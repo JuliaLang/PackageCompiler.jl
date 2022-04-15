@@ -637,7 +637,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
-- executables::`Vector{Pair{String, String}}:`: A list of executables to
+- `executables::Vector{Pair{String, String}}`: A list of executables to
   produce, given as pairs of `executable_name => julia_main` where
   `executable_name` is the name of the produced executable with the
   julia function `julia_main`. If not provided, the name
