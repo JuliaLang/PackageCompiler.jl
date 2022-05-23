@@ -5,6 +5,7 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
+using LLVMExtra_jll
 
 const myrand = rand()
 
@@ -72,13 +73,19 @@ function real_main()
         addprocs(4)
         @eval @everywhere using MyApp
     end
-   
+
     n = @distributed (+) for i = 1:20000000
         1
     end
     println("n = $n")
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
+
+    if isfile(LLVMExtra_jll.libLLVMExtra_path)
+        println("LLVMExtra path: ok!")
+    else
+        println("LLVMExtra path: fail!")
+    end
     return
 end
 

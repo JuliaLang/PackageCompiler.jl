@@ -62,8 +62,8 @@ end
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), 
-                       executables=["MyApp" => "julia_main", 
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
+                       executables=["MyApp" => "julia_main",
                                     "SecondApp" => "second_main",
                                     "ReturnType" => "wrong_return_type",
                                     "Error" => "erroring",
@@ -110,6 +110,8 @@ end
             @test occursin("From worker 3:\t8", app_output)
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
+
+            @test occursin("LLVMExtra path: ok!", app_output)
 
             # Test second app
             app_output = read(`$(app_path("SecondApp"))`, String)
