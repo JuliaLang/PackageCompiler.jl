@@ -1072,16 +1072,25 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
         bundled_artifacts_pkg = Pair{String, String}[]
-        # Check to see if this package has an (Julia)Artifacts.toml
-        for f in Pkg.Artifacts.artifact_names
-            artifacts_toml_path = joinpath(pkg_source_path, f)
-            if isfile(artifacts_toml_path)
-                artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
-                for name in keys(artifacts)
-                    artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
-                    push!(bundled_artifacts_pkg, name => artifact_path)
+        if isdefined(Pkg.Operations, :collect_artifacts)
+            for (artifacts_toml, artifacts) in Pkg.Operations.collect_artifacts(pkg_source_path; platform)
+                for (name, data) in artifacts
+                    Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml; platform)
+                    hash = Base.SHA1(data["git-tree-sha1"])
+                    push!(bundled_artifacts_pkg, name => artifact_path(hash))
                 end
-                break
+            end
+        else
+            for f in Pkg.Artifacts.artifact_names
+                artifacts_toml_path = joinpath(pkg_source_path, f)
+                if isfile(artifacts_toml_path)
+                    artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
+                    for name in keys(artifacts)
+                        artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
+                        push!(bundled_artifacts_pkg, name => artifact_path)
+                    end
+                    break
+                end
             end
         end
         if !isempty(bundled_artifacts_pkg)
