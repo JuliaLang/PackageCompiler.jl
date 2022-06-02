@@ -250,7 +250,8 @@ function create_sysimg_object_file(object_file::String,
                             cpu_target::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
-                            extra_precompiles::String)
+                            extra_precompiles::String,
+                            incremental::Bool)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -352,7 +353,12 @@ function create_sysimg_object_file(object_file::String,
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image")
+    if incremental
+        non = ""
+    else
+        non = "non"
+    end
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     TerminalSpinners.@spin spinner run(cmd)
     return
 end
@@ -512,7 +518,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             cpu_target,
                             script,
                             sysimage_build_args,
-                            extra_precompiles)
+                            extra_precompiles,
+                            incremental)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
