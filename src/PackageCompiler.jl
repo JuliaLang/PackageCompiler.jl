@@ -57,10 +57,7 @@ end
 #############
 
 function create_pkg_context(project)
-    if isfile(project) && (basename(project) in Base.project_names
-        # If the user passed in "/foo/bar/Project.toml", we convert that to `/foo/bar`.
-        project = dirname(project)
-    end
+    (basename(project) in Base.project_names) && return create_pkg_context(dirname(project))
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
     if project_toml_path === nothing
         error("could not find project at $(repr(project))")
