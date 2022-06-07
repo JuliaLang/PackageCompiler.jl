@@ -353,11 +353,7 @@ function create_sysimg_object_file(object_file::String,
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    if incremental
-        non = ""
-    else
-        non = "non"
-    end
+    non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     TerminalSpinners.@spin spinner run(cmd)
     return
