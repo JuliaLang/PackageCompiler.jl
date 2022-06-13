@@ -6,6 +6,7 @@ using Artifacts
 using Distributed
 using Random
 using LLVMExtra_jll
+using MKL_jll
 
 const myrand = rand()
 
@@ -85,6 +86,13 @@ function real_main()
         println("LLVMExtra path: ok!")
     else
         println("LLVMExtra path: fail!")
+    end
+    return
+
+    if isfile(MKL_jll.libmkl_core_path)
+        println("MKL_jll path: ok!")
+    else
+        println("MKL_jll path: fail!")
     end
     return
 end
