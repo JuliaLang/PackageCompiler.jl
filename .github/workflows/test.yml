@@ -16,9 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
+          - '1.6'
           - '1'
-          - '~1.7.0-0'
-          # - 'nightly'
+          - '1.7'
+          - 'nightly'
         julia-arch:
           - 'x64'
           - 'x86'
