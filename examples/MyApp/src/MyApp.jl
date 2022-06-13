@@ -87,7 +87,6 @@ function real_main()
     else
         println("LLVMExtra path: fail!")
     end
-    return
 
     if isfile(MKL_jll.libmkl_core_path)
         println("MKL_jll path: ok!")
