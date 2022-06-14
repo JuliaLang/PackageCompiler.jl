@@ -10,3 +10,4 @@
 *.dll
 *.dylib
 *.o
+test/references/Foo.jl/Manifest.toml

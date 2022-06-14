@@ -23,6 +23,7 @@ end
     Base.ACTIVE_PROJECT[] = new_project
     try
         Pkg.add("Example")
+        Pkg.develop(path=joinpath(@__DIR__, "references", "Foo.jl"))
     finally
         Base.ACTIVE_PROJECT[] = old_project
     end
