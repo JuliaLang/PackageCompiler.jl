@@ -5,7 +5,10 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
-using LLVMExtra_jll
+if VERSION >= v"1.7.0"
+    using LLVMExtra_jll
+end
+
 using MKL_jll
 
 const myrand = rand()
@@ -82,10 +85,12 @@ function real_main()
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
 
-    if isfile(LLVMExtra_jll.libLLVMExtra_path)
-        println("LLVMExtra path: ok!")
-    else
-        println("LLVMExtra path: fail!")
+    if VERSION >= v"1.7.0"
+        if isfile(LLVMExtra_jll.libLLVMExtra_path)
+            println("LLVMExtra path: ok!")
+        else
+            println("LLVMExtra path: fail!")
+        end
     end
 
     if isfile(MKL_jll.libmkl_core_path)

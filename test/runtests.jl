@@ -111,7 +111,9 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            @test occursin("LLVMExtra path: ok!", app_output)
+            if VERSION >= v"1.7.0"
+                @test occursin("LLVMExtra path: ok!", app_output)
+            end
             @test occursin("MKL_jll path: ok!", app_output)
 
             # Test second app
