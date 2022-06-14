@@ -1175,7 +1175,7 @@ function audit_sysimage_relocatability(sysimg_path::String; paths::Vector{String
             push!(found, "[$(m.offset)] $(m.match)")
         end
         if !isempty(found)
-            @warn "absolute path `$path` found in $(length(found)) places:" found
+            @warn """absolute path `$path` found in $(length(found)) places:\n$(join(found, "\n"))"""
             none_found = false
         end
     end
