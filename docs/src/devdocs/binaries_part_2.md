@@ -14,7 +14,7 @@ calling into the Julia runtime library (`libjulia`) from a C program.  A quite
 detail set of docs for how this is done can be found at the [embedding chapter
 in the Julia manual](https://docs.julialang.org/en/v1/manual/embedding/) and it
 is recommended to read before reading on.  Since this is supposed to highlight
-the interals of PackageCompiler, will not use the conveniences shown in that
+the internals of PackageCompiler, will not use the conveniences shown in that
 section (e.g. the `julia-config.jl` script) but it is good to know they exist.
 
 A rough outline of the steps we will take to create an executable are:
@@ -96,7 +96,7 @@ julia --startup-file=no --trace-compile=app_precompile.jl MyApp.jl "FL_insurance
 
 The `custom_sysimage.jl` script look similar to before with the exception that
 we added an include of the app file inside the anonymous module where the
-precompiliation statements are evaluated in:
+precompilation statements are evaluated in:
 
 ```julia
 Base.init_depot_path()

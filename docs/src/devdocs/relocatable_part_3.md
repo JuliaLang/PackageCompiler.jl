@@ -209,7 +209,7 @@ The plan is that on macOS and Linux the files are structured as:
 On Windows, we will just store everything in `bin` due to no convenient way of using `RPATH`.
 
 We create a new folder `lib` and copy the libraries into it (and remove the
-sysimage, since we will create cusom sysimage anyway):
+sysimage, since we will create custom sysimage anyway):
 
 ```
 ~/MyApp
