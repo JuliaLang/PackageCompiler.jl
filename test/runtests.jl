@@ -61,7 +61,7 @@ end
         for filter in filter_stdlibs
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
+            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
                        precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
                        executables=["MyApp" => "julia_main",
                                     "SecondApp" => "second_main",
@@ -111,7 +111,10 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            @test occursin("LLVMExtra path: ok!", app_output)
+            if VERSION >= v"1.7.0"
+                @test occursin("LLVMExtra path: ok!", app_output)
+            end
+            @test occursin("MKL_jll path: ok!", app_output)
 
             # Test second app
             app_output = read(`$(app_path("SecondApp"))`, String)

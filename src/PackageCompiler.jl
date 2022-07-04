@@ -8,6 +8,7 @@ using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
 using RelocatableFolders
+using TOML
 
 export create_sysimage, create_app, create_library
 
@@ -1055,6 +1056,40 @@ function pretty_byte_str(size)
     return @sprintf("%.3f %s", bytes, Base._mem_units[mb])
 end
 
+# Copy pasted from Pkg since `collect_artifacts` doesn't allow lazy artifacts to get installed
+function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=HostPlatform(), include_lazy::Bool)
+    # Check to see if this package has an (Julia)Artifacts.toml
+    artifacts_tomls = Tuple{String,Base.TOML.TOMLDict}[]
+
+    for f in Artifacts.artifact_names
+        artifacts_toml = joinpath(pkg_root, f)
+        if isfile(artifacts_toml)
+            selector_path = joinpath(pkg_root, ".pkg", "select_artifacts.jl")
+
+            # If there is a dynamic artifact selector, run that in an appropriate sandbox to select artifacts
+            if isfile(selector_path)
+                # Despite the fact that we inherit the project, since the in-memory manifest
+                # has not been updated yet, if we try to load any dependencies, it may fail.
+                # Therefore, this project inheritance is really only for Preferences, not dependencies.
+                code = try Pkg.Operations.gen_build_code(selector_path; inherit_project=true)
+                catch e
+                    e isa MethodError || rethrow()
+                    Pkg.Operations.gen_build_code(selector_path)
+                end
+                select_cmd = Cmd(`$code $(Base.BinaryPlatforms.triplet(platform))`)
+                meta_toml = String(read(select_cmd))
+                push!(artifacts_tomls, (artifacts_toml, TOML.parse(meta_toml)))
+            else
+                # Otherwise, use the standard selector from `Artifacts`
+                artifacts = Pkg.Artifacts.select_downloadable_artifacts(artifacts_toml; platform, include_lazy)
+                push!(artifacts_tomls, (artifacts_toml, artifacts))
+            end
+            break
+        end
+    end
+    return artifacts_tomls
+end
+
 function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     pkgs = load_all_deps(ctx)
 
@@ -1076,7 +1111,7 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
         pkg_source_path === nothing && continue
         bundled_artifacts_pkg = Pair{String, String}[]
         if isdefined(Pkg.Operations, :collect_artifacts)
-            for (artifacts_toml, artifacts) in Pkg.Operations.collect_artifacts(pkg_source_path; platform)
+            for (artifacts_toml, artifacts) in _collect_artifacts(pkg_source_path; platform, include_lazy=include_lazy_artifacts)
                 for (name, data) in artifacts
                     Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml; platform)
                     hash = Base.SHA1(data["git-tree-sha1"])
