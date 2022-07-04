@@ -87,7 +87,7 @@ Here you have different options depending on your operating system and needs.
 
 1. Install the libraries in a non-standard location, and update an appropriate environment
    variable to point to the library location.
-   * On Linux and other Unix-like OSes, run `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
+   * On Linux and other Unix-like operating systems, run `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
    * On Mac, run `export DYLD_FALLBACK_LIBRARY_PATH=/path/to/lib:$DYLD_FALLBACK_LIBRARY_PATH`
    * On Windows, include the library location in `PATH`. (* NOTE: not tested--does this work? *)
 
