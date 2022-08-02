@@ -426,6 +426,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
+                         audit_relocatability::Bool = true
                          )
 
     if filter_stdlibs && incremental
@@ -534,6 +535,13 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
             run(cmd)
+        end
+    end
+
+    if audit_relocatability
+        @info "Auditing sysimage relocatability"
+        if audit_sysimage_relocatability(sysimage_path)
+            @info "No issues found"
         end
     end
 
@@ -1189,6 +1197,25 @@ function bundle_headers(dest_dir, header_files)
         cp(header_file, new_file; force=true)
     end
     return
+end
+
+function audit_sysimage_relocatability(sysimg_path::String; paths::Vector{String} = [homedir(), DEPOT_PATH...])
+
+    none_found = true
+    sysimg_contents = open(io -> String(read(io)), sysimg_path, read=true)
+
+    for path in paths
+        found = String[]
+        for m in eachmatch(Regex("$(path)[^\0]+"), sysimg_contents)
+            push!(found, "[$(m.offset)] $(m.match)")
+        end
+        if !isempty(found)
+            @warn """absolute path `$path` found in $(length(found)) places:\n$(join(found, "\n"))"""
+            none_found = false
+        end
+    end
+
+    return none_found
 end
 
 end # module
