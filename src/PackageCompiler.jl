@@ -1195,7 +1195,9 @@ end
 
 function bundle_cert(dest_dir)
     cert_path = joinpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
-    cp(cert_path, joinpath(dest_dir, "share", "julia", "cert.pem"))
+    share_path = joinpath(dest_dir, "share", "julia")
+    mkpath(share_path)
+    cp(cert_path, joinpath(share_path, "cert.pem"))
 end
 
 end # module
