@@ -704,6 +704,7 @@ function create_app(package_dir::String,
     bundle_julia_libraries(app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
+    bundle_cert(app_dir)
 
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
@@ -887,6 +888,7 @@ function create_library(package_dir::String,
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
+    bundle_cert(dest_dir)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1189,6 +1191,11 @@ function bundle_headers(dest_dir, header_files)
         cp(header_file, new_file; force=true)
     end
     return
+end
+
+function bundle_cert(dest_dir)
+    cert_path = joinpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
+    cp(cert_path, joinpath(dest_dir, "share", "julia", "cert.pem"))
 end
 
 end # module
