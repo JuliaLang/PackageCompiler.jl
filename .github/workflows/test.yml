@@ -9,6 +9,9 @@ on:
       - 'master'
       - 'release-*'
     tags: '*'
+concurrency:
+  group: ${{ github.head_ref || github.ref_name || github.run_id }} 
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ${{ matrix.os }}
