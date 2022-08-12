@@ -63,7 +63,7 @@ function create_pkg_context(project)
         error("could not find project at $(repr(project))")
     end
     ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
-    if isfile(ctx.env.manifest_file)
+    if !isfile(ctx.env.manifest_file)
         @warn "it is not recommended to create an app/library without a preexisting manifest"
     end
     return ctx
