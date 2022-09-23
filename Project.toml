@@ -4,6 +4,7 @@ version = "2.0.9"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"

@@ -9,6 +9,7 @@ using LazyArtifacts
 using UUIDs: UUID, uuid1
 using RelocatableFolders
 using TOML
+using Glob
 
 export create_sysimage, create_app, create_library
 
@@ -93,10 +94,12 @@ sysimage_modules() = map(x->x.name, Base._sysimage_modules)
 stdlibs_in_sysimage() = intersect(_STDLIBS, sysimage_modules())
 
 # TODO: Also check UUIDs for stdlibs, not only names
-function gather_stdlibs_project(ctx)
+function gather_stdlibs_project(ctx; only_in_sysimage::Bool=true)
     @assert ctx.env.manifest !== nothing
-    sysimage_stdlibs = stdlibs_in_sysimage()
-    return String[pkg.name for (_, pkg) in ctx.env.manifest if pkg.name in sysimage_stdlibs]
+    stdlibs = only_in_sysimage ? stdlibs_in_sysimage() : _STDLIBS
+    stdlib_names = String[pkg.name for (_, pkg) in ctx.env.manifest]
+    filter!(pkg -> pkg in stdlibs, stdlib_names)
+    return stdlib_names
 end
 
 function check_packages_in_project(ctx, packages)
@@ -700,11 +703,14 @@ function create_app(package_dir::String,
         executables = [ctx.env.pkg.name => "julia_main"]
     end
     try_rm_dir(app_dir; force)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
-    bundle_julia_libraries(app_dir)
+
+    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     bundle_cert(app_dir)
+
+    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
 
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
@@ -885,10 +891,11 @@ function create_library(package_dir::String,
     lib_name = something(lib_name, ctx.env.pkg.name)
     try_rm_dir(dest_dir; force)
     mkpath(dest_dir)
-    bundle_julia_libraries(dest_dir)
-    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
+    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    bundle_julia_libraries(dest_dir, stdlibs)
     bundle_headers(dest_dir, header_files)
     bundle_cert(dest_dir)
+    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1018,20 +1025,275 @@ function bundle_julia_executable(dir::String)
     cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
 end
 
-function bundle_julia_libraries(dest_dir)
-    app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
-    mkpath(app_libdir)
-    cp(julia_libdir(), app_libdir; force=true)
-    # We do not want to bundle the sysimg
-    default_sysimg_name = "sys." * Libdl.dlext
-    rm(joinpath(app_libdir, "julia", default_sysimg_name); force=true)
-    # Remove debug symbol libraries
-    if Sys.isapple()
-        v = string(VERSION.major, ".", VERSION.minor)
-        rm(joinpath(app_libdir, "libjulia.$v.dylib.dSYM"); force=true, recursive=true)
-        rm(joinpath(app_libdir, "julia", "sys.dylib.dSYM"); force=true, recursive=true)
+
+
+# Goes into `lib/julia`
+const libjulia_list =
+if Sys.islinux()
+    [
+        "libLLVM-*jl.so*"
+        "libatomic.so*"
+        "libgcc_s.so*"
+        "libgmp.so*" # I guess the xx version is not needed?
+        "libjulia-codegen.so*"
+        "libjulia-internal.so*"
+        "libmpfr.so*"
+        "libopenlibm.so*"
+        "libpcre2-8.so*"
+        "libssp.so*"
+        "libstdc++.so*"
+        "libunwind.so*"
+        "libuv.so*"
+        "libz.so*"
+    ]
+elseif Sys.isapple()
+    [
+        "libLLVM*.dylib" # why no 13jl prefix here like for the others?
+        "libatomic*.dylib"
+        "libgcc_s*.dylib"
+        "libgmp*.dylib"
+        "libjulia-codegen*.dylib"
+        "libjulia-internal*.dylib"
+        "libmpfr*.dylib"
+        "libopenlibm*.dylib"
+        "libpcre2-8*.dylib"
+        "libssp*.dylib"
+        "libstdc++*.dylib"
+        "libunwind*.dylib"
+        "libuv*.dylib"
+        "libz*.dylib"
+    ]
+elseif Sys.iswindows()
+    [
+        "libLLVM-*jl.dll"
+        "libLTO.dll"
+        "libatomic*.dll"
+        "libgcc_s_seh*.dll"
+        "libgmp*.dll"
+        "libjulia-codegen.dll"
+        "libjulia-internal.dll"
+        "libjulia.dll"
+
+        # Why are these needed?
+        "libRemarks.dll"
+        "libmlir_async_runtime.dll"
+        "libmlir_c_runner_utils.dll"
+        "libmlir_runner_utils.dll"
+
+        "libmpfr*.dll"
+        "libopenlibm.dll"
+        "libpcre2*.dll"
+        "libssp*.dll"
+        "libuv-2.dll"
+        "libwinpthread*.dll"
+        "libz.dll"
+    ]
+else
+    error("unknown os")
+end
+
+
+# Goes into `lib`
+const lib_list = String[
+    if Sys.islinux()
+        "libjulia.so*"
+    elseif Sys.isapple()
+        "libjulia*.dylib"
+    elseif Sys.iswindows()
     end
+]
+
+if Base.USE_BLAS64
+    const libsuffix = "64_"
+else
+    const libsuffix = ""
+end
+
+
+const jll_libs = Dict{String, Vector{String}}(
+"CompilerSupportLibraries_jll" =>
+    [
+        "libgomp"
+        "libquadmath"
+        "libgfortran"
+    ],
+"dSFMT_jll" =>
+    [
+        "libdSFMT"
+    ],
+"GMP_jll" =>
+    [
+       "libgmp"
+       "libgmpxx"
+    ],
+"libblastrampoline_jll" =>
+    [
+        "libblastrampoline"
+    ],
+"LibCURL_jll" =>
+    [
+        "libcurl"
+    ],
+"LibGit2_jll" =>
+    [
+        "libgit2"
+    ],
+"libLLVM_jll" =>
+    [
+        "libLLVM"
+    ],
+"LibSSH2_jll" =>
+    [
+        "libssh2"
+    ],
+# Only on Linux?
+"LibUnwind_jll" =>
+    [
+        "libunwind"
+    ],
+"LibUV_jll" =>
+    [
+        "libuv"
+    ],
+# Only on Mac?
+"LLVMLibUnwind_jll" =>
+    [
+        "libunwind"
+    ],
+"MbedTLS_jll" =>
+    [
+        "libmbedcrypto"
+        "libmbedtls"
+        "libmbedx509"
+    ],
+"MPFR_jll:" =>
+    [
+        "libmpfr"
+    ],
+"nghttp2_jll:" =>
+    [
+        "libnghttp2"
+    ],
+"OpenBLAS_jll:" =>
+    [
+        "libopenblas$(libsuffix)"
+    ],
+"OpenLibm_jll:" =>
+    [
+        "libopenlibm"
+    ],
+"PCRE2_jll" =>
+    [
+        "libpcre2-8"
+    ],
+"SuiteSparse_jll" =>
+    ["libamd"
+    "libbtf"
+    "libcamd"
+    "libccolamd"
+    "libcholmod"
+    "libcolamd"
+    "libklu"
+    "libldl"
+    "librbio"
+    "libspqr"
+    "libsuitesparseconfig"
+    "libumfpack"
+    ],
+"Zlib_jll" =>
+    [
+        "libz"
+    ],
+)
+
+function glob_pattern_lib(lib)
+    Sys.iswindows() ? lib * ".dll" :
+    Sys.isapple() ? lib * "*.dylib" :
+    Sys.islinux() ? lib* ".so*" :
+    error("unknown os")
+end
+
+
+
+# TODO: Detangle printing from business logic
+function bundle_julia_libraries(dest_dir, stdlibs)
+    app_lib_dir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
+    app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
+    lib_dir = julia_libdir()
+    libjulia_dir = Sys.isunix() ? joinpath(lib_dir, "julia") : lib_dir
+
+    mkpath(app_lib_dir)
+    Sys.isunix() && mkpath(app_libjulia_dir)
+
+    libs = Pair{String, String}
+
+    tot_libsize = 0
+    printstyled("PackageCompiler: bundled libraries:\n")
+
+    println("  ├── Base:")
+    first = true
+    for lib in libjulia_list
+        matches = glob(lib, libjulia_dir)
+        for match in matches
+            mark = "├──"
+
+            cp(match, joinpath(app_libjulia_dir, basename(match)))
+            libsize = lstat(match).size
+            tot_libsize += libsize
+            if libsize > 1024
+                println("  │    $mark ", basename(match), " - ", pretty_byte_str(libsize))
+                first = false
+            end
+        end
+    end
+
+    for lib in lib_list
+        mark = "├──"
+        matches = glob(lib, lib_dir)
+        for match in matches
+            libsize = lstat(match).size
+            tot_libsize += libsize
+            if libsize > 1024
+                println("  │    $mark ", basename(match), " - ", pretty_byte_str(libsize))
+            end
+            cp(match, joinpath(app_lib_dir, basename(match)))
+        end
+    end
+
+    println("  ├── Stdlibs:")
+    for stdlib in stdlibs
+        printed_stdlib = false
+        libs = get(Vector{String}, jll_libs, stdlib)
+        first_lib = true
+        for lib in libs
+            lib = glob_pattern_lib(lib)
+            matches = glob(lib, libjulia_dir)
+            for match in matches
+                destpath = joinpath(app_libjulia_dir, basename(match))
+                if !isfile(destpath)
+                    if !printed_stdlib && !isempty(match)
+                        mark = "├──"
+                        printed_stdlib = true
+                        println("  │   $mark ", stdlib)
+                    end
+
+                    libsize = lstat(match).size
+                    mark = "├──"
+                    if libsize > 1024
+                        println("  │   │   $mark ", basename(match), " - ", pretty_byte_str(libsize))
+                        first_lib = false
+                    end
+                    cp(match, destpath)
+                    tot_libsize += libsize
+                end
+            end
+        end
+    end
+
+    println("  Total library file size: ", pretty_byte_str(tot_libsize))
+
     return
+
 end
 
 function recursive_dir_size(path)
@@ -1198,6 +1460,10 @@ function bundle_cert(dest_dir)
     share_path = joinpath(dest_dir, "share", "julia")
     mkpath(share_path)
     cp(cert_path, joinpath(share_path, "cert.pem"))
+end
+
+function bundle_libraries(src_dir, dest_dir)
+
 end
 
 end # module
