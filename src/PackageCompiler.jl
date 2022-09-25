@@ -119,6 +119,7 @@ const WARNED_CPP_COMPILER = Ref{Bool}(false)
 
 function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
+    cc_flags = get(ENV, "JULIA_CC_FLAGS", nothing)
     path = nothing
     @static if Sys.iswindows()
         path = joinpath(LazyArtifacts.artifact"mingw-w64", (Int==Int64 ? "mingw64" : "mingw32"), "bin", cplusplus ? "g++.exe" : "gcc.exe")
@@ -159,7 +160,12 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
     end
-    full_cmd = `$compiler_cmd $cmd`
+    if cc_flags !== nothing
+        compiler_flags = Cmd(Base.shell_split(cc_flags))
+    else
+        compiler_flags = ``
+    end
+    full_cmd = `$compiler_cmd $compiler_flags $cmd`
     @debug "running $full_cmd"
     run(full_cmd)
 end
@@ -369,7 +375,7 @@ project will be put into the sysimage.
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler (can also include extra arguments to the compiler, like `-g`).
+compiler. Extra arguments to the compiler (like `-g`) can be specified with `JULIA_CC_FLAGS`.
 
 ### Keyword arguments:
 
@@ -637,7 +643,7 @@ argument, for example:
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler (can also include extra arguments to the compiler, like `-g`).
+compiler. Extra arguments to the compiler (like `-g`) can be specified with `JULIA_CC_FLAGS`.
 
 ### Keyword arguments:
 
@@ -797,7 +803,7 @@ simply calls `jl_atexit_hook(retcode)`.)
 
 An attempt to automatically find a compiler will be done but can also be given
 explicitly by setting the environment variable `JULIA_CC` to a path to a
-compiler (can also include extra arguments to the compiler, like `-g`).
+compiler. Extra arguments to the compiler (like `-g`) can be specified with `JULIA_CC_FLAGS`.
 
 ### Keyword arguments:
 
