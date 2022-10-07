@@ -132,7 +132,8 @@ end
 
             io = IOBuffer()
             p = run(pipeline(ignorestatus(`$(app_path("Undefined"))`), stderr=io;))
-            @test occursin("UndefVarError: undefined not defined", String(take!(io)))
+            str = String(take!(io))
+            @test all(occursin(str), ["UndefVarError:", "undefined", "not defined"])
             @test p.exitcode == 1
         end
     end
