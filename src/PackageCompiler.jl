@@ -117,7 +117,7 @@ end
 
 const WARNED_CPP_COMPILER = Ref{Bool}(false)
 
-function run_compiler(cmd::Cmd; cplusplus::Bool=false)
+function get_compiler_cmd(; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
     @static if Sys.iswindows()
@@ -159,6 +159,11 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
     end
+    return compiler_cmd
+end
+
+function run_compiler(cmd::Cmd; cplusplus::Bool=false)
+    compiler_cmd = get_compiler_cmd(; cplusplus)
     full_cmd = `$compiler_cmd $cmd`
     @debug "running $full_cmd"
     run(full_cmd)
