@@ -61,9 +61,9 @@ end
         for filter in filter_stdlibs
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), 
-                       executables=["MyApp" => "julia_main", 
+            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
+                       executables=["MyApp" => "julia_main",
                                     "SecondApp" => "second_main",
                                     "ReturnType" => "wrong_return_type",
                                     "Error" => "erroring",
@@ -111,6 +111,11 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
+            if VERSION >= v"1.7.0"
+                @test occursin("LLVMExtra path: ok!", app_output)
+            end
+            @test occursin("MKL_jll path: ok!", app_output)
+
             # Test second app
             app_output = read(`$(app_path("SecondApp"))`, String)
             @test occursin("Hello from second main", app_output)
@@ -127,7 +132,8 @@ end
 
             io = IOBuffer()
             p = run(pipeline(ignorestatus(`$(app_path("Undefined"))`), stderr=io;))
-            @test occursin("UndefVarError: undefined not defined", String(take!(io)))
+            str = String(take!(io))
+            @test all(occursin(str), ["UndefVarError:", "undefined", "not defined"])
             @test p.exitcode == 1
         end
     end

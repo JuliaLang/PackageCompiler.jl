@@ -8,6 +8,7 @@ using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
 using RelocatableFolders
+using TOML
 
 export create_sysimage, create_app, create_library
 
@@ -62,7 +63,7 @@ function create_pkg_context(project)
         error("could not find project at $(repr(project))")
     end
     ctx = Pkg.Types.Context(env=Pkg.Types.EnvCache(project_toml_path))
-    if isempty(ctx.env.manifest)
+    if !isfile(ctx.env.manifest_file)
         @warn "it is not recommended to create an app/library without a preexisting manifest"
     end
     return ctx
@@ -116,7 +117,7 @@ end
 
 const WARNED_CPP_COMPILER = Ref{Bool}(false)
 
-function run_compiler(cmd::Cmd; cplusplus::Bool=false)
+function get_compiler_cmd(; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
     @static if Sys.iswindows()
@@ -158,6 +159,11 @@ function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     if path !== nothing
         compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
     end
+    return compiler_cmd
+end
+
+function run_compiler(cmd::Cmd; cplusplus::Bool=false)
+    compiler_cmd = get_compiler_cmd(; cplusplus)
     full_cmd = `$compiler_cmd $cmd`
     @debug "running $full_cmd"
     run(full_cmd)
@@ -250,7 +256,8 @@ function create_sysimg_object_file(object_file::String,
                             cpu_target::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
-                            extra_precompiles::String)
+                            extra_precompiles::String,
+                            incremental::Bool)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -352,7 +359,8 @@ function create_sysimg_object_file(object_file::String,
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling incremental system image")
+    non = incremental ? "" : "non"
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     TerminalSpinners.@spin spinner run(cmd)
     return
 end
@@ -512,7 +520,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             cpu_target,
                             script,
                             sysimage_build_args,
-                            extra_precompiles)
+                            extra_precompiles,
+                            incremental)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
@@ -637,7 +646,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 ### Keyword arguments:
 
-- executables::`Vector{Pair{String, String}}:`: A list of executables to
+- `executables::Vector{Pair{String, String}}`: A list of executables to
   produce, given as pairs of `executable_name => julia_main` where
   `executable_name` is the name of the produced executable with the
   julia function `julia_main`. If not provided, the name
@@ -700,6 +709,7 @@ function create_app(package_dir::String,
     bundle_julia_libraries(app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
+    bundle_cert(app_dir)
 
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
@@ -883,6 +893,7 @@ function create_library(package_dir::String,
     bundle_julia_libraries(dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
+    bundle_cert(dest_dir)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1052,6 +1063,40 @@ function pretty_byte_str(size)
     return @sprintf("%.3f %s", bytes, Base._mem_units[mb])
 end
 
+# Copy pasted from Pkg since `collect_artifacts` doesn't allow lazy artifacts to get installed
+function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=HostPlatform(), include_lazy::Bool)
+    # Check to see if this package has an (Julia)Artifacts.toml
+    artifacts_tomls = Tuple{String,Base.TOML.TOMLDict}[]
+
+    for f in Artifacts.artifact_names
+        artifacts_toml = joinpath(pkg_root, f)
+        if isfile(artifacts_toml)
+            selector_path = joinpath(pkg_root, ".pkg", "select_artifacts.jl")
+
+            # If there is a dynamic artifact selector, run that in an appropriate sandbox to select artifacts
+            if isfile(selector_path)
+                # Despite the fact that we inherit the project, since the in-memory manifest
+                # has not been updated yet, if we try to load any dependencies, it may fail.
+                # Therefore, this project inheritance is really only for Preferences, not dependencies.
+                code = try Pkg.Operations.gen_build_code(selector_path; inherit_project=true)
+                catch e
+                    e isa MethodError || rethrow()
+                    Pkg.Operations.gen_build_code(selector_path)
+                end
+                select_cmd = Cmd(`$code $(Base.BinaryPlatforms.triplet(platform))`)
+                meta_toml = String(read(select_cmd))
+                push!(artifacts_tomls, (artifacts_toml, TOML.parse(meta_toml)))
+            else
+                # Otherwise, use the standard selector from `Artifacts`
+                artifacts = Pkg.Artifacts.select_downloadable_artifacts(artifacts_toml; platform, include_lazy)
+                push!(artifacts_tomls, (artifacts_toml, artifacts))
+            end
+            break
+        end
+    end
+    return artifacts_tomls
+end
+
 function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     pkgs = load_all_deps(ctx)
 
@@ -1072,16 +1117,25 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
         bundled_artifacts_pkg = Pair{String, String}[]
-        # Check to see if this package has an (Julia)Artifacts.toml
-        for f in Pkg.Artifacts.artifact_names
-            artifacts_toml_path = joinpath(pkg_source_path, f)
-            if isfile(artifacts_toml_path)
-                artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
-                for name in keys(artifacts)
-                    artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
-                    push!(bundled_artifacts_pkg, name => artifact_path)
+        if isdefined(Pkg.Operations, :collect_artifacts)
+            for (artifacts_toml, artifacts) in _collect_artifacts(pkg_source_path; platform, include_lazy=include_lazy_artifacts)
+                for (name, data) in artifacts
+                    Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml; platform)
+                    hash = Base.SHA1(data["git-tree-sha1"])
+                    push!(bundled_artifacts_pkg, name => artifact_path(hash))
                 end
-                break
+            end
+        else
+            for f in Pkg.Artifacts.artifact_names
+                artifacts_toml_path = joinpath(pkg_source_path, f)
+                if isfile(artifacts_toml_path)
+                    artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
+                    for name in keys(artifacts)
+                        artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
+                        push!(bundled_artifacts_pkg, name => artifact_path)
+                    end
+                    break
+                end
             end
         end
         if !isempty(bundled_artifacts_pkg)
@@ -1142,6 +1196,13 @@ function bundle_headers(dest_dir, header_files)
         cp(header_file, new_file; force=true)
     end
     return
+end
+
+function bundle_cert(dest_dir)
+    cert_path = joinpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
+    share_path = joinpath(dest_dir, "share", "julia")
+    mkpath(share_path)
+    cp(cert_path, joinpath(share_path, "cert.pem"))
 end
 
 end # module

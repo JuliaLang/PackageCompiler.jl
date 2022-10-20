@@ -104,7 +104,12 @@ int main(int argc, char *argv[]) {
     checked_eval_string("append!(empty!(Base.ARGS), Core.ARGS)");
     jl_value_t *firstarg = checked_eval_string("popfirst!(ARGS)");
     JL_GC_PUSH1(&firstarg);
-    jl_set_global(jl_base_module, jl_symbol("PROGRAM_FILE"), firstarg);
+#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 9
+    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, jl_symbol("PROGRAM_FILE"), 1);
+    jl_checked_assignment(bp, firstarg);
+#else
+    jl_set_global(jl_base_module, jl_symbol("PROGRAM_FILE"), firstarg);    
+#endif
     JL_GC_POP();
 
     // call the work function, and get back a value

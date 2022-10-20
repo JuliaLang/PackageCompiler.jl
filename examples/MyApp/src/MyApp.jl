@@ -5,6 +5,11 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
+if VERSION >= v"1.7.0"
+    using LLVMExtra_jll
+end
+
+using MKL_jll
 
 const myrand = rand()
 
@@ -72,13 +77,27 @@ function real_main()
         addprocs(4)
         @eval @everywhere using MyApp
     end
-   
+
     n = @distributed (+) for i = 1:20000000
         1
     end
     println("n = $n")
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
+
+    if VERSION >= v"1.7.0"
+        if isfile(LLVMExtra_jll.libLLVMExtra_path)
+            println("LLVMExtra path: ok!")
+        else
+            println("LLVMExtra path: fail!")
+        end
+    end
+
+    if isfile(MKL_jll.libmkl_core_path)
+        println("MKL_jll path: ok!")
+    else
+        println("MKL_jll path: fail!")
+    end
     return
 end
 
