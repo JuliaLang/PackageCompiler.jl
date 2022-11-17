@@ -361,24 +361,30 @@ function create_sysimg_object_file(object_file::String,
     @debug "running $cmd"
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
-    lowest_free_mem = Sys.free_memory()
-    mem_monitor = Timer(0, interval = 1) do t
-        lowest_free_mem = min(lowest_free_mem, Sys.free_memory())
-    end
-    try
-        TerminalSpinners.@spin spinner run(cmd)
-    catch
-        if lowest_free_mem < 512 * 1024 * 1024 # Less than 512 MB
-            @warn """
-            Free system memory dropped to $(Base.format_bytes(lowest_free_mem)) during sysimage compilation.
-            If the subprocess errored without reporting why, it may have been OOM-killed.
-            """
-        end
-        rethrow()
-    finally
-        close(mem_monitor)
-    end
+    @monitor_oom TerminalSpinners.@spin spinner run(cmd)
     return
+end
+
+macro monitor_oom(ex)
+    quote
+        lowest_free_mem = Sys.free_memory()
+        mem_monitor = Timer(0, interval = 1) do t
+            lowest_free_mem = min(lowest_free_mem, Sys.free_memory())
+        end
+        try
+            $(esc(ex))
+        catch
+            if lowest_free_mem < 512 * 1024 * 1024 # Less than 512 MB
+                @warn """
+                Free system memory dropped to $(Base.format_bytes(lowest_free_mem)) during sysimage compilation.
+                If the reason the subprocess errored isn't clear, it may have been OOM-killed.
+                """
+            end
+            rethrow()
+        finally
+            close(mem_monitor)
+        end
+    end
 end
 
 """
