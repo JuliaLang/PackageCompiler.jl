@@ -361,7 +361,14 @@ function create_sysimg_object_file(object_file::String,
     @debug "running $cmd"
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
+    mem_monitor = Timer(0, interval = 1) do t
+        if Int(Sys.free_memory()) < 100 * 1024 * 1024 # less than 100MB
+            @warn "There is only $(Base.format_bytes(Sys.free_memory())) of memory free. The sysimage compiling subprocess may crash"
+            close(t)
+        end
+    end
     TerminalSpinners.@spin spinner run(cmd)
+    close(mem_monitor)
     return
 end
 
