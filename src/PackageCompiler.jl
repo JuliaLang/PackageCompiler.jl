@@ -1026,16 +1026,17 @@ end
 function bundle_julia_libraries(dest_dir)
     app_libdir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     mkpath(app_libdir)
-    cp(julia_libdir(), app_libdir; force=true)
+    for filename in filter(startswith("libjulia"),readdir(julia_libdir()))
+        # Skip debug symbol libraries
+        if endswith(filename, "dylib.dSYM")
+            continue
+        end
+        cp(joinpath(julia_libdir(),filename), joinpath(app_libdir, filename); force=true)
+    end
+    cp(joinpath(julia_libdir(),"julia"), joinpath(app_libdir, "julia"); force=true)
     # We do not want to bundle the sysimg
     default_sysimg_name = "sys." * Libdl.dlext
     rm(joinpath(app_libdir, "julia", default_sysimg_name); force=true)
-    # Remove debug symbol libraries
-    if Sys.isapple()
-        v = string(VERSION.major, ".", VERSION.minor)
-        rm(joinpath(app_libdir, "libjulia.$v.dylib.dSYM"); force=true, recursive=true)
-        rm(joinpath(app_libdir, "julia", "sys.dylib.dSYM"); force=true, recursive=true)
-    end
     return
 end
 
