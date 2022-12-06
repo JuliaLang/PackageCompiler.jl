@@ -893,7 +893,7 @@ function create_library(package_dir::String,
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
-                        script::Union{Nothing,String}=nothing,
+                        script::Union{Nothing,String}=nothing
                         )
 
 
@@ -1010,7 +1010,7 @@ function create_sysimage_workaround(
 
     create_sysimage([package_name]; sysimage_path, project,
                     incremental=true,
-                    script,
+                    script=script,
                     precompile_execution_file,
                     precompile_statements_file,
                     cpu_target,
