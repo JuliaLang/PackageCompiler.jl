@@ -891,7 +891,7 @@ function create_library(package_dir::String,
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
-                        script=nothing,
+                        script::Union{Nothing,String}=nothing,
                         )
 
 
@@ -928,9 +928,8 @@ function create_library(package_dir::String,
 
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        script=script,
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
-        soname)
+        soname, script)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -993,7 +992,7 @@ function create_sysimage_workaround(
                     julia_init_c_file::Union{Nothing,String},
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
-                    script=nothing
+                    script::Union{Nothing,String}
                     )
     package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
@@ -1009,7 +1008,7 @@ function create_sysimage_workaround(
 
     create_sysimage([package_name]; sysimage_path, project,
                     incremental=true,
-                    script=script,
+                    script,
                     precompile_execution_file,
                     precompile_statements_file,
                     cpu_target,
