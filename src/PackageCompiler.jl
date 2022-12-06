@@ -868,6 +868,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `script::String`: Path to a file that gets executed in the `--output-o` process.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
