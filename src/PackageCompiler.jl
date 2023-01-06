@@ -194,7 +194,11 @@ end
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
-    return `$julia_path --color=$color --startup-file=no`
+    if isdefined(Base, :Linking) # pkgimage support feature flag
+        `$julia_path --color=$color --startup-file=no --pkgimages=no`
+    else
+        `$julia_path --color=$color --startup-file=no`
+    end
 end
 
 
@@ -249,6 +253,7 @@ function ensurecompiled(project, packages, sysimage)
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     run(cmd)
     return
@@ -261,6 +266,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
@@ -340,6 +346,7 @@ function create_sysimg_object_file(object_file::String,
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
+        ENV["JULIA_DEBUG"]="loading"
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
@@ -560,6 +567,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         cd(dirname(abspath(sysimage_path))) do
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
+            @debug "running $cmd"
             run(cmd)
         end
     end

@@ -10,7 +10,7 @@ on:
       - 'release-*'
     tags: '*'
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }} 
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 jobs:
   test:
@@ -22,6 +22,7 @@ jobs:
           - '1.6'
           - '1.7'
           - '1.8'
+          - '1.9-nightly'
           - 'nightly'
         julia-arch:
           - 'x64'
@@ -30,16 +31,28 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        coverage:
+          - 'true'
+          - 'false' # needed for 1.9+ to test from a session using pkgimages
         exclude:
           - os: macOS-latest
             julia-arch: x86
+          - julia-version: '1.6'
+            coverage: 'false'
+          - julia-version: '1.7'
+            coverage: 'false'
+          - julia-version: '1.8'
+            coverage: 'false'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v1
       - uses: julia-actions/julia-runtest@latest
+        with:
+          coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@latest
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v3
         with:
           file: lcov.info
