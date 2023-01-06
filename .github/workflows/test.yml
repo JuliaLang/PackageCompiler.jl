@@ -10,7 +10,7 @@ on:
       - 'release-*'
     tags: '*'
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }} 
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 jobs:
   test:
@@ -22,6 +22,7 @@ jobs:
           - '1.6'
           - '1.7'
           - '1.8'
+          - '1.9-nightly'
           - 'nightly'
         julia-arch:
           - 'x64'
