@@ -18,6 +18,7 @@ if haskey(ENV, "CI")
 end
 
 @testset "PackageCompiler.jl" begin
+    @testset "create_sysimage" begin
     new_project = mktempdir()
     old_project = Base.ACTIVE_PROJECT[]
     Base.ACTIVE_PROJECT[] = new_project
@@ -48,17 +49,19 @@ end
     @test occursin("Hello, foo", str)
     @test occursin("I am a script", str)
     @test occursin("opt: -O1", str)
+    end # testset
 
+    @testset "create_app" begin
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
-    for incremental in (is_slow_ci ? (false,) : (true, false))
+    @testset for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
         else
             filter_stdlibs = (false,)
         end
-        for filter in filter_stdlibs
+        @testset for filter in filter_stdlibs
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
@@ -137,6 +140,7 @@ end
             @test p.exitcode == 1
         end
     end
+    end # testset
 
     if !is_slow_ci
         # Test library creation
