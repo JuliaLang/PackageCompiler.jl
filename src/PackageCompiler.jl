@@ -15,6 +15,7 @@ export create_sysimage, create_app, create_library
 include("juliaconfig.jl")
 include("../ext/TerminalSpinners.jl")
 
+const DISABLE_PKGIMAGES = isdefined(Base, :Linking) ? "--pkgimages=no" : ""
 
 ##############
 # Arch utils #
@@ -230,7 +231,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = `$(get_julia_cmd()) $DISABLE_PKGIMAGES --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
                                         -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
                 @debug "running $cmd"
@@ -247,7 +248,7 @@ end
 function ensurecompiled(project, packages, sysimage)
     length(packages) == 0 && return
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    cmd = `$(get_julia_cmd()) $DISABLE_PKGIMAGES --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
     splitter = Sys.iswindows() ? ';' : ':'
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     run(cmd)
@@ -258,7 +259,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
     arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
+    cmd = `$(get_julia_cmd()) $DISABLE_PKGIMAGES --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
@@ -378,7 +379,7 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+    cmd = `$(get_julia_cmd()) $DISABLE_PKGIMAGES --cpu-target=$cpu_target -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
     @debug "running $cmd"
     non = incremental ? "" : "non"
