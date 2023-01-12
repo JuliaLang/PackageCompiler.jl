@@ -385,7 +385,7 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = if isdefined(Base, :Loading) # pkgimages feature flag
+    cmd = if isdefined(Base, :Linking) # pkgimages feature flag
         cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
                                 --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
         @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
