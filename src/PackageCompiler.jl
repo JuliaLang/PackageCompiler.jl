@@ -7,7 +7,7 @@ using Printf
 using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
-using RelocatableFolders
+JULIAusing RelocatableFolders
 using TOML
 
 export create_sysimage, create_app, create_library
@@ -346,7 +346,6 @@ function create_sysimg_object_file(object_file::String,
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
-        ENV["JULIA_DEBUG"]="loading"
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
