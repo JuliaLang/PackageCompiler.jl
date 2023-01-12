@@ -77,9 +77,9 @@ end
             finally
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
-            rm(joinpath(new_depot, "packages"); recursive=true)
-            rm(joinpath(new_depot, "compiled"); recursive=true)
-            rm(joinpath(new_depot, "artifacts"); recursive=true)
+            rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+            rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+            rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$(app_path("MyApp")) I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
