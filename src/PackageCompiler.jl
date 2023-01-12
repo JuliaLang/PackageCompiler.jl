@@ -385,10 +385,17 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
-                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
-    cmd = addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+    cmd = if isdefined(Base, :Loading) # pkgimages feature flag
+        cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+        addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+    else
+        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd"
+        cmd
+    end
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
