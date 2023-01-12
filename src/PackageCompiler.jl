@@ -7,7 +7,7 @@ using Printf
 using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
-JULIAusing RelocatableFolders
+using RelocatableFolders
 using TOML
 
 export create_sysimage, create_app, create_library
