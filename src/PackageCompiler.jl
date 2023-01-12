@@ -237,7 +237,8 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
                                         -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-                @debug "running $cmd"
+                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                cmd = addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
                 read(cmd)
             finally
                 rm(new_sysimage_source_path; force=true)
@@ -384,9 +385,10 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+    cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
                               --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-    @debug "running $cmd"
+    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+    cmd = addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
