@@ -223,9 +223,15 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                    -g0 -O0 $compiler_source_path`
-            @debug "running $cmd"
+            cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+                cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji -g0 -O0 $compiler_source_path`
+                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+            else
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
+                                        -g0 -O0 $compiler_source_path`
+                @debug "running $cmd"
+            end
             read(cmd)
 
             # Use that to create sys.ji
