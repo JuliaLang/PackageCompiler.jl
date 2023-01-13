@@ -62,8 +62,10 @@ end
             filter_stdlibs = (false,)
         end
         @testset for filter in filter_stdlibs
+            @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
+            try
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
                        precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
                        executables=["MyApp" => "julia_main",
@@ -72,11 +74,13 @@ end
                                     "Error" => "erroring",
                                     "Undefined" => "undefined",
                                     ])
+            finally
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
-            rm(joinpath(new_depot, "packages"); recursive=true)
-            rm(joinpath(new_depot, "compiled"); recursive=true)
-            rm(joinpath(new_depot, "artifacts"); recursive=true)
+            rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+            rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+            rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end # try
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$(app_path("MyApp")) I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
 
@@ -138,6 +142,7 @@ end
             str = String(take!(io))
             @test all(occursin(str), ["UndefVarError:", "undefined", "not defined"])
             @test p.exitcode == 1
+            @info "done: create_app testset" incremental filter
         end
     end
     end # testset

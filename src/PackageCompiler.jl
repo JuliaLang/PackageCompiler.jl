@@ -194,7 +194,11 @@ end
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
-    return `$julia_path --color=$color --startup-file=no`
+    if isdefined(Base, :Linking) # pkgimage support feature flag
+        `$julia_path --color=$color --startup-file=no --pkgimages=no`
+    else
+        `$julia_path --color=$color --startup-file=no`
+    end
 end
 
 
@@ -219,9 +223,16 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                    -g0 -O0 $compiler_source_path`
-            @debug "running $cmd"
+            cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+                cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji -g0 -O0 $compiler_source_path`
+                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+            else
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
+                                        -g0 -O0 $compiler_source_path`
+                @debug "running $cmd"
+                cmd
+            end
             read(cmd)
 
             # Use that to create sys.ji
@@ -230,10 +241,18 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+                    cmd = `$(get_julia_cmd()) --sysimage=$tmp_corecompiler_ji
+                                              -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                    addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+                else
+                    cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
                                         -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-                @debug "running $cmd"
+                    @debug "running $cmd"
+                    cmd
+                end
                 read(cmd)
             finally
                 rm(new_sysimage_source_path; force=true)
@@ -249,6 +268,7 @@ function ensurecompiled(project, packages, sysimage)
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     run(cmd)
     return
@@ -261,6 +281,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
@@ -378,9 +399,17 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
-                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-    @debug "running $cmd"
+    cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+        cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+        addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+    else
+        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd"
+        cmd
+    end
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
@@ -560,6 +589,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         cd(dirname(abspath(sysimage_path))) do
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
+            @debug "running $cmd"
             run(cmd)
         end
     end
