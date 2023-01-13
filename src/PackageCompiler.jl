@@ -231,6 +231,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
                                         -g0 -O0 $compiler_source_path`
                 @debug "running $cmd"
+                cmd
             end
             read(cmd)
 
