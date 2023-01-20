@@ -175,11 +175,16 @@ int main(int argc, char *argv[])
     jl_set_ARGS(argc, argv);
 
     // Set PROGRAM_FILE to argv[0].
-#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 9
-    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, jl_symbol("PROGRAM_FILE"), 1);
-    jl_checked_assignment(bp, (jl_value_t*)jl_cstr_to_string(argv[0]));
+    jl_sym_t *var = jl_symbol("PROGRAM_FILE");
+    jl_value_t *val = jl_cstr_to_string(argv[0]);
+#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 10
+    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var);
+    jl_checked_assignment(bp, jl_base_module, var, val);
+#elif JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 9
+    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var, 1);
+    jl_checked_assignment(bp, val);
 #else
-    jl_set_global(jl_base_module, jl_symbol("PROGRAM_FILE"), (jl_value_t*)jl_cstr_to_string(argv[0]));    
+    jl_set_global(jl_base_module, var, val);
 #endif
 
     // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
