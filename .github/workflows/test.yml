@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 90
     runs-on: ${{ matrix.os }}
     strategy:
+      max-parallel: 20 # leave space for other runs in the JuliaLang org, given these tests are long
       fail-fast: false
       matrix:
         julia-version:
