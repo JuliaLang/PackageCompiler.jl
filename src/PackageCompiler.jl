@@ -381,7 +381,7 @@ function create_sysimg_object_file(object_file::String,
             """)
     end
 
-    print(julia_code_buffer, precompile_code)
+    # print(julia_code_buffer, precompile_code)
 
     if script !== nothing
         print(julia_code_buffer, """
