@@ -184,9 +184,8 @@ function get_compiler_cmd(; cplusplus::Bool=false)
     return compiler_cmd
 end
 
-function run_compiler(cmd::Cmd; cplusplus::Bool=false)
-    compiler_cmd = get_compiler_cmd(; cplusplus)
-    full_cmd = `$compiler_cmd $cmd`
+function run_compiler(cmd::Cmd, args::Cmd)
+    full_cmd = `$cmd $args`
     @debug "running $full_cmd"
     run(full_cmd)
 end
@@ -488,6 +487,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
 
+    compiler_cmd = get_compiler_cmd(;cplusplus=true)
+
     ctx = create_pkg_context(project)
 
     if packages === nothing
@@ -575,13 +576,14 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             incremental)
     object_files = [object_file]
     if julia_init_c_file !== nothing
-        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
+        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path); compiler_cmd=compiler_cmd))
     end
     create_sysimg_from_object_file(object_files,
                                 sysimage_path;
                                 compat_level,
                                 version,
-                                soname)
+                                soname,
+                                compiler_cmd)
 
     rm(object_file; force=true)
 
@@ -601,7 +603,8 @@ function create_sysimg_from_object_file(object_files::Vector{String},
                                         sysimage_path::String;
                                         version,
                                         compat_level::String,
-                                        soname::Union{Nothing, String})
+                                        soname::Union{Nothing, String},
+                                        compiler_cmd = get_compiler_cmd())
 
     if soname === nothing && (Sys.isunix() && !Sys.isapple())
         soname = basename(sysimage_path)
@@ -610,8 +613,8 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     # Prevent compiler from stripping all symbols from the shared lib.
     o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
     extra = get_extra_linker_flags(version, compat_level, soname)
-    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
-    run_compiler(cmd; cplusplus=true)
+    args = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
+    run_compiler(compiler_cmd, args)
     return nothing
 end
 
@@ -636,13 +639,13 @@ function get_extra_linker_flags(version, compat_level, soname)
     return extra
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String; compiler_cmd=get_compiler_cmd())
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
-    run_compiler(cmd)
+    args = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    run_compiler(compiler_cmd, args)
     return o_init_file
 end
 
@@ -749,6 +752,8 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true)
     warn_official()
 
+    compiler_cmd = get_compiler_cmd()
+
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
@@ -788,20 +793,21 @@ function create_app(package_dir::String,
                     extra_precompiles = join(precompiles, "\n"))
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main); compiler_cmd=compiler_cmd)
     end
 end
 
 
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
-                                       julia_main::String)
+                                       julia_main::String;
+                                       compiler_cmd = get_compiler_cmd())
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
-    run_compiler(cmd)
+    args = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
+    run_compiler(compiler_cmd, args)
     return nothing
 end
 
