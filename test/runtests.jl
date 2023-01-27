@@ -3,6 +3,8 @@ using Test
 using Libdl
 using Pkg
 
+import TOML
+
 ENV["JULIA_DEBUG"] = "PackageCompiler"
 
 # Make a new depot
@@ -13,14 +15,22 @@ Base.init_depot_path()
 
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64
-const is_julia_1_6_ci = is_ci && VERSION.major == 1 && VERSION.minor == 6
+const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 
-if is_julia_1_6_ci
-    @warn "This is Julia 1.6. Some tests will be skipped." VERSION
+if is_julia_1_6
+    @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
 end
 
 if is_ci
     @show Sys.ARCH
+end
+
+function remove_llvmextras(project_file)
+    proj = TOML.parsefile(project_file)
+    delete!(proj["deps"], "LLVMExtra_jll")
+    open(project_file, "w") do io
+        TOML.print(io, proj)
+    end
 end
 
 @testset "PackageCompiler.jl" begin
@@ -68,16 +78,12 @@ end
             filter_stdlibs = (false,)
         end
         @testset for filter in filter_stdlibs
-            if is_julia_1_6_ci
-                if !filter
-                    @warn "Skipping this test because we are on Julia 1.6" incremental filter
-                    @test_broken false
-                    continue
-                end
-            end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
+            if is_julia_1_6
+                remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
+            end
             try
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
                        precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
