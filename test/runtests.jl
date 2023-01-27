@@ -82,6 +82,7 @@ end
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             if is_julia_1_6
+                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove                
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
