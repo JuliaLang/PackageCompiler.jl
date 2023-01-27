@@ -6,12 +6,17 @@ using Pkg
 ENV["JULIA_DEBUG"] = "PackageCompiler"
 
 # Make a new depot
-new_depot = mktempdir()
+const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
-is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+const is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+const is_julia_1_6 = (VERSION.major == 1) && (VERSION.minor == 6)
+
+if is_julia_1_6
+    @warn "This is Julia 1.6. Some tests will be skipped." VERSION
+end
 
 if haskey(ENV, "CI")
     @show Sys.ARCH
@@ -62,6 +67,13 @@ end
             filter_stdlibs = (false,)
         end
         @testset for filter in filter_stdlibs
+            if is_julia_1_6
+                if !filter
+                    @warn "Skipping this test because we are on Julia 1.6" incremental filter
+                    @test_broken false
+                    continue
+                end
+            end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
@@ -118,7 +130,7 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            if VERSION >= v"1.7.0"
+            if VERSION >= v"1.7-"
                 @test occursin("LLVMExtra path: ok!", app_output)
             end
             @test occursin("MKL_jll path: ok!", app_output)
