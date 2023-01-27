@@ -483,6 +483,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          )
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler is fiund, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
     if filter_stdlibs && incremental
@@ -749,6 +750,7 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
     warn_official()
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler is fiund, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
     ctx = create_pkg_context(package_dir)
