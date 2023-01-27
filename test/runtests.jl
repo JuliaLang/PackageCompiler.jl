@@ -11,14 +11,15 @@ mkpath(joinpath(new_depot, "registries"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
-const is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
-const is_julia_1_6 = (VERSION.major == 1) && (VERSION.minor == 6)
+const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64
+const is_julia_1_6_ci = is_ci && VERSION.major == 1 && VERSION.minor == 6
 
-if is_julia_1_6
+if is_julia_1_6_ci
     @warn "This is Julia 1.6. Some tests will be skipped." VERSION
 end
 
-if haskey(ENV, "CI")
+if is_ci
     @show Sys.ARCH
 end
 
@@ -67,7 +68,7 @@ end
             filter_stdlibs = (false,)
         end
         @testset for filter in filter_stdlibs
-            if is_julia_1_6
+            if is_julia_1_6_ci
                 if !filter
                     @warn "Skipping this test because we are on Julia 1.6" incremental filter
                     @test_broken false
