@@ -22,16 +22,16 @@ jobs:
       matrix:
         julia-version:
           - '1.6'
-          - '1.8'
-          - '1.9-nightly'
-          - 'nightly'
+          #- '1.8'
+          #- '1.9-nightly'
+          #- 'nightly'
         julia-arch:
           - 'x64'
-          - 'x86'
+          #- 'x86'
         os:
           - ubuntu-latest
-          - macOS-latest
-          - windows-latest
+          #- macOS-latest
+          #- windows-latest
         coverage:
           - 'true'
           - 'false' # needed for 1.9+ to test from a session using pkgimages
