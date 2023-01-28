@@ -141,7 +141,7 @@ end
             if VERSION >= v"1.7-"
                 @test occursin("LLVMExtra path: ok!", app_output)
             end
-            @test occursin("MKL_jll path: ok!", app_output)
+            @test occursin("micromamba_jll path: ok!", app_output)
 
             # Test second app
             app_output = read(`$(app_path("SecondApp"))`, String)
