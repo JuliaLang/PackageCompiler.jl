@@ -57,3 +57,17 @@ jobs:
       - uses: codecov/codecov-action@v3
         with:
           file: lcov.info
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1'
+      - name: Build and deploy docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
+
