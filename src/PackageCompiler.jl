@@ -434,7 +434,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_path::String`: The path to where the resulting sysimage should be saved.
 
-- `project::String`: The project path that should be active when the sysimage is created,
+- `project::String`: The project directory that should be active when the sysimage is created,
   defaults to the currently active project.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
