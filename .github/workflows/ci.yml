@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 jobs:
+  ci_started:
+    timeout-minutes: 3
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 0
   test:
     timeout-minutes: 90
     runs-on: ${{ matrix.os }}
