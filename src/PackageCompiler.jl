@@ -59,7 +59,7 @@ end
 
 function create_pkg_context(project)
     if isfile(project)
-        error("project should be specified as path, not as file")
+        error("`project` should be a path to a directory containing a Project/Manifest, not a file")
     end
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
     if project_toml_path === nothing
