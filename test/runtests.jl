@@ -3,18 +3,34 @@ using Test
 using Libdl
 using Pkg
 
+import TOML
+
 ENV["JULIA_DEBUG"] = "PackageCompiler"
 
 # Make a new depot
-new_depot = mktempdir()
+const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
-is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64
+const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 
-if haskey(ENV, "CI")
+if is_julia_1_6
+    @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
+end
+
+if is_ci
     @show Sys.ARCH
+end
+
+function remove_llvmextras(project_file)
+    proj = TOML.parsefile(project_file)
+    delete!(proj["deps"], "LLVMExtra_jll")
+    open(project_file, "w") do io
+        TOML.print(io, proj)
+    end
 end
 
 @testset "PackageCompiler.jl" begin
@@ -65,6 +81,10 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
+            if is_julia_1_6
+                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove                
+                remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
+            end
             try
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
                        precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
@@ -118,7 +138,7 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            if VERSION >= v"1.7.0"
+            if VERSION >= v"1.7-"
                 @test occursin("LLVMExtra path: ok!", app_output)
             end
             @test occursin("MKL_jll path: ok!", app_output)
