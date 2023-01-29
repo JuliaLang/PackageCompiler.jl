@@ -58,6 +58,9 @@ end
 #############
 
 function create_pkg_context(project)
+    if isfile(project)
+        error("`project` should be a path to a directory containing a Project/Manifest, not a file")
+    end
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
     if project_toml_path === nothing
         error("could not find project at $(repr(project))")
@@ -431,7 +434,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_path::String`: The path to where the resulting sysimage should be saved.
 
-- `project::String`: The project that should be active when the sysimage is created,
+- `project::String`: The project directory that should be active when the sysimage is created,
   defaults to the currently active project.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
