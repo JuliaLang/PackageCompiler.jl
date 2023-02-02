@@ -228,13 +228,13 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             # Create corecompiler.ji
             cmd = if isdefined(Base, :Linking) # pkgimages feature flag
                 cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji -g0 -O0 $compiler_source_path`
-                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
-                addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target JULIA_NUM_THREADS = 1
+                addenv(cmd, "JULIA_CPU_TARGET" => cpu_target, "JULIA_NUM_THREADS" => 1)
             else
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
                                         -g0 -O0 $compiler_source_path`
-                @debug "running $cmd"
-                cmd
+                @debug "running $cmd" JULIA_NUM_THREADS = 1
+                addenv(cmd, "JULIA_NUM_THREADS" => 1)
             end
             read(cmd)
 
@@ -247,14 +247,14 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
                 cmd = if isdefined(Base, :Linking) # pkgimages feature flag
                     cmd = `$(get_julia_cmd()) --sysimage=$tmp_corecompiler_ji
                                               -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-                    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
-                    addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+                    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target JULIA_NUM_THREADS = 1
+                    addenv(cmd, "JULIA_CPU_TARGET" => cpu_target, "JULIA_NUM_THREADS" => 1)
                 else
                     cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
                                         -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-                    @debug "running $cmd"
-                    cmd
+                    @debug "running $cmd" JULIA_NUM_THREADS = 1
+                    addenv(cmd, "JULIA_NUM_THREADS" => 1)
                 end
                 read(cmd)
             finally
@@ -271,8 +271,8 @@ function ensurecompiled(project, packages, sysimage)
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
     splitter = Sys.iswindows() ? ';' : ':'
-    @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
-    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib" JULIA_NUM_THREADS = 1
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib", "JULIA_NUM_THREADS" => 1)
     run(cmd)
     return
 end
@@ -405,13 +405,13 @@ function create_sysimg_object_file(object_file::String,
     cmd = if isdefined(Base, :Linking) # pkgimages feature flag
         cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
                                 --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-        @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
-        addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+        @debug "running $cmd" JULIA_CPU_TARGET = cpu_target JULIA_NUM_THREADS = 1
+        addenv(cmd, "JULIA_CPU_TARGET" => cpu_target, "JULIA_NUM_THREADS" => 1)
     else
         cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
                                 --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-        @debug "running $cmd"
-        cmd
+        @debug "running $cmd" JULIA_NUM_THREADS = 1
+        addenv(cmd, "JULIA_NUM_THREADS" => 1)
     end
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
@@ -486,7 +486,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          )
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
@@ -754,7 +754,7 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
     warn_official()
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
