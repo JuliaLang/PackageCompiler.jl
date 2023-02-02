@@ -466,6 +466,12 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+!!! note
+    When `filter_stdlibs` and `incremental` are both false, `PackageCompiler.create_sysimage` uses a julia mode that will
+    max-out available cores during various stages including `Pkg.precompile`, overloading the system, so for this configuration
+    it is recommended to start julia with a single thread and ensure `JULIA_NUM_THREADS` is unset.
+
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -489,6 +495,14 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
+
+    if !filter_stdlibs && !incremental && Threads.nthreads() > 1
+        @warn """
+        When `filter_stdlibs` and `incremental` are both false, `PackageCompiler.create_sysimage` uses a julia mode that
+        will max-out available cores during various stages including `Pkg.precompile`, overloading the system, so it is
+        recommended to start julia with a single thread and ensure `JULIA_NUM_THREADS` is unset.
+        """ Threads.nthreads() filter_stdlibs incremental
+    end
 
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
