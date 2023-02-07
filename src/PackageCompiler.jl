@@ -214,7 +214,7 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
         r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
+function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -222,17 +222,23 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
+    # we can't strip the IR from the base sysimg, so we filter out this flag
+    # also presuambly `--compile=all`` and maybe a few others we missed here...
+    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
+    sysimage_build_args = Cmd(sysimage_build_args_strs)
+
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
             cmd = if isdefined(Base, :Linking) # pkgimages feature flag
-                cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji -g0 -O0 $compiler_source_path`
+                cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji $sysimage_build_args $compiler_source_path`
                 @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
                 addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
             else
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                        -g0 -O0 $compiler_source_path`
+                                        $sysimage_build_args $compiler_source_path`
                 @debug "running $cmd"
                 cmd
             end
@@ -246,13 +252,13 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             try
                 cmd = if isdefined(Base, :Linking) # pkgimages feature flag
                     cmd = `$(get_julia_cmd()) --sysimage=$tmp_corecompiler_ji
-                                              -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                                              $sysimage_build_args --output-ji=$tmp_sys_ji $new_sysimage_source_path`
                     @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
                     addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
                 else
                     cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
-                                        -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                                        $sysimage_build_args --output-ji=$tmp_sys_ji $new_sysimage_source_path`
                     @debug "running $cmd"
                     cmd
                 end
@@ -403,12 +409,12 @@ function create_sysimg_object_file(object_file::String,
     # Read the input via stdin to avoid hitting the maximum command line limit
 
     cmd = if isdefined(Base, :Linking) # pkgimages feature flag
-        cmd = `$(get_julia_cmd()) -O3 $sysimage_build_args
+        cmd = `$(get_julia_cmd()) $sysimage_build_args
                                 --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
         @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
         addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
     else
-        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
+        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
                                 --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
         @debug "running $cmd"
         cmd
@@ -519,7 +525,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
