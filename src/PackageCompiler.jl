@@ -733,7 +733,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `force::Bool`: Remove the folder `compiled_app` if it exists before creating the app.
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `false`.
+  defaults to `true`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a difference if some
@@ -756,7 +756,7 @@ function create_app(package_dir::String,
                     force::Bool=false,
                     c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
                     cpu_target::String=default_app_cpu_target(),
-                    include_lazy_artifacts::Bool=false,
+                    include_lazy_artifacts::Bool=true,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
     warn_official()
@@ -907,7 +907,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   Linux/UNIX).
 
 - `include_lazy_artifacts::Bool`: if lazy artifacts should be included in the bundled artifacts,
-  defaults to `false`.
+  defaults to `true`.
 
 - `include_transitive_dependencies::Bool`: If `true`, explicitly put all
   transitive dependencies into the sysimage. This only makes a difference if some
@@ -935,7 +935,7 @@ function create_library(package_dir::String,
                         version::Union{String,VersionNumber,Nothing}=nothing,
                         compat_level::String="major",
                         cpu_target::String=default_app_cpu_target(),
-                        include_lazy_artifacts::Bool=false,
+                        include_lazy_artifacts::Bool=true,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
                         script::Union{Nothing,String}=nothing
