@@ -745,6 +745,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -758,7 +760,8 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
-                    include_transitive_dependencies::Bool=true)
+                    include_transitive_dependencies::Bool=true,
+                    script::Union{Nothing, String}=nothing)
     warn_official()
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -800,7 +803,8 @@ function create_app(package_dir::String,
                     cpu_target,
                     sysimage_build_args,
                     include_transitive_dependencies,
-                    extra_precompiles = join(precompiles, "\n"))
+                    extra_precompiles = join(precompiles, "\n"),
+                    script)
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
