@@ -200,3 +200,6 @@ in your current project.
 - When creating a sysimage incrementally, you can use a different sysimage as the "base sysimage" by passing the `base_sysimage` keyword argument.
 - The "cpu target" can be specified with the `cpu_target` keyword. For more information about the syntax of this option, see the [Julia manual](https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets).
 - If you need to run some code in the process creating the sysimage, the `script` argument that points to a file can be passed.
+- To exclude certain packages in the sysimage, the `excluded_packages` keyword can be used to pass their names. This option can be useful when one want to compile a sysimage for package development where the dependences contains heavy packages with long load times (can be found using `@time_imports using MyDevPackage` in Julia >= 1.8). 
+  In this case, building a system image including the dependencies can significantly reduce the load times of the package in development.  
+  As an example, one can create a system image with `MyDevPackage` included in the `packages` keyword argument with `include_transitive_dependencies=true` to ensure its dependencies are included while excluding `MyDevPackage` itself.
