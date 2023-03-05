@@ -9,7 +9,7 @@ if VERSION >= v"1.7.0"
     using LLVMExtra_jll
 end
 
-using MKL_jll
+using micromamba_jll
 
 const myrand = rand()
 
@@ -93,10 +93,10 @@ function real_main()
         end
     end
 
-    if isfile(MKL_jll.libmkl_core_path)
-        println("MKL_jll path: ok!")
+    if isfile(micromamba_jll.micromamba_path)
+        println("micromamba_jll path: ok!")
     else
-        println("MKL_jll path: fail!")
+        println("micromamba_jll path: fail!")
     end
     return
 end
