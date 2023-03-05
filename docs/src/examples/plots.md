@@ -49,7 +49,11 @@ julia> @time display(p);
   0.331869 seconds (278.38 k allocations: 7.900 MiB)
 ```
 
-which is a sizeable speedup.
+which is a sizeable speedup. 
+
+When using the sysimage, you may need to call `Plots.__init__()` after loading
+Plots for the plots to display; otherwise, you might need to use `gui` or 
+pass argument `show = true` to `plot`.
 
 Note that since we have more stuff in our sysimage, Julia is slightly slower to
 start (0.35 seconds on this machine):
