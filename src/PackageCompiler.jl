@@ -500,6 +500,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `disable_precompile::Bool`: If `true`, fully disable the precompile stage of the build.
+  Can be helpful in case of package name conflicts in dependencies.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
