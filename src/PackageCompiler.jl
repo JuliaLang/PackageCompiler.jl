@@ -309,7 +309,9 @@ function create_sysimg_object_file(object_file::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
-                            incremental::Bool)
+                            incremental::Bool,
+                            import_into_main::Bool,
+                            disable_precompile::Bool)
     # Handle precompilation
     precompile_files = String[]
     @debug "running precompilation execution script..."
@@ -326,7 +328,17 @@ function create_sysimg_object_file(object_file::String,
             PrecompileStagingArea = Module()
             for (_pkgid, _mod) in Base.loaded_modules
                 if !(_pkgid.name in ("Main", "Core", "Base"))
-                    eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
+                    if !isdefined(PrecompileStagingArea, Symbol(_mod))
+                        Base.eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
+                    else
+                        @warn(
+                            "Skipping the addition of \$(_pkgid.name) [\$(_pkgid.uuid)] to the precompile environment. " *
+                            "A package with this name is already present there. " *
+                            "Precompilation may be broken if your precompile statements require this package. " *
+                            "You can disable precompilation by setting the `disable_precompile` flag. " *
+                            "Ref: https://github.com/JuliaLang/PackageCompiler.jl/issues/767",
+                        )
+                    end
                 end
             end
             precompile_files = String[
@@ -384,13 +396,26 @@ function create_sysimg_object_file(object_file::String,
     end
 
     # Make packages available in Main. It is unclear if this is the right thing to do.
-    for pkg in packages
-        print(julia_code_buffer, """
-            import $pkg
+    if import_into_main
+        for pkg in packages
+            print(julia_code_buffer, """
+                if isdefined(Main, Symbol("$pkg"))
+                    @warn(
+                        "Skipping the import of $pkg into Main. A package with this name has " *
+                        "already been imported. You can disable importing packages into Main " *
+                        "by setting the `import_into_main` flag to `false`. " *
+                        "Ref: https://github.com/JuliaLang/PackageCompiler.jl/issues/768"
+                    )
+                else
+                    import $pkg
+                end
             """)
+        end
     end
 
-    print(julia_code_buffer, precompile_code)
+    if !disable_precompile
+        print(julia_code_buffer, precompile_code)
+    end
 
     if script !== nothing
         print(julia_code_buffer, """
@@ -459,6 +484,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    transitive dependencies into the sysimage. This only makes a difference if some
    packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `import_into_main::Bool`: If `true`, import all packages from the sysimage into `Main`.
+  This allows calling `using .Package` without the Project.toml the sysimage was built with.
+
 ### Advanced keyword arguments
 
 - `base_sysimage::Union{Nothing, String}`: If a `String`, names an existing sysimage upon which to build
@@ -491,8 +519,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
+                         import_into_main::Bool=true,
+                         disable_precompile::Bool=false,
                          )
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
@@ -584,7 +614,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             script,
                             sysimage_build_args,
                             extra_precompiles,
-                            incremental)
+                            incremental,
+                            import_into_main,
+                            disable_precompile)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
@@ -760,7 +792,7 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
     warn_official()
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
