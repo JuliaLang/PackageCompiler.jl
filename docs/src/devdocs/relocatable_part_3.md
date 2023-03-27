@@ -2,7 +2,7 @@
 
 !!! info
     This section is for people who want to understand PackageCompiler.jl under
-    the hood. It is not required reading to use the pacakge.
+    the hood. It is not required reading to use the package.
 
 In the previous tutorials, we created a custom sysimage and a binary (app) that
 did some simple CSV parsing with an (depending on the exact demands) acceptable
