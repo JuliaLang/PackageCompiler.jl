@@ -486,10 +486,6 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
-                         julia_init_c_file=nothing,
-                         version=nothing,
-                         soname=nothing,
-                         compat_level::String="major",
                          extra_precompiles::String = "",
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
@@ -585,15 +581,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             sysimage_build_args,
                             extra_precompiles,
                             incremental)
-    object_files = [object_file]
-    if julia_init_c_file !== nothing
-        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
-    end
-    create_sysimg_from_object_file(object_files,
-                                sysimage_path;
-                                compat_level,
-                                version,
-                                soname)
+
+    create_sysimg_from_object_file(object_file,
+                                sysimage_path)
 
     rm(object_file; force=true)
 
@@ -609,20 +599,12 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     return nothing
 end
 
-function create_sysimg_from_object_file(object_files::Vector{String},
-                                        sysimage_path::String;
-                                        version,
-                                        compat_level::String,
-                                        soname::Union{Nothing, String})
-
-    if soname === nothing && (Sys.isunix() && !Sys.isapple())
-        soname = basename(sysimage_path)
-    end
+function create_sysimg_from_object_file(object_file::String,
+                                        sysimage_path::String)
     mkpath(dirname(sysimage_path))
     # Prevent compiler from stripping all symbols from the shared lib.
-    o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
-    extra = get_extra_linker_flags(version, compat_level, soname)
-    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
+    o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_file` : `-Wl,--whole-archive $object_file -Wl,--no-whole-archive`
+    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs()))`
     run_compiler(cmd; cplusplus=true)
     return nothing
 end
@@ -950,10 +932,7 @@ function create_library(package_dir::String,
         push!(header_files, julia_init_h_file)
     end
 
-    if version isa String
-        version = parse(VersionNumber, version)
-    end
-
+  
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
@@ -968,22 +947,47 @@ function create_library(package_dir::String,
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
-    sysimg_file = get_library_filename(lib_name; version)
-    sysimg_path = joinpath(lib_dir, sysimg_file)
+    sysimage_file = "sys." * Libdl.dlext
+    sysimage_path = joinpath(lib_dir, sysimage_file)
+   
+    package_name = ctx.env.pkg.name
+    project = dirname(ctx.env.project_file)
+
+
+
+    create_sysimage([package_name]; sysimage_path, project,
+        incremental,
+        filter_stdlibs,
+        precompile_execution_file,
+        precompile_statements_file,
+        cpu_target,
+        script,
+        sysimage_build_args,
+        include_transitive_dependencies
+    )
+
+
+    libname = get_library_filename(lib_name; version)
+    lib_path = joinpath(lib_dir, libname)
+
+    # Pull out into separate function?
     compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
-
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
-        soname, script)
+    if version isa String
+        version = parse(VersionNumber, version)
+    end
+    init_object_file = compile_c_init_julia(julia_init_c_file, sysimage_file)
+    o_file_flags = Sys.isapple() ? `-Wl,-all_load $init_object_file` : `-Wl,--whole-archive $init_object_file -Wl,--no-whole-archive`
+    extra = get_extra_linker_flags(version, compat_level, soname)
+    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $lib_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
+    run_compiler(cmd; cplusplus=true)
 
     if version !== nothing && Sys.isunix()
-        cd(dirname(sysimg_path)) do
+        cd(dirname(sysimage_path)) do
             base_file = get_library_filename(lib_name)
             @debug "creating symlinks for $compat_file and $base_file"
-            symlink(sysimg_file, compat_file)
-            symlink(sysimg_file, base_file)
+            symlink(sysimage_file, compat_file)
+            symlink(sysimage_file, base_file)
         end
     end
 end
@@ -1022,52 +1026,6 @@ function get_library_filename(name::String;
     return sysimg_file
 end
 
-# Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
-# by first creating a normal "empty" sysimage and then use that to finally create the one
-# with the @ccallable function.
-# This function can be removed when https://github.com/JuliaLang/julia/pull/37530 is merged
-function create_sysimage_workaround(
-                    ctx,
-                    sysimage_path::String,
-                    precompile_execution_file::Union{String, Vector{String}},
-                    precompile_statements_file::Union{String, Vector{String}},
-                    incremental::Bool,
-                    filter_stdlibs::Bool,
-                    cpu_target::String;
-                    sysimage_build_args::Cmd,
-                    include_transitive_dependencies::Bool,
-                    julia_init_c_file::Union{Nothing,String},
-                    version::Union{Nothing,VersionNumber},
-                    soname::Union{Nothing,String},
-                    script::Union{Nothing,String}
-                    )
-    package_name = ctx.env.pkg.name
-    project = dirname(ctx.env.project_file)
-
-    if !incremental
-        tmp = mktempdir()
-        base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
-        create_sysimage(String[]; sysimage_path=base_sysimage, project,
-                        incremental=false, filter_stdlibs, cpu_target)
-    else
-        base_sysimage = nothing
-    end
-
-    create_sysimage([package_name]; sysimage_path, project,
-                    incremental=true,
-                    script=script,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    cpu_target,
-                    base_sysimage,
-                    julia_init_c_file,
-                    version,
-                    soname,
-                    sysimage_build_args,
-                    include_transitive_dependencies)
-
-    return
-end
 ############
 # Bundling #
 ############
