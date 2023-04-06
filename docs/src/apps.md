@@ -80,7 +80,7 @@ import MyApp
 MyApp.julia_main()
 ```
 which can be invoked by calling `julia MyApp/main.jl args...`.
-This requires the `MyApp` package is available on the julia
+This requires the `MyApp` package being available on the julia
 [`LOAD_PATH`](https://docs.julialang.org/en/v1/base/constants/#Base.LOAD_PATH).
 
 ### Compilation of functions
