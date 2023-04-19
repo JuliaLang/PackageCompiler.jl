@@ -58,6 +58,9 @@ end
 #############
 
 function create_pkg_context(project)
+    if isfile(project)
+        error("`project` should be a path to a directory containing a Project/Manifest, not a file")
+    end
     project_toml_path = Pkg.Types.projectfile_path(project; strict=true)
     if project_toml_path === nothing
         error("could not find project at $(repr(project))")
@@ -114,6 +117,28 @@ end
 ##############
 # Misc utils #
 ##############
+
+macro monitor_oom(ex)
+    quote
+        lowest_free_mem = Sys.free_memory()
+        mem_monitor = Timer(0, interval = 1) do t
+            lowest_free_mem = min(lowest_free_mem, Sys.free_memory())
+        end
+        try
+            $(esc(ex))
+        catch
+            if lowest_free_mem < 512 * 1024 * 1024 # Less than 512 MB
+                @warn """
+                Free system memory dropped to $(Base.format_bytes(lowest_free_mem)) during sysimage compilation.
+                If the reason the subprocess errored isn't clear, it may have been OOM-killed.
+                """
+            end
+            rethrow()
+        finally
+            close(mem_monitor)
+        end
+    end
+end
 
 const WARNED_CPP_COMPILER = Ref{Bool}(false)
 
@@ -172,7 +197,11 @@ end
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
-    return `$julia_path --color=$color --startup-file=no`
+    if isdefined(Base, :Linking) # pkgimage support feature flag
+        `$julia_path --color=$color --startup-file=no --pkgimages=no`
+    else
+        `$julia_path --color=$color --startup-file=no`
+    end
 end
 
 
@@ -185,7 +214,7 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
         r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
+function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -193,13 +222,26 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
     tmp_sys_ji = joinpath(tmp, "sys.ji")
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
+    # we can't strip the IR from the base sysimg, so we filter out this flag
+    # also presumably `--compile=all` and maybe a few others we missed here...
+    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
+    sysimage_build_args = Cmd(sysimage_build_args_strs)
+
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
-                                    -g0 -O0 $compiler_source_path`
-            @debug "running $cmd"
+            cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+                cmd = `$(get_julia_cmd()) --output-ji $tmp_corecompiler_ji $sysimage_build_args $compiler_source_path`
+                @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+            else
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target --output-ji $tmp_corecompiler_ji
+                                        $sysimage_build_args $compiler_source_path`
+                @debug "running $cmd"
+                cmd
+            end
             read(cmd)
 
             # Use that to create sys.ji
@@ -208,10 +250,18 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String)
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+                    cmd = `$(get_julia_cmd()) --sysimage=$tmp_corecompiler_ji
+                                              $sysimage_build_args --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                    @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+                    addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+                else
+                    cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                                         --sysimage=$tmp_corecompiler_ji
-                                        -g1 -O0 --output-ji=$tmp_sys_ji $new_sysimage_source_path`
-                @debug "running $cmd"
+                                        $sysimage_build_args --output-ji=$tmp_sys_ji $new_sysimage_source_path`
+                    @debug "running $cmd"
+                    cmd
+                end
                 read(cmd)
             finally
                 rm(new_sysimage_source_path; force=true)
@@ -227,6 +277,7 @@ function ensurecompiled(project, packages, sysimage)
     # TODO: Only precompile `packages` (should be available in Pkg 1.8)
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     run(cmd)
     return
@@ -239,6 +290,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
+    @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
     precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
@@ -356,12 +408,20 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-    cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target -O3 $sysimage_build_args
-                              --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
-    @debug "running $cmd"
+    cmd = if isdefined(Base, :Linking) # pkgimages feature flag
+        cmd = `$(get_julia_cmd()) $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd" JULIA_CPU_TARGET = cpu_target
+        addenv(cmd, "JULIA_CPU_TARGET" => cpu_target)
+    else
+        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
+                                --sysimage=$base_sysimage --project=$project --output-o=$(object_file) $outputo_file`
+        @debug "running $cmd"
+        cmd
+    end
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
-    TerminalSpinners.@spin spinner run(cmd)
+    @monitor_oom TerminalSpinners.@spin spinner run(cmd)
     return
 end
 
@@ -380,7 +440,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_path::String`: The path to where the resulting sysimage should be saved.
 
-- `project::String`: The project that should be active when the sysimage is created,
+- `project::String`: The project directory that should be active when the sysimage is created,
   defaults to the currently active project.
 
 - `precompile_execution_file::Union{String, Vector{String}}`: A file or list of
@@ -432,6 +492,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          )
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
+    get_compiler_cmd()
 
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
@@ -462,7 +525,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
@@ -538,6 +601,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         cd(dirname(abspath(sysimage_path))) do
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
+            @debug "running $cmd"
             run(cmd)
         end
     end
@@ -696,6 +760,9 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true)
     warn_official()
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
+    get_compiler_cmd()
 
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
@@ -846,6 +913,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `script::String`: Path to a file that gets executed in the `--output-o` process.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -868,7 +937,9 @@ function create_library(package_dir::String,
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
-                        include_transitive_dependencies::Bool=true)
+                        include_transitive_dependencies::Bool=true,
+                        script::Union{Nothing,String}=nothing
+                        )
 
 
     warn_official()
@@ -905,7 +976,7 @@ function create_library(package_dir::String,
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
-        soname)
+        soname, script)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -967,7 +1038,8 @@ function create_sysimage_workaround(
                     include_transitive_dependencies::Bool,
                     julia_init_c_file::Union{Nothing,String},
                     version::Union{Nothing,VersionNumber},
-                    soname::Union{Nothing,String}
+                    soname::Union{Nothing,String},
+                    script::Union{Nothing,String}
                     )
     package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
@@ -983,6 +1055,7 @@ function create_sysimage_workaround(
 
     create_sysimage([package_name]; sysimage_path, project,
                     incremental=true,
+                    script=script,
                     precompile_execution_file,
                     precompile_statements_file,
                     cpu_target,
