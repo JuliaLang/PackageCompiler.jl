@@ -1,0 +1,78 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - 'release-*'
+  push:
+    branches:
+      - 'master'
+      - 'release-*'
+    tags: '*'
+concurrency:
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+jobs:
+  ci_started:
+    timeout-minutes: 3
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 0
+  test:
+    timeout-minutes: 90
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 20 # leave space for other runs in the JuliaLang org, given these tests are long
+      fail-fast: false
+      matrix:
+        julia-version:
+          - '1.6'
+          - '1.8'
+          - '1.9-nightly'
+          - 'nightly'
+        julia-arch:
+          - 'x64'
+          - 'x86'
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+        coverage:
+          - 'true'
+          - 'false' # needed for 1.9+ to test from a session using pkgimages
+        exclude:
+          - os: macOS-latest
+            julia-arch: x86
+          - julia-version: '1.6'
+            coverage: 'false'
+          - julia-version: '1.7'
+            coverage: 'false'
+          - julia-version: '1.8'
+            coverage: 'false'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: ${{ matrix.julia-version }}
+      - uses: julia-actions/cache@v1
+      - uses: julia-actions/julia-runtest@latest
+        with:
+          coverage: ${{ matrix.coverage }}
+      - uses: julia-actions/julia-processcoverage@latest
+      - uses: codecov/codecov-action@v3
+        with:
+          file: lcov.info
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1'
+      - name: Build and deploy docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
+
