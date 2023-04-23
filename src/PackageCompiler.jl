@@ -354,10 +354,12 @@ function create_sysimg_object_file(object_file::String,
                     end
                     # println(ps)
                     ps = Core.eval(PrecompileStagingArea, ps)
-                    # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-                    # Skipping them avoids the warning.
-                    ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-                    ms isa Vector || continue
+                    @static if VERSION <= 1.9.0-beta1
+                        # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+                        # Skipping them avoids the warning.
+                        ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+                        ms isa Vector || continue
+                    end
                     precompile(ps...)
                 catch e
                     # See julia issue #28808
