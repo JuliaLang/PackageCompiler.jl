@@ -341,12 +341,15 @@ function create_sysimg_object_file(object_file::String,
                     popfirst!(ps.args) # precompile(...)
                     ps.head = :tuple
                     l = ps.args[end]
-                    if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
-                        # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
-                        # Replacing N with a large number works around it.
-                        l = l.args[end]
-                        if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
-                            push!(l.args, 100) # form Vararg{T, 100} instead
+                    @static if VERSION <= 1.9.0
+                        l = ps.args[end]
+                        if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
+                            # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
+                            # Replacing N with a large number works around it.
+                            l = l.args[end]
+                            if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
+                                push!(l.args, 100) # form Vararg{T, 100} instead
+                            end
                         end
                     end
                     # println(ps)
