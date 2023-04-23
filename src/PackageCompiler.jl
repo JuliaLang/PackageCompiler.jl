@@ -372,6 +372,12 @@ function create_sysimg_object_file(object_file::String,
                 while true
                     try
                         ps = Core.eval(PrecompileStagingArea, ps)
+                        @static if VERSION <= v"1.9.0-beta1"
+                            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+                            # Skipping them avoids the warning.
+                            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+                            ms isa Vector || @goto skip_precompile
+                        end
                         break
                     catch e
                         if e isa UndefVarError
@@ -390,12 +396,6 @@ function create_sysimg_object_file(object_file::String,
                             @debug "failed to execute \$statement: \$e"
                             @goto skip_precompile
                         end
-                    end
-                    @static if VERSION <= v"1.9.0-beta1"
-                        # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-                        # Skipping them avoids the warning.
-                        ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-                        ms isa Vector || @goto skip_precompile
                     end
                 end
                 precompile(ps...)
