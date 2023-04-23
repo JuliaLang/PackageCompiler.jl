@@ -1,0 +1,31 @@
+name: Build MyLib
+on:
+  pull_request:
+    branches:
+      - 'master'
+      - 'release-*'
+  push:
+    branches:
+      - 'master'
+      - 'release-*'
+    tags: '*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: 'examples/MyLib'
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: 'examples/MyLib/build'
+      - run: |
+          cd examples/MyLib
+          make
+      - run: ./examples/MyLib/my_application.out
+        env:
+          LD_LIBRARY_PATH: 'examples/MyLib/MyLibCompiled/lib'
