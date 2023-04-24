@@ -310,63 +310,6 @@ function create_sysimg_object_file(object_file::String,
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
                             incremental::Bool)
-    # Handle precompilation
-    precompile_files = String[]
-    @debug "running precompilation execution script..."
-    precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
-    for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
-        push!(precompile_files, tracefile)
-    end
-    append!(precompile_files, abspath.(precompile_statements_file))
-    precompile_code = """
-        # This @eval prevents symbols from being put into Main
-        @eval Module() begin
-            using Base.Meta
-            PrecompileStagingArea = Module()
-            for (_pkgid, _mod) in Base.loaded_modules
-                if !(_pkgid.name in ("Main", "Core", "Base"))
-                    eval(PrecompileStagingArea, :(const \$(Symbol(_mod)) = \$_mod))
-                end
-            end
-            precompile_files = String[
-                $(join(map(repr, precompile_files), "\n" * " " ^ 8))
-            ]
-            for file in precompile_files, statement in eachline(file)
-                try
-                    # println(statement)
-                    # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
-                    ps = Meta.parse(statement)
-                    isexpr(ps, :call) || continue
-                    popfirst!(ps.args) # precompile(...)
-                    ps.head = :tuple
-                    l = ps.args[end]
-                    if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
-                        # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
-                        # Replacing N with a large number works around it.
-                        l = l.args[end]
-                        if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
-                            push!(l.args, 100) # form Vararg{T, 100} instead
-                        end
-                    end
-                    # println(ps)
-                    ps = Core.eval(PrecompileStagingArea, ps)
-                    # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-                    # Skipping them avoids the warning.
-                    ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-                    ms isa Vector || continue
-                    precompile(ps...)
-                catch e
-                    # See julia issue #28808
-                    @debug "failed to execute \$statement"
-                end
-            end
-            @eval PrecompileStagingArea begin
-                $extra_precompiles
-            end
-        end # module
-        """
-
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
@@ -382,6 +325,88 @@ function create_sysimg_object_file(object_file::String,
             Base.require(Base.PkgId(Base.UUID("$(string(pkg.uuid))"), $(repr(pkg.name))))
             """)
     end
+
+    # Handle precompilation
+    precompile_files = String[]
+    @debug "running precompilation execution script..."
+    precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
+    for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
+        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
+        push!(precompile_files, tracefile)
+    end
+    append!(precompile_files, abspath.(precompile_statements_file))
+    precompile_code = """
+        # This @eval prevents symbols from being put into Main
+        @eval Module() begin
+            using Base.Meta
+            PrecompileStagingArea = Module()
+
+            precompile_files = String[
+                $(join(map(repr, precompile_files), "\n" * " " ^ 8))
+            ]
+            for file in precompile_files, statement in eachline(file)
+                # println(statement)
+                # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
+                ps = try
+                    Meta.parse(statement)
+                catch
+                    # guard against precompile statements that are not valid Julia syntax
+                    continue
+                end
+                isexpr(ps, :call) || continue
+                popfirst!(ps.args) # precompile(...)
+                ps.head = :tuple
+                @static if VERSION <= v"1.9.0"
+                    l = ps.args[end]
+                    if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
+                        # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
+                        # Replacing N with a large number works around it.
+                        l = l.args[end]
+                        if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
+                            push!(l.args, 100) # form Vararg{T, 100} instead
+                        end
+                    end
+                end
+                # println(ps)
+                local ps
+                while true
+                    try
+                        ps = Core.eval(PrecompileStagingArea, ps)
+                        @static if VERSION <= v"1.9.0-beta1"
+                            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+                            # Skipping them avoids the warning.
+                            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+                            ms isa Vector || @goto skip_precompile
+                        end
+                        break
+                    catch e
+                        if e isa UndefVarError
+                            dep = string(e.var)
+                            mods = filter(p -> p.first.name == dep, Base.loaded_modules)
+                            if length(mods) != 1
+                                @debug "zero or multiple modules loaded with name \$dep"
+                                @goto skip_precompile
+                            else
+                                _, mod = only(mods)
+                                @debug "importing \$dep into PrecompileStagingArea"
+                                Base.eval(PrecompileStagingArea, :(\$(Symbol(dep)) = \$(mod)))
+                            end
+                        else
+                            # See julia issue #28808
+                            @debug "failed to execute \$statement: \$e"
+                            @goto skip_precompile
+                        end
+                    end
+                end
+                precompile(ps...)
+                @label skip_precompile
+            end
+
+            @eval PrecompileStagingArea begin
+                $extra_precompiles
+            end
+        end # module
+        """
 
     # Make packages available in Main. It is unclear if this is the right thing to do.
     for pkg in packages
@@ -492,7 +517,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          )
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
@@ -763,7 +788,7 @@ function create_app(package_dir::String,
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
-    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler 
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
