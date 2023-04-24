@@ -796,7 +796,7 @@ function create_app(package_dir::String,
     get_compiler_cmd()
 
     ctx = create_pkg_context(package_dir)
-    ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
+    ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     if executables === nothing
@@ -987,7 +987,7 @@ function create_library(package_dir::String,
     end
 
     ctx = create_pkg_context(package_dir)
-    ctx.env.pkg === nothing && error("expected package to have a `name`-entry")
+    ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     lib_name = something(lib_name, ctx.env.pkg.name)
