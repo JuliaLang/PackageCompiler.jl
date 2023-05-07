@@ -399,9 +399,9 @@ function create_sysimg_object_file(object_file::String,
                         end
                     end
                 end
-                end
                 precompile(ps...)
                 @label skip_precompile
+            end
             end
 
             @eval PrecompileStagingArea begin
