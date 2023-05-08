@@ -344,7 +344,7 @@ function create_sysimg_object_file(object_file::String,
             precompile_files = String[
                 $(join(map(repr, precompile_files), "\n" * " " ^ 8))
             ]
-           lock = Threads.SpinLock()
+           slock = Threads.SpinLock()
            Threads.@threads for statement in collect(Iterators.flatten(eachline.(precompile_files)))
                 # println(statement)
                 # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
@@ -399,7 +399,7 @@ function create_sysimg_object_file(object_file::String,
                         end
                     end
                 end
-                lock(lock) do
+                lock(slock) do
                     precompile(ps...)
                 end
                 @label skip_precompile
