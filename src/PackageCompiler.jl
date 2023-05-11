@@ -310,7 +310,7 @@ function create_sysimg_object_file(object_file::String,
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
                             incremental::Bool,
-                            import_into_main::Base._bool)
+                            import_into_main::Bool)
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
