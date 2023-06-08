@@ -1151,7 +1151,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
             dest = joinpath(app_libjulia_dir, basename(match))
             isfile(dest) && continue
             mark = "├──"
-            cp(match, dest)
+            cp(match, dest; force=true)
             libsize = lstat(match).size
             tot_libsize += libsize
             if libsize > 1024
@@ -1162,8 +1162,10 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     matches = glob(glob_pattern_lib("libjulia"), lib_dir)
     for match in matches
+        dest = joinpath(app_lib_dir, basename(match))
+        isfile(dest) && continue
         mark = "├──"
-        cp(match, joinpath(app_lib_dir, basename(match)))
+        cp(match, dest)
         libsize = lstat(match).size
         tot_libsize += libsize
         if libsize > 1024
@@ -1181,22 +1183,21 @@ function bundle_julia_libraries(dest_dir, stdlibs)
             matches = glob(lib, libjulia_dir)
             for match in matches
                 destpath = joinpath(app_libjulia_dir, basename(match))
-                if !isfile(destpath)
-                    if !printed_stdlib && !isempty(match)
-                        mark = "├──"
-                        printed_stdlib = true
-                        println("  │   $mark ", stdlib)
-                    end
-
-                    libsize = lstat(match).size
+                isfile(destpath) && continue
+                if !printed_stdlib && !isempty(match)
                     mark = "├──"
-                    if libsize > 1024
-                        println("  │   │   $mark ", basename(match), " - ", pretty_byte_str(libsize))
-                        first_lib = false
-                    end
-                    cp(match, destpath)
-                    tot_libsize += libsize
+                    printed_stdlib = true
+                    println("  │   $mark ", stdlib)
                 end
+
+                libsize = lstat(match).size
+                mark = "├──"
+                if libsize > 1024
+                    println("  │   │   $mark ", basename(match), " - ", pretty_byte_str(libsize))
+                    first_lib = false
+                end
+                cp(match, destpath)
+                tot_libsize += libsize
             end
         end
     end
