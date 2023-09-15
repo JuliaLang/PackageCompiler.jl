@@ -501,6 +501,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
+                         julia_init_h_file=nothing,
                          version=nothing,
                          soname=nothing,
                          compat_level::String="major",
@@ -604,8 +605,19 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if julia_init_c_file isa String
             julia_init_c_file = [julia_init_c_file]
         end
-        for f in julia_init_c_file
-            push!(object_files, compile_c_init_julia(f, basename(sysimage_path)))
+        mktempdir() do include_dir
+            if julia_init_h_file !== nothing
+                if julia_init_h_file isa String
+                    julia_init_h_file = [julia_init_h_file]
+                end
+                for f in julia_init_h_file
+                    cp(f, joinpath(include_dir, basename(f)))
+                end
+            end
+            for f in julia_init_c_file
+                filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
+                push!(object_files, filename)
+            end
         end
     end
     create_sysimg_from_object_file(object_files,
@@ -667,12 +679,12 @@ function get_extra_linker_flags(version, compat_level, soname)
     return extra
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, include_dir::String)
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -O2 -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -1014,8 +1026,8 @@ function create_library(package_dir::String,
 
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
-        soname, script)
+        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
+        julia_init_h_file, version, soname, script)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1076,6 +1088,7 @@ function create_sysimage_workaround(
                     sysimage_build_args::Cmd,
                     include_transitive_dependencies::Bool,
                     julia_init_c_file::Union{Nothing,String,Vector{String}},
+                    julia_init_h_file::Union{Nothing,String,Vector{String}},
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String}
@@ -1100,6 +1113,7 @@ function create_sysimage_workaround(
                     cpu_target,
                     base_sysimage,
                     julia_init_c_file,
+                    julia_init_h_file,
                     version,
                     soname,
                     sysimage_build_args,
