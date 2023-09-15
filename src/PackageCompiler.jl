@@ -28,6 +28,8 @@ const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
 const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
 const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
+default_julia_init() = String(DEFAULT_JULIA_INIT)
+default_julia_init_header() = String(DEFAULT_JULIA_INIT_HEADER)
 
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
@@ -599,7 +601,12 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             incremental)
     object_files = [object_file]
     if julia_init_c_file !== nothing
-        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
+        if julia_init_c_file isa String
+            julia_init_c_file = [julia_init_c_file]
+        end
+        for f in julia_init_c_file
+            push!(object_files, compile_c_init_julia(f, basename(sysimage_path)))
+        end
     end
     create_sysimg_from_object_file(object_files,
                                 sysimage_path;
@@ -915,8 +922,13 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
 
-- `julia_init_c_file::String`: File to include in the system image with functions for
-  initializing julia from external code.
+- `julia_init_c_file::::Union{String, Vector{String}}`: A file or list of files to include
+  in the system image with functions for initializing Julia from external code
+  (default: `PackageCompiler.default_julia_init()`).
+
+- `julia_init_h_file::::Union{String, Vector{String}}`: A file or list of files to include
+  in the library bundle, with declarations for the functions defined in the file(s) provided
+  via `julia_init_c_file` (default: `PackageCompiler.default_julia_init_header()`).
 
 - `version::VersionNumber`: Library version number. Added to the sysimg `.so` name
   on Linux, and the `.dylib` name on Apple platforms, and with `compat_level`, used to
@@ -952,7 +964,8 @@ function create_library(package_dir::String,
                         filter_stdlibs::Bool=false,
                         force::Bool=false,
                         header_files::Vector{String} = String[],
-                        julia_init_c_file::String=String(DEFAULT_JULIA_INIT),
+                        julia_init_c_file::Union{String, Vector{String}}=default_julia_init(),
+                        julia_init_h_file::Union{String, Vector{String}}=default_julia_init_header(),
                         version::Union{String,VersionNumber,Nothing}=nothing,
                         compat_level::String="major",
                         cpu_target::String=default_app_cpu_target(),
@@ -965,10 +978,14 @@ function create_library(package_dir::String,
 
     warn_official()
 
-    julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
-
-    if !(julia_init_h_file in header_files)
-        push!(header_files, julia_init_h_file)
+    # Add init header files to list of bundled header files if not already present
+    if julia_init_h_file isa String
+        julia_init_h_file = [julia_init_h_file]
+    end
+    for f in julia_init_h_file
+        if !(f in header_files)
+            push!(header_files, f)
+        end
     end
 
     if version isa String
@@ -1058,7 +1075,7 @@ function create_sysimage_workaround(
                     cpu_target::String;
                     sysimage_build_args::Cmd,
                     include_transitive_dependencies::Bool,
-                    julia_init_c_file::Union{Nothing,String},
+                    julia_init_c_file::Union{Nothing,String,Vector{String}},
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String}
