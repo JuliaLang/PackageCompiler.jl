@@ -1068,24 +1068,6 @@ function create_sysimage_workaround(
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String}
                     )
-    # If environment is not a package but a project, directly create sysimage
-    if ctx.env.pkg === nothing
-        project = dirname(ctx.env.project_file)
-        create_sysimage(String[]; sysimage_path, project,
-                        incremental,
-                        script,
-                        precompile_execution_file,
-                        precompile_statements_file,
-                        cpu_target,
-                        julia_init_c_file,
-                        version,
-                        soname,
-                        sysimage_build_args,
-                        include_transitive_dependencies)
-        return
-    end
-
-    package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
 
     if !incremental
@@ -1097,7 +1079,15 @@ function create_sysimage_workaround(
         base_sysimage = nothing
     end
 
-    create_sysimage([package_name]; sysimage_path, project,
+    if ctx.env.pkg === nothing
+        # If environment is not a package, create sysimage with all packages in project
+        packages = nothing
+    else
+        # Otherwise, only include package in sysimage
+        packages = [ctx.env.pkg.name]
+    end
+
+    create_sysimage(packages; sysimage_path, project,
                     incremental=true,
                     script=script,
                     precompile_execution_file,
