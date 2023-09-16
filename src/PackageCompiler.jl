@@ -847,10 +847,10 @@ end
 ###########
 
 """
-    create_library(package_dir::String, dest_dir::String; kwargs...)
+    create_library(package_or_project::String, dest_dir::String; kwargs...)
 
-Compile a library with the source in `package_dir` to the folder `dest_dir`.
-The folder `package_dir` should to contain a package with C-callable functions,
+Compile a library with the source in `package_or_project` to the folder `dest_dir`.
+The folder `package_or_project` should contain a package with C-callable functions,
 e.g.
 
 ```
@@ -867,6 +867,7 @@ Base.@ccallable function julia_cg(fptr::Ptr{Cvoid}, cx::Ptr{Cdouble}, cb::Ptr{Cd
     return 0
 end
 ```
+Alternatively, it can contain a project with dependencies that have C-callable functions.
 
 The library will be placed in the `lib` folder in `dest_dir` (or `bin` on Windows),
 and can be linked to and called into from C/C++ or other languages that can use C libraries.
@@ -943,7 +944,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_library(package_dir::String,
+function create_library(package_or_project::String,
                         dest_dir::String;
                         lib_name=nothing,
                         precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -975,11 +976,15 @@ function create_library(package_dir::String,
         version = parse(VersionNumber, version)
     end
 
-    ctx = create_pkg_context(package_dir)
-    ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
+    ctx = create_pkg_context(package_or_project)
+    if ctx.env.pkg === nothing && lib_name === nothing
+        error("expected either package with a `name` and `uuid`, or non-empty `lib_name`")
+    end
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
-    lib_name = something(lib_name, ctx.env.pkg.name)
+    if lib_name === nothing
+        lib_name = ctx.env.pkg.name
+    end
     try_rm_dir(dest_dir; force)
     mkpath(dest_dir)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
@@ -1063,6 +1068,23 @@ function create_sysimage_workaround(
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String}
                     )
+    # If environment is not a package but a project, directly create sysimage
+    if ctx.env.pkg === nothing
+        project = dirname(ctx.env.project_file)
+        create_sysimage(String[]; sysimage_path, project,
+                        incremental,
+                        script,
+                        precompile_execution_file,
+                        precompile_statements_file,
+                        cpu_target,
+                        julia_init_c_file,
+                        version,
+                        soname,
+                        sysimage_build_args,
+                        include_transitive_dependencies)
+        return
+    end
+
     package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
 
@@ -1268,22 +1290,23 @@ end
 function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     pkgs = load_all_deps(ctx)
 
-    # Also want artifacts for the project itself
-    @assert ctx.env.pkg !== nothing
-    # This is kinda ugly...
-    ctx.env.pkg.path = dirname(ctx.env.project_file)
-    push!(pkgs, ctx.env.pkg)
-
     # TODO: Allow override platform?
     platform = Base.BinaryPlatforms.HostPlatform()
     depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
 
-    bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
-
+    source_paths_names = Tuple{String, String}[]
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
+        push!(source_paths_names, (pkg_source_path, pkg.name))
+    end
+    # Also want artifacts for the project itself
+    push!(source_paths_names, (dirname(ctx.env.project_file), ctx.env.project_file))
+
+    bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
+
+    for (pkg_source_path, pkg_name) in source_paths_names
         bundled_artifacts_pkg = Pair{String, String}[]
         if isdefined(Pkg.Operations, :collect_artifacts)
             for (artifacts_toml, artifacts) in _collect_artifacts(pkg_source_path; platform, include_lazy=include_lazy_artifacts)
@@ -1307,7 +1330,7 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
             end
         end
         if !isempty(bundled_artifacts_pkg)
-            push!(bundled_artifacts, pkg.name => bundled_artifacts_pkg)
+            push!(bundled_artifacts, pkg_name => bundled_artifacts_pkg)
         end
     end
 
