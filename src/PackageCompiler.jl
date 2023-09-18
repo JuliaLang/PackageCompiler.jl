@@ -1173,8 +1173,18 @@ function bundle_julia_libraries(dest_dir, stdlibs)
         end
     end
 
-    matches = glob(glob_pattern_lib("libjulia"), lib_dir)
+    major, minor, patch = VERSION.major, VERSION.minor, VERSION.patch
+    r = if  Sys.isapple()
+        Regex("^libjulia(\\.$major(\\.$minor(\\.$patch)?)?)?\\.dylib\$")
+    elseif Sys.islinux()
+        Regex("^libjulia\\.so(\\.$major(\\.$minor(\\.$patch)?)?)?\$")
+    elseif Sys.iswindows()
+        Regex("^libjulia\\.dll\$")
+    end
+
+    matches = filter(!isnothing, match.(r, readdir(lib_dir)))
     for match in matches
+        match = joinpath(lib_dir, match.match)
         dest = joinpath(app_lib_dir, basename(match))
         isfile(dest) && continue
         mark = "├──"
