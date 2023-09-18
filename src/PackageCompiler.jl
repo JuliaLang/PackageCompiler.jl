@@ -423,6 +423,7 @@ function create_sysimg_object_file(object_file::String,
 
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
+    @debug "writing precompile staging code to $outputo_file"
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
@@ -805,7 +806,7 @@ function create_app(package_dir::String,
     # add precompile statements for functions that will be called from the C main() wrapper
     precompiles = String[]
     for (_, julia_main) in executables
-        push!(precompiles, "import $package_name")
+        push!(precompiles, "@isdefined($package_name) || (import $package_name)")
         push!(precompiles, "isdefined($package_name, :$julia_main) && precompile(Tuple{typeof($package_name.$julia_main)})")
     end
     push!(precompiles, "precompile(Tuple{typeof(append!), Vector{String}, Vector{Any}})")
