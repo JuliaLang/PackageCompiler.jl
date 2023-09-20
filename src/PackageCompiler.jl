@@ -714,6 +714,9 @@ end
 
 The executable will be placed in a folder called `bin` in `compiled_app` and
 when the executable run the `julia_main` function is called.
+Note that since an app-specific `Project.toml` is placed in the `share/julia` folder in
+`compiled_app`, it is generally *not* possible to install multiple unrelated apps to the
+same location.
 
 Standard Julia arguments are set by passing them after a `--julia-args`
 argument, for example:
@@ -876,6 +879,9 @@ Alternatively, it can contain a project with dependencies that have C-callable f
 
 The library will be placed in the `lib` folder in `dest_dir` (or `bin` on Windows),
 and can be linked to and called into from C/C++ or other languages that can use C libraries.
+Note that since a library-specific `Project.toml` is placed in the `share/julia` folder in
+`dest_dir`, it is generally *not* possible to install multiple libraries to the same
+location.
 
 Note that any applications/programs linking to this library may need help finding
 it at run time. Options include
@@ -996,6 +1002,7 @@ function create_library(package_or_project::String,
     bundle_julia_libraries(dest_dir, stdlibs)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
+    bundle_project(ctx, dest_dir)
     bundle_cert(dest_dir)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
@@ -1121,8 +1128,11 @@ function bundle_project(ctx, dir)
     # We do not want to bundle some potentially sensitive data, only data that
     # is already trivially retrievable from the sysimage.
     d = Dict{String, Any}()
-    d["name"] = ctx.env.project.name
-    d["uuid"] = ctx.env.project.uuid
+    # Only include name/uuid if it is a package and not just a project
+    if !isnothing(ctx.env.project.name) && !isnothing(ctx.env.project.uuid)
+        d["name"] = ctx.env.project.name
+        d["uuid"] = ctx.env.project.uuid
+    end
     d["deps"] = ctx.env.project.deps
 
     Pkg.Types.write_project(d, joinpath(julia_share, "Project.toml"))
