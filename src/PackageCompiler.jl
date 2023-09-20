@@ -28,6 +28,8 @@ const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
 const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
 const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
+default_julia_init() = String(DEFAULT_JULIA_INIT)
+default_julia_init_header() = String(DEFAULT_JULIA_INIT_HEADER)
 
 # See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
 function default_app_cpu_target()
@@ -500,6 +502,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
+                         julia_init_h_file=nothing,
                          version=nothing,
                          soname=nothing,
                          compat_level::String="major",
@@ -604,7 +607,23 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             incremental)
     object_files = [object_file]
     if julia_init_c_file !== nothing
-        push!(object_files, compile_c_init_julia(julia_init_c_file, basename(sysimage_path)))
+        if julia_init_c_file isa String
+            julia_init_c_file = [julia_init_c_file]
+        end
+        mktempdir() do include_dir
+            if julia_init_h_file !== nothing
+                if julia_init_h_file isa String
+                    julia_init_h_file = [julia_init_h_file]
+                end
+                for f in julia_init_h_file
+                    cp(f, joinpath(include_dir, basename(f)))
+                end
+            end
+            for f in julia_init_c_file
+                filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
+                push!(object_files, filename)
+            end
+        end
     end
     create_sysimg_from_object_file(object_files,
                                 sysimage_path;
@@ -665,12 +684,12 @@ function get_extra_linker_flags(version, compat_level, soname)
     return extra
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, include_dir::String)
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -O2 -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -927,8 +946,13 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
 
-- `julia_init_c_file::String`: File to include in the system image with functions for
-  initializing julia from external code.
+- `julia_init_c_file::::Union{String, Vector{String}}`: A file or list of files to include
+  in the system image with functions for initializing Julia from external code
+  (default: `PackageCompiler.default_julia_init()`).
+
+- `julia_init_h_file::::Union{String, Vector{String}}`: A file or list of files to include
+  in the library bundle, with declarations for the functions defined in the file(s) provided
+  via `julia_init_c_file` (default: `PackageCompiler.default_julia_init_header()`).
 
 - `version::VersionNumber`: Library version number. Added to the sysimg `.so` name
   on Linux, and the `.dylib` name on Apple platforms, and with `compat_level`, used to
@@ -964,7 +988,8 @@ function create_library(package_or_project::String,
                         filter_stdlibs::Bool=false,
                         force::Bool=false,
                         header_files::Vector{String} = String[],
-                        julia_init_c_file::String=String(DEFAULT_JULIA_INIT),
+                        julia_init_c_file::Union{String, Vector{String}}=default_julia_init(),
+                        julia_init_h_file::Union{String, Vector{String}}=default_julia_init_header(),
                         version::Union{String,VersionNumber,Nothing}=nothing,
                         compat_level::String="major",
                         cpu_target::String=default_app_cpu_target(),
@@ -977,10 +1002,14 @@ function create_library(package_or_project::String,
 
     warn_official()
 
-    julia_init_h_file = String(DEFAULT_JULIA_INIT_HEADER)
-
-    if !(julia_init_h_file in header_files)
-        push!(header_files, julia_init_h_file)
+    # Add init header files to list of bundled header files if not already present
+    if julia_init_h_file isa String
+        julia_init_h_file = [julia_init_h_file]
+    end
+    for f in julia_init_h_file
+        if !(f in header_files)
+            push!(header_files, f)
+        end
     end
 
     if version isa String
@@ -1014,8 +1043,8 @@ function create_library(package_or_project::String,
 
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file, version,
-        soname, script)
+        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
+        julia_init_h_file, version, soname, script)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1075,7 +1104,8 @@ function create_sysimage_workaround(
                     cpu_target::String;
                     sysimage_build_args::Cmd,
                     include_transitive_dependencies::Bool,
-                    julia_init_c_file::Union{Nothing,String},
+                    julia_init_c_file::Union{Nothing,String,Vector{String}},
+                    julia_init_h_file::Union{Nothing,String,Vector{String}},
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String}
@@ -1107,6 +1137,7 @@ function create_sysimage_workaround(
                     cpu_target,
                     base_sysimage,
                     julia_init_c_file,
+                    julia_init_h_file,
                     version,
                     soname,
                     sysimage_build_args,
