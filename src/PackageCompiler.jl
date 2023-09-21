@@ -786,6 +786,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `remove_symlinks::Bool`: Experimental! If `true`, remove symlinks from bundled libraries and artifacts. Defaults to `false`.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -800,7 +802,8 @@ function create_app(package_dir::String,
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    remove_symlinks::Bool=false)
     warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
@@ -823,6 +826,9 @@ function create_app(package_dir::String,
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     bundle_cert(app_dir)
+    if remove_symlinks
+        do_remove_symlinks(app_dir)
+    end
 
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
@@ -868,6 +874,20 @@ function create_executable_from_sysimg(exe_path::String,
     return nothing
 end
 
+function do_remove_symlinks(app_dir::String)
+    app_libdir = joinpath(app_dir, Sys.isunix() ? "lib" : "bin")
+    artifact_dir = joinpath(app_dir, "share", "julia", "artifacts")
+    for dir in (app_libdir, artifact_dir)
+        for (root, dirs, files) in walkdir(dir)
+            for file in files
+                path = joinpath(root, file)
+                if islink(path)
+                    rm(path)
+                end
+            end
+        end
+    end
+end
 
 ###########
 # Library #
@@ -978,6 +998,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `remove_symlinks::Bool`: Experimental! If `true`, remove symlinks from bundled libraries and artifacts. Defaults to `false`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
@@ -996,7 +1018,8 @@ function create_library(package_or_project::String,
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
-                        script::Union{Nothing,String}=nothing
+                        script::Union{Nothing,String}=nothing,
+                        remove_symlinks::Bool=false,
                         )
 
 
@@ -1033,6 +1056,9 @@ function create_library(package_or_project::String,
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
     bundle_cert(dest_dir)
+    if remove_symlinks
+        do_remove_symlinks(dest_dir)
+    end
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
