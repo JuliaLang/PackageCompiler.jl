@@ -1452,17 +1452,16 @@ function bundle_cert(dest_dir)
     cp(cert_path, joinpath(share_path, "cert.pem"))
 end
 
-# Write preferences of project `project_dir` to `io`. If `active_project_only`, discard
-# preferences for packages not used in the project in `project_dir`
-function dump_preferences(io::IO, project_dir; active_project_only = true)
+# Write preferences for packages in project `project_dir` to `io`
+function dump_preferences(io::IO, project_dir)
+    # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
+    #       only introduced in Julia v1.8
     command = """
     using TOML, Pkg
-    prefs = Base.get_preferences()
-    if $active_project_only
-        pkgs = map(p -> p.name, values(Pkg.dependencies()))
-        keep = Set(intersect(pkgs, keys(prefs)))
-        filter!(p -> first(p) in keep, prefs)
-    end
+    # For each dependency pair (UUID => PackageInfo), store preferences in Dict
+    prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
+    # Filter out packages without preferences
+    filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
     """
     prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
@@ -1470,9 +1469,7 @@ function dump_preferences(io::IO, project_dir; active_project_only = true)
 
     nothing
 end
-function dump_preferences(project_dir; active_project_only = true)
-    dump_preferences(stdout, project_dir; active_project_only)
-end
+dump_preferences(project_dir) = dump_preferences(stdout, project_dir)
 
 # Collect all preferences of the active project and store them in the `LOAD_PATH`
 # Note: for apps/libraries, the `LOAD_PATH` defaults to `<dest_dir>/share/julia`
