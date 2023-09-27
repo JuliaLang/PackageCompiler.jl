@@ -1202,7 +1202,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     # Bundle the libstdc++ that is actually loaded by Julia
     # xref: https://discourse.julialang.org/t/precedence-of-local-and-julia-shipped-shared-libraries/104258?u=sloede
-    libstdcpp_path = Libdl.dllist() |> filter(contains("libstdc++")) |> first
+    libstdcpp_path = first(filter(contains("libstdc++"), Libdl.dllist()))
     libstdcpp_dir = dirname(abspath(libstdcpp_path))
 
     # Required libraries
