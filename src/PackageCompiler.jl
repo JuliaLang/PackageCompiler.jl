@@ -1200,11 +1200,17 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     tot_libsize = 0
     printstyled("PackageCompiler: bundled libraries:\n")
 
-    # Reqiored libraries
+    # Bundle the libstdc++ that is actually loaded by Julia
+    # xref: https://discourse.julialang.org/t/precedence-of-local-and-julia-shipped-shared-libraries/104258?u=sloede
+    libstdcpp_path = Libdl.dllist() |> filter(contains("libstdc++")) |> first
+    libstdcpp_dir = dirname(abspath(libstdcpp_path))
+
+    # Required libraries
     println("  ├── Base:")
     os = Sys.islinux() ? "linux" : Sys.isapple() ? "mac" : "windows"
     for lib in required_libraries[os]
-        matches = glob(glob_pattern_lib(lib), libjulia_dir)
+        search_dir = (lib == "libstdc++") ? libstdcpp_dir : libjulia_dir
+        matches = glob(glob_pattern_lib(lib), search_dir)
         for match in matches
             dest = joinpath(app_libjulia_dir, basename(match))
             isfile(dest) && continue
