@@ -1183,6 +1183,68 @@ function glob_pattern_lib(lib)
     error("unknown os")
 end
 
+# Take `path` to a libstdc++ library and return aliases for soname symlinks
+# - Unix:
+#   `path/to/libstdc++.so.6.0.30` will yield aliases
+#   `libstdc++.so.6.0.30`, `libstdc++.so.6`, `libstdc++.so`
+# - Apple:
+#   `path/to/libstdc++.6.0.30.dylib` will yield aliases
+#   `libstdc++.6.0.30.dylib`, `libstdc++.6.dylib`, `libstdc++.dylib`
+# - Windows (no versions in filenames):
+#   `path/to/libstdc++.dll` will yield alias `libstdc++.dll`
+function get_libstdcxx_aliases(path)
+    # Always add full filename to list of aliases
+    filename = basename(path)
+    aliases = String[filename]
+
+    if Sys.iswindows()
+        # Windows does not encode versions in filenames
+        return aliases
+    end
+
+    # Split filename into components
+    components = split(filename, ".")
+
+    if Sys.isapple()
+        # macOS uses `libname[.major[.minor[.patch]].dylib`, where the version parts are optional
+        # we want the full name (`filename`) plus
+        # - `libname.dylib`
+        # - `libname.major.dylib` (if `major` exists)
+        if last(components) != Libdl.dlext
+            error("unexpected filename: last component should be `.$(Libdl.dlext)` but is `$(last(components))`")
+        end
+        libname = components[1]
+        ext = components[end]
+        push!(aliases, libname * "." * ext) # `libname.dylib`
+        if length(components) > 2
+            major = components[2]
+            push!(aliases, libname * "." * major * "." * ext) # `libname.major.dylib`
+        end
+        return unique(aliases)
+    elseif Sys.isunix()
+        # Unix uses `libname.so[.major[.minor[.patch]]`, where the version parts are optional
+        # we want the full name (`filename`) plus
+        # - `libname.so`
+        # - `libname.major.so` (if `major` exists)
+        if length(components) < 2
+            error("unexpected filename: no file extension found")
+        end
+        if components[2] != Libdl.dlext
+            error("unexpected filename: second component should be `.$(Libdl.dlext)` but is `$(components[2])`")
+        end
+        libname = components[1]
+        ext = components[2]
+        push!(aliases, libname * "." * ext) # `libname.so`
+        if length(components) > 2
+            major = components[3]
+            push!(aliases, libname * "." * ext * "." * major) # `libname.so.major`
+        end
+        return unique(aliases)
+    else
+        error("unable to determine aliases; system is not Windows, macOS, or UNIX")
+    end
+end
+
 # TODO: Detangle printing from business logic
 function bundle_julia_libraries(dest_dir, stdlibs)
     app_lib_dir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
@@ -1202,21 +1264,20 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     # Bundle the libstdc++ that is actually loaded by Julia
     # xref: https://discourse.julialang.org/t/precedence-of-local-and-julia-shipped-shared-libraries/104258?u=sloede
-    libstdcpp_search = filter(contains("libstdc++"), Libdl.dllist())
-    if isempty(libstdcpp_search)
-        # Fall back to default search directory if libstdc++ is not loaded
-        libstdcpp_dir = libjulia_dir
-    else
-        # If libstdc++ was found, get absolute path to directory
-        libstdcpp_dir = dirname(abspath(first(libstdcpp_search)))
+    libstdcxx = filter(contains("libstdc++"), Libdl.dllist())
+    # Load libstdc++ if not yet loaded to figure out which one Julia would load
+    if isempty(libstdcxx)
+        Libdl.dlopen("libstdc++")
+        libstdcxx = filter(contains("libstdc++"), Libdl.dllist())
     end
+    # Resolve symbolic links
+    libstdcxx = map(realpath ∘ abspath, libstdcxx)
 
     # Required libraries
     println("  ├── Base:")
     os = Sys.islinux() ? "linux" : Sys.isapple() ? "mac" : "windows"
     for lib in required_libraries[os]
-        search_dir = (lib == "libstdc++") ? libstdcpp_dir : libjulia_dir
-        matches = glob(glob_pattern_lib(lib), search_dir)
+        matches = (lib == "libstdc++") ? libstdcxx : glob(glob_pattern_lib(lib), libjulia_dir)
         for match in matches
             dest = joinpath(app_libjulia_dir, basename(match))
             isfile(dest) && continue
@@ -1228,6 +1289,16 @@ function bundle_julia_libraries(dest_dir, stdlibs)
                 println("  │    $mark ", basename(match), " - ", pretty_byte_str(libsize))
             end
         end
+    end
+
+    # For libstdc++, add additional symlinks since above only the library itself was copied
+    libstdcxx_path = first(libstdcxx)
+    for alias in get_libstdcxx_aliases(libstdcxx_path)
+        link = joinpath(app_libjulia_dir, alias)
+        if isfile(link) || islink(link)
+            continue
+        end
+        symlink(basename(libstdcxx_path), link)
     end
 
     major, minor, patch = VERSION.major, VERSION.minor, VERSION.patch
