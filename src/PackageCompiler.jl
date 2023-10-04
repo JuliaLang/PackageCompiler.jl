@@ -1183,66 +1183,52 @@ function glob_pattern_lib(lib)
     error("unknown os")
 end
 
-# Take `path` to a libstdc++ library and return aliases for soname symlinks
+# Take `path` to a libstdc++ library and return aliases for shared library symlinks:
 # - Unix:
 #   `path/to/libstdc++.so.6.0.30` will yield aliases
 #   `libstdc++.so.6.0.30`, `libstdc++.so.6`, `libstdc++.so`
 # - Apple:
 #   `path/to/libstdc++.6.0.30.dylib` will yield aliases
 #   `libstdc++.6.0.30.dylib`, `libstdc++.6.dylib`, `libstdc++.dylib`
-# - Windows (no versions in filenames):
-#   `path/to/libstdc++.dll` will yield alias `libstdc++.dll`
+# - Windows:
+#   `path/to/libstdc++-6.0.30.dll` will yield aliases
+#   `libstdc++-6.0.30.dll`, `libstdc++-6.dll`, `libstdc++.dll`
+# If the major version cannot be inferred from the filename, return only full name and the
+# alias without any version information.
 function get_libstdcxx_aliases(path)
-    # Always add full filename to list of aliases
-    filename = basename(path)
-    aliases = String[filename]
-
-    if Sys.iswindows()
-        # Windows does not encode versions in filenames
-        return aliases
-    end
-
-    # Split filename into components
-    components = split(filename, ".")
-
-    if Sys.isapple()
-        # macOS uses `libname[.major[.minor[.patch]].dylib`, where the version parts are optional
-        # we want the full name (`filename`) plus
-        # - `libname.dylib`
-        # - `libname.major.dylib` (if `major` exists)
-        if last(components) != Libdl.dlext
-            error("unexpected filename: last component should be `.$(Libdl.dlext)` but is `$(last(components))`")
-        end
-        libname = components[1]
-        ext = components[end]
-        push!(aliases, libname * "." * ext) # `libname.dylib`
-        if length(components) > 2
-            major = components[2]
-            push!(aliases, libname * "." * major * "." * ext) # `libname.major.dylib`
-        end
-        return unique(aliases)
+    # Extract library name and version from path
+    os = if Sys.iswindows()
+        "windows"
+    elseif Sys.isapple()
+        "macos"
     elseif Sys.isunix()
-        # Unix uses `libname.so[.major[.minor[.patch]]`, where the version parts are optional
-        # we want the full name (`filename`) plus
-        # - `libname.so`
-        # - `libname.major.so` (if `major` exists)
-        if length(components) < 2
-            error("unexpected filename: no file extension found")
-        end
-        if components[2] != Libdl.dlext
-            error("unexpected filename: second component should be `.$(Libdl.dlext)` but is `$(components[2])`")
-        end
-        libname = components[1]
-        ext = components[2]
-        push!(aliases, libname * "." * ext) # `libname.so`
-        if length(components) > 2
-            major = components[3]
-            push!(aliases, libname * "." * ext * "." * major) # `libname.so.major`
-        end
-        return unique(aliases)
+        "unix"
     else
         error("unable to determine aliases; system is not Windows, macOS, or UNIX")
     end
+    libname, version = Base.BinaryPlatforms.parse_dl_name_version(path, os)
+
+    # Always add full filename and base library name to list of aliases
+    ext = Libdl.dlext
+    aliases = String[basename(path), "$libname.$ext"]
+
+    # If version exists, also add alias for major version
+    if !isnothing(version)
+        major = version.major
+        if Sys.iswindows()
+            # libname-major.dll
+            push!(aliases, "$libname-$major.$ext")
+        elseif Sys.isapple()
+            # libname.major.dylib
+            push!(aliases, "$libname.$major.$ext")
+        else
+            # libname.so.major
+            push!(aliases, "$libname.$ext.$major")
+        end
+    end
+
+    # Return unique list in case, e.g., filename is identical to base library name
+    return unique(aliases)
 end
 
 # TODO: Detangle printing from business logic
