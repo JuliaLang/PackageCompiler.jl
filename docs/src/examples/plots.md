@@ -1,6 +1,7 @@
 # [Creating a sysimage for fast plotting with Plots.jl](@id examples-plots)
 
-!!! note Julia Version 1.9 Performance Update
+!!! note "Julia Version 1.9 Performance Update"
+
     Starting from Julia 1.9, the "time to first plot" (TTFP) has seen a
     significant improvement due to the introduction of native code
     caching with Package Images.
