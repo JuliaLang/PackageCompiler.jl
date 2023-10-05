@@ -117,3 +117,15 @@ Note that on Unix-like operating systems (including Mac), your library must have
 
 See [here](https://github.com/simonbyrne/libcg) for a more complete example of how this might look.
 
+### [Preferences](@id library-preferences)
+
+Compile-time preferences used by any of the packages included in the library will be stored in
+the sysimage. To support runtime preferences, all preferences that the library "sees" during the
+compilation process are stored in the library bundle under
+`<dest_dir>/share/julia/LocalPreferences.toml`. Note that preferences loaded at compile time
+are *not* affected by the values in the `LocalPreferences.toml`, but modifying the file
+*will* change the value of preferences loaded at runtime.
+
+To learn more about compile time preferences and runtime preferences, please refer to the
+[Preferences.jl docs](https://juliapackaging.github.io/Preferences.jl/stable/).
+
