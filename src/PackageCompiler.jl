@@ -778,6 +778,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `include_preferences::Bool`: If `true`, store all preferences visible by the project in
+  `package_dir` in the app bundle. Defaults to `true`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -800,6 +803,7 @@ function create_app(package_dir::String,
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
+                    include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
     warn_official()
     if filter_stdlibs && incremental
@@ -822,6 +826,7 @@ function create_app(package_dir::String,
     bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
+    include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
 
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
@@ -970,6 +975,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   transitive dependencies into the sysimage. This only makes a difference if some
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `include_preferences::Bool`: If `true`, store all preferences visible by the project in
+  `project_or_package` in the library bundle. Defaults to `true`.
+
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
 ### Advanced keyword arguments
@@ -996,6 +1004,7 @@ function create_library(package_or_project::String,
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
+                        include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing
                         )
 
@@ -1032,6 +1041,7 @@ function create_library(package_or_project::String,
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
+    include_preferences && bundle_preferences(ctx, dest_dir)
     bundle_cert(dest_dir)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
@@ -1509,6 +1519,40 @@ function bundle_cert(dest_dir)
     share_path = joinpath(dest_dir, "share", "julia")
     mkpath(share_path)
     cp(cert_path, joinpath(share_path, "cert.pem"))
+end
+
+# Write preferences for packages in project `project_dir` to `io`
+function dump_preferences(io::IO, project_dir)
+    # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
+    #       only introduced in Julia v1.8
+    command = """
+    using TOML, Pkg
+    # For each dependency pair (UUID => PackageInfo), store preferences in Dict
+    prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
+    # Filter out packages without preferences
+    filter!(p -> !isempty(last(p)), prefs)
+    TOML.print(prefs, sorted=true)
+    """
+    prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
+    write(io, prefs)
+
+    nothing
+end
+dump_preferences(project_dir) = dump_preferences(stdout, project_dir)
+
+# Collect all preferences of the active project and store them in the `LOAD_PATH`
+# Note: for apps/libraries, the `LOAD_PATH` defaults to `<dest_dir>/share/julia`
+function bundle_preferences(ctx, dest_dir)
+    share_path = joinpath(dest_dir, "share", "julia")
+    mkpath(share_path)
+    preferences_path = joinpath(share_path, "LocalPreferences.toml")
+    project_dir = dirname(ctx.env.project_file)
+
+    open(preferences_path, "w") do io
+        dump_preferences(io, project_dir)
+    end
+
+    return
 end
 
 end # module
