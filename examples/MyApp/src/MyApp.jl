@@ -120,6 +120,8 @@ function erroring()
     return 0
 end
 
-
+function __init__()
+    @info "Running MyApp.__init__()" get(ENV, "CI", nothing)
+end
 
 end # module
