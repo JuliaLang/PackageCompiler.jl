@@ -1260,20 +1260,27 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     # Bundle the libstdc++ that is actually loaded by Julia
     # xref: https://discourse.julialang.org/t/precedence-of-local-and-julia-shipped-shared-libraries/104258?u=sloede
-    libstdcxx = filter(contains("libstdc++"), Libdl.dllist())
-    # Load libstdc++ if not yet loaded to figure out which one Julia would load
-    if isempty(libstdcxx)
-        Libdl.dlopen("libstdc++")
+    # Note: Like Julia, we only do this dynamic selection on Linux systems
+    if Sys.islinux()
         libstdcxx = filter(contains("libstdc++"), Libdl.dllist())
+        # Load libstdc++ if not yet loaded to figure out which one Julia would load
+        if isempty(libstdcxx)
+            Libdl.dlopen("libstdc++")
+            libstdcxx = filter(contains("libstdc++"), Libdl.dllist())
+        end
+        # Resolve symbolic links
+        libstdcxx = map(realpath ∘ abspath, libstdcxx)
     end
-    # Resolve symbolic links
-    libstdcxx = map(realpath ∘ abspath, libstdcxx)
 
     # Required libraries
     println("  ├── Base:")
     os = Sys.islinux() ? "linux" : Sys.isapple() ? "mac" : "windows"
     for lib in required_libraries[os]
-        matches = (lib == "libstdc++") ? libstdcxx : glob(glob_pattern_lib(lib), libjulia_dir)
+        if Sys.islinux() && lib == "libstdc++"
+            matches = libstdcxx
+        else
+            matches = glob(glob_pattern_lib(lib), libjulia_dir)
+        end
         for match in matches
             dest = joinpath(app_libjulia_dir, basename(match))
             isfile(dest) && continue
@@ -1288,13 +1295,15 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     end
 
     # For libstdc++, add additional symlinks since above only the library itself was copied
-    libstdcxx_path = first(libstdcxx)
-    for alias in get_libstdcxx_aliases(libstdcxx_path)
-        link = joinpath(app_libjulia_dir, alias)
-        if isfile(link) || islink(link)
-            continue
+    if Sys.islinux()
+        libstdcxx_path = first(libstdcxx)
+        for alias in get_libstdcxx_aliases(libstdcxx_path)
+            link = joinpath(app_libjulia_dir, alias)
+            if isfile(link) || islink(link)
+                continue
+            end
+            symlink(basename(libstdcxx_path), link)
         end
-        symlink(basename(libstdcxx_path), link)
     end
 
     major, minor, patch = VERSION.major, VERSION.minor, VERSION.patch
