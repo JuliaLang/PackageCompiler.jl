@@ -824,7 +824,7 @@ function create_app(package_dir::String,
     bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(app_dir, stdlibs)
-    bundle_julia_libexec(ctx, destdir)
+    bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
