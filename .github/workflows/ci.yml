@@ -28,7 +28,8 @@ jobs:
         julia-version:
           - '1.6'
           - '1.8'
-          - '1.9-nightly'
+          - '1.9'
+          - '1.10-nightly'
           - 'nightly'
         julia-arch:
           - 'x64'
