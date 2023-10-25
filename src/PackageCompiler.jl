@@ -824,6 +824,7 @@ function create_app(package_dir::String,
     bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(app_dir, stdlibs)
+    bundle_julia_libexec(ctx, destdir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
@@ -1038,6 +1039,7 @@ function create_library(package_or_project::String,
     mkpath(dest_dir)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(dest_dir, stdlibs)
+    bundle_julia_libexec(ctx, destdir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
@@ -1360,6 +1362,38 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     println("  Total library file size: ", pretty_byte_str(tot_libsize))
 
+    return
+end
+
+function bundle_julia_libexec(ctx, destdir)
+    # We only bundle the `7z` executable at the moment, which in turn is only needed by Pkg
+    @assert ctx.env.manifest !== nothing
+    has_pkg = false
+    for (_, package) in ctx.env.manifest
+        if package.name == "Pkg"
+            has_pkg = true
+            break
+        end
+    end
+    if !has_pkg
+        return
+    end
+
+    p7zip_exe = Sys.iswindows() ? "7z.exe" : "7z" 
+    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
+    bundle_p7zip_path = joinpath(bundle_libexec_dir, p7zip_exe)
+
+    # We only bundle the `7z` from Julia
+    for julia_p7zip_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe),
+                             joinpath(Sys.BINDIR, p7zip_exe))
+        if isfile(julia_p7zip_path)
+            mkdir(bundle_libexec_dir)
+            cp(julia_p7zip_path, bundle_p7zip_path)
+            return
+        end
+    end
+
+    # If no bundled `7z` was found, we do nothing and assume the system `7z` will be used
     return
 end
 
