@@ -1039,7 +1039,7 @@ function create_library(package_or_project::String,
     mkpath(dest_dir)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(dest_dir, stdlibs)
-    bundle_julia_libexec(ctx, destdir)
+    bundle_julia_libexec(ctx, dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
