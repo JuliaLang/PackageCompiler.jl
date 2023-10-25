@@ -1535,6 +1535,8 @@ function dump_preferences(io::IO, project_dir)
     # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
     #       only introduced in Julia v1.8
     command = """
+    println(stderr, "Base.LOAD_PATH = ", Base.LOAD_PATH)
+    println(stderr, "JULIA_LOAD_PATH = ", get(ENV, "JULIA_LOAD_PATH", nothing))
     using TOML, Pkg
     # For each dependency pair (UUID => PackageInfo), store preferences in Dict
     prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
