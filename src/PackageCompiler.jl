@@ -220,8 +220,7 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
         r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
-                                    sysimage_build_args::Cmd, sysimage_build_prefix::Cmd)
+function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -239,7 +238,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
-            cmd = `$sysimage_build_prefix $(get_julia_cmd()) --cpu-target $cpu_target
+            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
                 $compiler_source_path`
             @debug "running $cmd"
@@ -252,7 +251,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$sysimage_build_prefix $(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-ji=$tmp_sys_ji
                     $new_sysimage_source_path`
@@ -304,7 +303,6 @@ function create_sysimg_object_file(object_file::String,
                             cpu_target::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
-                            sysimage_build_prefix::Cmd,
                             extra_precompiles::String,
                             incremental::Bool)
     julia_code_buffer = IOBuffer()
@@ -431,7 +429,7 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-        cmd = `$sysimage_build_prefix $(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
+        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
             --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
             $outputo_file`
         @debug "running $cmd"
@@ -489,9 +487,6 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
-
-- `sysimage_build_prefix::Cmd`: A set of commands and command line options that will be
-   prefixed to the call to Julia for building the sysimage, for example `srun -n 1`.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -503,7 +498,6 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
-                         sysimage_build_prefix::Cmd=``,
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
@@ -551,8 +545,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target,
-                                                   sysimage_build_args, sysimage_build_prefix)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
@@ -610,7 +603,6 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             cpu_target,
                             script,
                             sysimage_build_args,
-                            sysimage_build_prefix,
                             extra_precompiles,
                             incremental)
     object_files = [object_file]
@@ -796,9 +788,6 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 
-- `sysimage_build_prefix::Cmd`: A set of commands and command line options that will be
-   prefixed to the call to Julia for building the sysimage, for example `srun -n 1`.
-
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
 function create_app(package_dir::String,
@@ -813,7 +802,6 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
-                    sysimage_build_prefix::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
@@ -863,7 +851,6 @@ function create_app(package_dir::String,
                     precompile_statements_file,
                     cpu_target,
                     sysimage_build_args,
-                    sysimage_build_prefix,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
                     script)
@@ -999,9 +986,6 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
-
-- `sysimage_build_prefix::Cmd`: A set of commands and command line options that will be
-   prefixed to the call to Julia for building the sysimage, for example `srun -n 1`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
@@ -1019,7 +1003,6 @@ function create_library(package_or_project::String,
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
-                        sysimage_build_prefix::Cmd=``,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing
@@ -1070,8 +1053,7 @@ function create_library(package_or_project::String,
 
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, sysimage_build_prefix,
-        include_transitive_dependencies, julia_init_c_file,
+        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
         julia_init_h_file, version, soname, script)
 
     if version !== nothing && Sys.isunix()
@@ -1131,7 +1113,6 @@ function create_sysimage_workaround(
                     filter_stdlibs::Bool,
                     cpu_target::String;
                     sysimage_build_args::Cmd,
-                    sysimage_build_prefix::Cmd,
                     include_transitive_dependencies::Bool,
                     julia_init_c_file::Union{Nothing,String,Vector{String}},
                     julia_init_h_file::Union{Nothing,String,Vector{String}},
@@ -1170,7 +1151,6 @@ function create_sysimage_workaround(
                     version,
                     soname,
                     sysimage_build_args,
-                    sysimage_build_prefix,
                     include_transitive_dependencies)
 
     return
