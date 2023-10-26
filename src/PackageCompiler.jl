@@ -1366,7 +1366,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     return
 end
 
-function bundle_julia_libexec(ctx, destdir)
+function bundle_julia_libexec(ctx, dest_dir)
     # We only bundle the `7z` executable at the moment
     @assert ctx.env.manifest !== nothing
     uses_p7zip_jll = false
@@ -1380,8 +1380,14 @@ function bundle_julia_libexec(ctx, destdir)
         return
     end
 
-    # Use Julia-private `libexec` folder (normpath is required in case `bin` does not exist)
-    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
+    # Use Julia-private `libexec` folder if it exsts
+    # (normpath is required in case `bin` does not exist in `dest_dir`)
+    libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
+        Base.PRIVATE_LIBEXECDIR
+    else
+        Base.LIBEXECDIR
+    end
+    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
     mkpath(bundle_libexec_dir)
 
     p7zip_exe = basename(p7zip_path)
