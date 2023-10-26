@@ -1369,14 +1369,7 @@ end
 function bundle_julia_libexec(ctx, dest_dir)
     # We only bundle the `7z` executable at the moment
     @assert ctx.env.manifest !== nothing
-    uses_p7zip_jll = false
-    for (_, package) in ctx.env.manifest
-        if package.name == "p7zip_jll"
-            uses_p7zip_jll = true
-            break
-        end
-    end
-    if !uses_p7zip_jll
+    if !any(x -> x.name == "p7zip_jll", values(ctx.env.manifest))
         return
     end
 
