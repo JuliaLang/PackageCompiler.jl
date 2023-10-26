@@ -1548,7 +1548,7 @@ function dump_preferences(io::IO, project_dir)
     # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
     if !("@stdlib" in LOAD_PATH)
         splitter = Sys.iswindows() ? ';' : ':'
-        new_load_path = join(vcat(LOAD_PATH, "@stdlib"), splitter)
+        new_load_path = get(ENV, "JULIA_LOAD_PATH", "") * "$(splitter)@stdlib"
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$new_load_path")
         @debug "dump_preferences: running $cmd" JULIA_LOAD_PATH = "$new_load_path"
     else
