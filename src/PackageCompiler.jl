@@ -278,11 +278,12 @@ function ensurecompiled(project, packages, sysimage)
     return
 end
 
-function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
+function run_precompilation_script(project::String, sysimg::String, precompile_prefix::Cmd,
+                                   precompile_file::Union{String, Nothing}, precompile_dir::String)
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
     arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
+    cmd = `$precompile_prefix $(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
@@ -299,6 +300,7 @@ function create_sysimg_object_file(object_file::String,
                             project::String,
                             base_sysimage::String,
                             precompile_execution_file::Vector{String},
+                            precompile_execution_prefix::Cmd,
                             precompile_statements_file::Vector{String},
                             cpu_target::String,
                             script::Union{Nothing, String},
@@ -326,7 +328,8 @@ function create_sysimg_object_file(object_file::String,
     @debug "running precompilation execution script..."
     precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
     for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
+        tracefile = run_precompilation_script(project, base_sysimage, precompile_execution_prefix,
+                                              file, precompile_dir)
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, abspath.(precompile_statements_file))
@@ -487,11 +490,16 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `precompile_execution_prefix::Cmd`: A set of commands and command line options that will be
+  prefixed to the call to Julia when executing files specified by `precompile_execution_file`,
+  for example `srun`.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
+                         precompile_execution_prefix::Cmd=``,
                          precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
                          filter_stdlibs::Bool=false,
@@ -599,6 +607,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             project,
                             base_sysimage,
                             precompile_execution_file,
+                            precompile_execution_prefix,
                             precompile_statements_file,
                             cpu_target,
                             script,
@@ -789,11 +798,16 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `precompile_execution_prefix::Cmd`: A set of commands and command line options that will be
+  prefixed to the call to Julia when executing files specified by `precompile_execution_file`,
+  for example `srun`.
 """
 function create_app(package_dir::String,
                     app_dir::String;
                     executables::Union{Nothing, Vector{Pair{String, String}}}=nothing,
                     precompile_execution_file::Union{String, Vector{String}}=String[],
+                    precompile_execution_prefix::Cmd=``,
                     precompile_statements_file::Union{String, Vector{String}}=String[],
                     incremental::Bool=false,
                     filter_stdlibs::Bool=false,
@@ -848,6 +862,7 @@ function create_app(package_dir::String,
                     incremental,
                     filter_stdlibs,
                     precompile_execution_file,
+                    precompile_execution_prefix,
                     precompile_statements_file,
                     cpu_target,
                     sysimage_build_args,
@@ -986,11 +1001,16 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `precompile_execution_prefix::Cmd`: A set of commands and command line options that will be
+  prefixed to the call to Julia when executing files specified by `precompile_execution_file`,
+  for example `srun`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
                         lib_name=nothing,
                         precompile_execution_file::Union{String, Vector{String}}=String[],
+                        precompile_execution_prefix::Cmd=``,
                         precompile_statements_file::Union{String, Vector{String}}=String[],
                         incremental::Bool=false,
                         filter_stdlibs::Bool=false,
@@ -1051,7 +1071,7 @@ function create_library(package_or_project::String,
     compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
+    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file, precompile_execution_prefix,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
         julia_init_h_file, version, soname, script)
@@ -1108,6 +1128,7 @@ function create_sysimage_workaround(
                     ctx,
                     sysimage_path::String,
                     precompile_execution_file::Union{String, Vector{String}},
+                    precompile_execution_prefix::Cmd,
                     precompile_statements_file::Union{String, Vector{String}},
                     incremental::Bool,
                     filter_stdlibs::Bool,
@@ -1143,6 +1164,7 @@ function create_sysimage_workaround(
                     incremental=true,
                     script=script,
                     precompile_execution_file,
+                    precompile_execution_prefix,
                     precompile_statements_file,
                     cpu_target,
                     base_sysimage,
