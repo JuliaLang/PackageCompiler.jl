@@ -1542,7 +1542,20 @@ function dump_preferences(io::IO, project_dir)
     filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
     """
-    prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
+
+    cmd = `$(Base.julia_cmd()) --project=$project_dir -e "$command"`
+
+    # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
+    if !("@stdlib" in LOAD_PATH)
+        splitter = Sys.iswindows() ? ';' : ':'
+        new_load_path = join(vcat(LOAD_PATH, "@stdlib"), splitter)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$new_load_path")
+        @debug "dump_preferences: running $cmd" JULIA_LOAD_PATH = "$new_load_path"
+    else
+        @debug "dump_preferences: running $cmd"
+    end
+
+    prefs = read(cmd, String)
     write(io, prefs)
 
     nothing
