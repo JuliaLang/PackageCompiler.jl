@@ -10,6 +10,7 @@ using UUIDs: UUID, uuid1
 using RelocatableFolders
 using TOML
 using Glob
+using p7zip_jll: p7zip_path
 
 export create_sysimage, create_app, create_library
 
@@ -1366,35 +1367,27 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 end
 
 function bundle_julia_libexec(ctx, destdir)
-    # We only bundle the `7z` executable at the moment, which in turn is only needed by Pkg
+    # We only bundle the `7z` executable at the moment
     @assert ctx.env.manifest !== nothing
-    has_pkg = false
+    uses_p7zip_jll = false
     for (_, package) in ctx.env.manifest
-        if package.name == "Pkg"
-            has_pkg = true
+        if package.name == "p7zip_jll"
+            uses_p7zip_jll = true
             break
         end
     end
-    if !has_pkg
+    if !uses_p7zip_jll
         return
     end
 
-    p7zip_exe = Sys.iswindows() ? "7z.exe" : "7z" 
+    # Use Julia-private `libexec` folder (normpath is required in case `bin` does not exist)
     bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
-    bundle_p7zip_path = joinpath(bundle_libexec_dir, p7zip_exe)
+    mkpath(bundle_libexec_dir)
 
-    # We only bundle the `7z` from Julia
-    for julia_p7zip_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe),
-                             joinpath(Sys.BINDIR, p7zip_exe))
-        if isfile(julia_p7zip_path)
-            mkdir(bundle_libexec_dir)
-            cp(julia_p7zip_path, bundle_p7zip_path)
-            return
-        end
-    end
+    p7zip_exe = basename(p7zip_path)
+    cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
 
-    # If no bundled `7z` was found, we do nothing and assume the system `7z` will be used
-    return
+    return 
 end
 
 function recursive_dir_size(path)
