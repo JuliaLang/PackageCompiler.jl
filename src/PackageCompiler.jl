@@ -1,6 +1,7 @@
 module PackageCompiler
 
 using Base: active_project
+using REPL
 using Libdl: Libdl
 using Pkg: Pkg
 using Printf
@@ -710,7 +711,11 @@ end
 # App #
 #######
 
-const IS_OFFICIAL = occursin("Official https://julialang.org/ release", sprint(Base.banner))
+const IS_OFFICIAL = occursin(
+    "Official https://julialang.org/ release",
+    # `banner` moved in https://github.com/JuliaLang/julia/pull/51867
+    sprint(isdefined(Base, :banner) ? Base.banner : REPL.banner)
+)
 function warn_official()
     if !IS_OFFICIAL
         @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
