@@ -711,11 +711,7 @@ end
 # App #
 #######
 
-const IS_OFFICIAL = occursin(
-    "Official https://julialang.org/ release",
-    # `banner` moved in https://github.com/JuliaLang/julia/pull/51867
-    sprint(isdefined(Base, :banner) ? Base.banner : REPL.banner)
-)
+const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
 function warn_official()
     if !IS_OFFICIAL
         @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
