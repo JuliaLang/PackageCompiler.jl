@@ -1,7 +1,6 @@
 module PackageCompiler
 
 using Base: active_project
-using REPL
 using Libdl: Libdl
 using Pkg: Pkg
 using Printf
