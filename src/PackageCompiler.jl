@@ -1535,7 +1535,10 @@ function dump_preferences(io::IO, project_dir)
     # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
     #       only introduced in Julia v1.8
     command = """
+    # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
+    pushfirst!(LOAD_PATH, "@stdlib")
     using TOML, Pkg
+    popfirst!(LOAD_PATH)
     # For each dependency pair (UUID => PackageInfo), store preferences in Dict
     prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
     # Filter out packages without preferences
