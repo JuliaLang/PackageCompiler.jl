@@ -1535,27 +1535,17 @@ function dump_preferences(io::IO, project_dir)
     # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
     #       only introduced in Julia v1.8
     command = """
+    # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
+    pushfirst!(LOAD_PATH, "@stdlib")
     using TOML, Pkg
+    popfirst!(LOAD_PATH)
     # For each dependency pair (UUID => PackageInfo), store preferences in Dict
     prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
     # Filter out packages without preferences
     filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
     """
-
-    cmd = `$(Base.julia_cmd()) --project=$project_dir -e "$command"`
-
-    # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
-    if !("@stdlib" in LOAD_PATH)
-        splitter = Sys.iswindows() ? ';' : ':'
-        new_load_path = get(ENV, "JULIA_LOAD_PATH", "") * "$(splitter)@stdlib"
-        cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$new_load_path")
-        @debug "dump_preferences: running $cmd" JULIA_LOAD_PATH = "$new_load_path"
-    else
-        @debug "dump_preferences: running $cmd"
-    end
-
-    prefs = read(cmd, String)
+    prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
     write(io, prefs)
 
     nothing
