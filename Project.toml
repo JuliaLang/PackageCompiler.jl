@@ -14,15 +14,15 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
-Artifacts = "1"
+Artifacts = "<0.0.1, 1"
 Glob = "1"
 LazyArtifacts = "<0.0.1, 1"
 Libdl = "1"
-Pkg = "1"
+Pkg = "<0.0.1, 1"
 Printf = "1"
 RelocatableFolders = "0.1, 0.3, 1"
-TOML = "1"
-UUIDs = "1"
+TOML = "<0.0.1, 1"
+UUIDs = "<0.0.1, 1"
 julia = "1.6"
 
 [extras]
