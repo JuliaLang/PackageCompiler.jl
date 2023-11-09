@@ -10,6 +10,7 @@ using UUIDs: UUID, uuid1
 using RelocatableFolders
 using TOML
 using Glob
+using p7zip_jll: p7zip_path
 
 export create_sysimage, create_app, create_library
 
@@ -824,6 +825,7 @@ function create_app(package_dir::String,
     bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(app_dir, stdlibs)
+    bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
@@ -1038,6 +1040,7 @@ function create_library(package_or_project::String,
     mkpath(dest_dir)
     stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
     bundle_julia_libraries(dest_dir, stdlibs)
+    bundle_julia_libexec(ctx, dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
@@ -1361,6 +1364,29 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     println("  Total library file size: ", pretty_byte_str(tot_libsize))
 
     return
+end
+
+function bundle_julia_libexec(ctx, dest_dir)
+    # We only bundle the `7z` executable at the moment
+    @assert ctx.env.manifest !== nothing
+    if !any(x -> x.name == "p7zip_jll", values(ctx.env.manifest))
+        return
+    end
+
+    # Use Julia-private `libexec` folder if it exsts
+    # (normpath is required in case `bin` does not exist in `dest_dir`)
+    libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
+        Base.PRIVATE_LIBEXECDIR
+    else
+        Base.LIBEXECDIR
+    end
+    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
+    mkpath(bundle_libexec_dir)
+
+    p7zip_exe = basename(p7zip_path)
+    cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
+
+    return 
 end
 
 function recursive_dir_size(path)
