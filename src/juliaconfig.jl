@@ -54,7 +54,7 @@ end
 
 function cflags()
     flags = IOBuffer()
-    print(flags, "-std=gnu99")
+    print(flags, "-std=gnu11")
     include = shell_escape(julia_includedir())
     print(flags, " -I", include)
     if Sys.isunix()
