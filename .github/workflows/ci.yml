@@ -28,7 +28,8 @@ jobs:
         julia-version:
           - '1.6'
           - '1.8'
-          - '1.9-nightly'
+          - '1.9'
+          - '1.10-nightly'
           - 'nightly'
         julia-arch:
           - 'x64'
@@ -50,7 +51,7 @@ jobs:
           - julia-version: '1.8'
             coverage: 'false'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.julia-version }}
@@ -66,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1'
