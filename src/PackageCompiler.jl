@@ -420,8 +420,16 @@ function create_sysimg_object_file(object_file::String,
     end
 
     print(julia_code_buffer, """
+        empty!(Core.ARGS)
+        empty!(Base.ARGS)
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
+        empty!(Base.TOML_CACHE.d)
+        Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+        @eval Sys begin
+            BINDIR = ""
+            STDLIB = ""
+        end
         """)
 
     julia_code = String(take!(julia_code_buffer))
