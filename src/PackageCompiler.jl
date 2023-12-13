@@ -235,16 +235,16 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
-    TerminalSpinners.@spin spinner begin
+    #spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
+    #TerminalSpinners.@spin spinner begin
         cd(base_dir) do
             # Create corecompiler.ji
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
                 $compiler_source_path`
-            @debug "running $cmd"
+            @info "running $cmd"
 
-            read(cmd)
+            @time run(cmd)
 
             # Use that to create sys.ji
             new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
@@ -256,14 +256,16 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-ji=$tmp_sys_ji
                     $new_sysimage_source_path`
-                @debug "running $cmd"
+                @info "running $cmd"
 
-                read(cmd)
+                @time run(cmd)
             finally
                 rm(new_sysimage_source_path; force=true)
             end
         end
-    end
+    #end
+
+    @info "Done fresh base sysimage"
 
     return tmp_sys_ji
 end
@@ -1386,7 +1388,7 @@ function bundle_julia_libexec(ctx, dest_dir)
     p7zip_exe = basename(p7zip_path)
     cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
 
-    return 
+    return
 end
 
 function recursive_dir_size(path)
