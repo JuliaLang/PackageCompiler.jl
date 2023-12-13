@@ -212,21 +212,23 @@ function get_julia_cmd()
 end
 
 
-function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
+function rewrite_sysimg_jl_no_stdlibs()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     sysimg_content = read(sysimg_source_path, String)
-    # replaces the hardcoded list of stdlibs in sysimg.jl with
-    # the stdlibs that is given as argument
+
+
     return replace(sysimg_content,
-        r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
+        r"stdlibs = \[(.*?)\]"s => string("stdlibs = []"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
+function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
-    tmp_sys_ji = joinpath(tmp, "sys.ji")
+    tmp_sys_o = joinpath(tmp, "sys.o")
+    tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
+
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
     # we can't strip the IR from the base sysimg, so we filter out this flag
@@ -235,9 +237,9 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
-    TerminalSpinners.@spin spinner begin
-        cd(base_dir) do
+    cd(base_dir) do
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler .ji image (incremental=false)")
+        TerminalSpinners.@spin spinner begin
             # Create corecompiler.ji
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
@@ -245,27 +247,39 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             @debug "running $cmd"
 
             read(cmd)
+        end
 
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
+        TerminalSpinners.@spin spinner begin
             # Use that to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content = rewrite_sysimg_jl_no_stdlibs()
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
-                    $sysimage_build_args --output-ji=$tmp_sys_ji
+                    $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path`
-                @debug "running $cmd"
+                @debug "reading $cmd"
 
                 read(cmd)
+
+                create_sysimg_from_object_file(String[tmp_sys_o],
+                                        tmp_sys_sl;
+                                        version=nothing,
+                                        soname=nothing,
+                                        compat_level="major")
+
             finally
                 rm(new_sysimage_source_path; force=true)
+                rm(tmp_corecompiler_ji; force=true)
+                rm(tmp_sys_o; force=true)
             end
         end
     end
 
-    return tmp_sys_ji
+    return tmp_sys_sl
 end
 
 function ensurecompiled(project, packages, sysimage)
@@ -545,8 +559,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
+        base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
@@ -1386,7 +1399,7 @@ function bundle_julia_libexec(ctx, dest_dir)
     p7zip_exe = basename(p7zip_path)
     cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
 
-    return 
+    return
 end
 
 function recursive_dir_size(path)
