@@ -101,11 +101,10 @@ sysimage_modules() = map(x->x.name, Base._sysimage_modules)
 stdlibs_in_sysimage() = intersect(_STDLIBS, sysimage_modules())
 
 # TODO: Also check UUIDs for stdlibs, not only names<
-function gather_stdlibs_project(ctx; only_in_sysimage::Bool=true)
+function gather_stdlibs_project(ctx)
     @assert ctx.env.manifest !== nothing
-    stdlibs = only_in_sysimage ? stdlibs_in_sysimage() : _STDLIBS
     stdlib_names = String[pkg.name for (_, pkg) in ctx.env.manifest]
-    filter!(pkg -> pkg in stdlibs, stdlib_names)
+    filter!(pkg -> pkg in _STDLIBS, stdlib_names)
     return stdlib_names
 end
 
@@ -822,11 +821,14 @@ function create_app(package_dir::String,
         executables = [ctx.env.pkg.name => "julia_main"]
     end
     try_rm_dir(app_dir; force)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
-    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    stdlibs = gather_stdlibs_project(ctx)
+    if !filter_stdlibs
+        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+    end
     bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
+    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
@@ -1038,7 +1040,10 @@ function create_library(package_or_project::String,
     end
     try_rm_dir(dest_dir; force)
     mkpath(dest_dir)
-    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    stdlibs = gather_stdlibs_project(ctx)
+    if !filter_stdlibs
+        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+    end
     bundle_julia_libraries(dest_dir, stdlibs)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
