@@ -697,7 +697,7 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, 
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -880,7 +880,7 @@ function create_executable_from_sysimg(exe_path::String,
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
