@@ -27,7 +27,6 @@ jobs:
       matrix:
         julia-version:
           - '1.6'
-          - '1.8'
           - '1.9'
           - '1.10-nightly'
           - 'nightly'
