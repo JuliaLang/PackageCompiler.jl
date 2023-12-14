@@ -225,7 +225,9 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
-    tmp_sys_ji = joinpath(tmp, "sys.ji")
+    tmp_sys_o = joinpath(tmp, "sys.o")
+    tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
+
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
     # we can't strip the IR from the base sysimg, so we filter out this flag
@@ -234,9 +236,9 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling base system image (incremental=false)")
-    TerminalSpinners.@spin spinner begin
-        cd(base_dir) do
+    cd(base_dir) do
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler .ji image (incremental=false)")
+        TerminalSpinners.@spin spinner begin
             # Create corecompiler.ji
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
@@ -244,7 +246,10 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             @debug "running $cmd"
 
             read(cmd)
+        end
 
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
+        TerminalSpinners.@spin spinner begin
             # Use that to create sys.ji
             new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
@@ -253,18 +258,27 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             try
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
-                    $sysimage_build_args --output-ji=$tmp_sys_ji
+                    $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path`
                 @debug "running $cmd"
 
                 read(cmd)
+
+                create_sysimg_from_object_file(String[tmp_sys_o],
+                                        tmp_sys_sl;
+                                        version=nothing,
+                                        soname=nothing,
+                                        compat_level="major")
+
             finally
                 rm(new_sysimage_source_path; force=true)
+                rm(tmp_corecompiler_ji; force=true)
+                rm(tmp_sys_o; force=true)
             end
         end
     end
 
-    return tmp_sys_ji
+    return tmp_sys_sl
 end
 
 function ensurecompiled(project, packages, sysimage)
