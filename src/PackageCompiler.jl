@@ -444,6 +444,13 @@ function create_sysimg_object_file(object_file::String,
             STDLIB = ""
         end
         """)
+    if "--strip-metadata" in sysimage_build_args
+        print(julia_code_buffer, """
+            empty!(Base._included_files)
+            empty!(Base.pkgorigins)
+            empty!(Base.Docs.keywords)
+            """)
+    end
 
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
