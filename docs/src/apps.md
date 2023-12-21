@@ -263,14 +263,14 @@ julia> names(MyApp; all=true)
  Symbol("#1#3")
  Symbol("#2#4")
  Symbol("#eval")
- Symbol("#fooifier_path")
+ Symbol("#hello_world_path")
  Symbol("#include")
  Symbol("#is_crayons_loaded")
  Symbol("#julia_main")
  Symbol("#real_main")
  :MyApp
  :eval
- :fooifier_path
+ :hello_world_path
  :include
  :is_crayons_loaded
  :julia_main

@@ -115,9 +115,9 @@ end
             # Check PROGRAM_FILE
             @test occursin("Base.PROGRAM_FILE = $(repr(app_path("MyApp")))", app_output)
             # Check jll package runs
-            @test occursin("Hello, World!", app_output)
+            @test occursin("\nHello, World!", app_output)
             # Check artifact runs
-            @test occursin("The result of 2*5^2 - 10 == 40.000000", app_output)
+            @test occursin("From C: Hello, World!\n", app_output)
             # Check artifact gets run from the correct place
             @test occursin("HelloWorld artifact at $(realpath(app_compiled_dir))", app_output)
             # Check ARGS
