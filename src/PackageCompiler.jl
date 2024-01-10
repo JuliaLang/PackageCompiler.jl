@@ -256,10 +256,11 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path`
+                    $new_sysimage_source_path`,
+                    "JULIA_LOAD_PATH" => "@stdlib")
                 @debug "running $cmd"
 
                 read(cmd)
