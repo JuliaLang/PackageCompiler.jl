@@ -220,7 +220,12 @@ function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
         r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
+function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd,
+    cflags=cflags(),
+    ldflags=ldflags(),
+    ldlibs=ldlibs(),
+    march=march())
+
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -269,7 +274,11 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
                                         tmp_sys_sl;
                                         version=nothing,
                                         soname=nothing,
-                                        compat_level="major")
+                                        compat_level="major",
+                                        cflags=cflags,
+                                        ldflags=ldflags,
+                                        ldlibs=ldlibs,
+                                        march=march)
 
             finally
                 rm(new_sysimage_source_path; force=true)
@@ -517,6 +526,14 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `cflags::String`: The compiler flags for use when compiling C code that will interact with the Julia runtime.
+
+- `ldflags::String`: The linker flags necessary for linking a C program with the Julia runtime.
+
+- `ldlibs::String`: The linker flags for the specific Julia libraries that must be linked with a C program, e.g. "libjulia"
+
+- `march::String`: The target machine architecture and extension used to compile the sysimg or library.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -537,6 +554,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
+                         cflags=cflags(),
+                         ldflags=ldflags(),
+                         ldlibs=ldlibs(),
+                         march=march()
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -575,7 +596,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
         sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
+        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args, cflags, ldflags, ldlibs, march)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
@@ -659,7 +680,11 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                                 sysimage_path;
                                 compat_level,
                                 version,
-                                soname)
+                                soname,
+                                cflags,
+                                ldflags,
+                                ldlibs,
+                                march)
 
     rm(object_file; force=true)
 
@@ -679,7 +704,11 @@ function create_sysimg_from_object_file(object_files::Vector{String},
                                         sysimage_path::String;
                                         version,
                                         compat_level::String,
-                                        soname::Union{Nothing, String})
+                                        soname::Union{Nothing, String},
+                                        cflags=cflags(),
+                                        ldflags=ldflags(),
+                                        ldlibs=ldlibs(),
+                                        march=march())
 
     if soname === nothing && (Sys.isunix() && !Sys.isapple())
         soname = basename(sysimage_path)
@@ -688,7 +717,7 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     # Prevent compiler from stripping all symbols from the shared lib.
     o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
     extra = get_extra_linker_flags(version, compat_level, soname)
-    cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
+    cmd = `$(bitflag()) $(march) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs)) $extra`
     run_compiler(cmd; cplusplus=true)
     return nothing
 end
@@ -714,12 +743,16 @@ function get_extra_linker_flags(version, compat_level, soname)
     return extra
 end
 
-function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, include_dir::String)
+function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, include_dir::String;
+    cflags=cflags(),
+    ldflags=ldflags(),
+    ldlibs=ldlibs(),
+    march=march())
     @debug "Compiling $julia_init_c_file"
-    flags = Base.shell_split(cflags())
+    flags = Base.shell_split(cflags)
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -897,11 +930,15 @@ end
 
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
-                                       julia_main::String)
+                                       julia_main::String;
+                                       cflags=cflags(),
+                                       ldflags=ldflags(),
+                                       ldlibs=ldlibs(),
+                                       march=march())
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
-    flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
-    m = something(march(), ``)
+    flags = Base.shell_split(join((cflags, ldflags, ldlibs), " "))
+    m = something(march, ``)
     cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
