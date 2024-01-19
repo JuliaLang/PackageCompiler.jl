@@ -1449,7 +1449,7 @@ function pretty_byte_str(size)
 end
 
 # Copy pasted from Pkg since `collect_artifacts` doesn't allow lazy artifacts to get installed
-function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=HostPlatform(), include_lazy::Bool)
+function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=Base.BinaryPlatforms.HostPlatform(), include_lazy::Bool)
     # Check to see if this package has an (Julia)Artifacts.toml
     artifacts_tomls = Tuple{String,Base.TOML.TOMLDict}[]
 
