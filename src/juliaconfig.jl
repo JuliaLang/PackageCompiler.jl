@@ -15,12 +15,12 @@ end
 
 function julia_private_libdir()
     if Base.DARWIN_FRAMEWORK # taken from Libdl tests
-        if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        if isdebugbuild() != 0
             dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
         else
             joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
         end
-    elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+    elseif isdebugbuild() != 0
         dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
     else
         dirname(abspath(Libdl.dlpath("libjulia-internal")))
@@ -54,7 +54,7 @@ end
 
 function cflags()
     flags = IOBuffer()
-    print(flags, "-std=gnu99")
+    print(flags, "-O2 -std=gnu99")
     include = shell_escape(julia_includedir())
     print(flags, " -I", include)
     if Sys.isunix()

@@ -27,9 +27,8 @@ jobs:
       matrix:
         julia-version:
           - '1.6'
-          - '1.8'
           - '1.9'
-          - '1.10-nightly'
+          - '1.10'
           - 'nightly'
         julia-arch:
           - 'x64'
@@ -76,4 +75,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
         run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
-
