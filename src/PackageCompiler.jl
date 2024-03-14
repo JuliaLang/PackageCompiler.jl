@@ -58,6 +58,232 @@ function march()
 end
 
 
+"""
+    Conf
+
+Struct containing configuration options for building a Julia package compiler sysimage.
+
+# Fields:
+
+- `project::String`: Name of the project.
+- `packages::Union{Nothing, Vector{String}}`: Packages to include in the sysimage.
+- `sysimage_path::String`: Path to write the built sysimage. 
+- `precompile_execution_file::Vector{String}`: Julia source files to precompile.
+- `precompile_statements_file::Vector{String}`: Julia statements to precompile.
+- `incremental::Bool`: Whether to build incrementally.
+- `filter_stdlibs::Bool`: Whether to filter stdlibs from the sysimage.
+- `cpu_target::String`: CPU target to optimize for.
+- `script::Union{Nothing,String}`: Path to driver script for executables.
+- `sysimage_build_args::Cmd`: Arguments to pass to `Base.compilecache`.
+- `include_transitive_dependencies::Bool`: Whether to include transitive deps.  
+- `base_sysimage::Union{Nothing,String}`: Path to base sysimage to use.
+- `soname::String`: Soname for shared library.
+- `compat_level::String`: Julia compatibility level.
+- `extra_precompiles::String`: Extra precompiles.
+- `executables::Union{Nothing,Vector{Pair{String,String}}}`: Executables to build.
+- `force::Bool`: Whether to force rebuild.
+- `c_driver_program::String`: C driver program for executables.
+- `include_lazy_artifacts::Bool`: Whether to include lazy artifacts.
+- `include_preferences::Bool`: Whether to include preferences.
+- `dest_dir::String`: Directory to write build artifacts.
+- `lib_name::Union{Nothing, String}`: Name for built shared library.
+- `header_files::Vector{String}`: Header files to make available to C.
+- `julia_init_c_file::Union{Nothing,Vector{String}}`: Custom Julia init C file.
+- `julia_init_h_file::Union{Nothing,Vector{String}}`: Custom Julia init header file.
+- `version::Union{Nothing,VersionNumber}`: Julia version to build against.
+- `pkg_ctx`: Package context.
+- `packages_sysimg::Set{Base.PkgId}`: Packages included in sysimage.
+- `sysimg_stdlibs`: Stdlibs included in sysimage.
+"""
+struct Conf
+    project::String
+    packages::Union{Nothing,Vector{String}}
+    sysimage_path::String
+    precompile_execution_file::Vector{String}
+    precompile_statements_file::Vector{String}
+    incremental::Bool
+    filter_stdlibs::Bool
+    cpu_target::String
+    script::Union{Nothing,String}
+    sysimage_build_args::Cmd
+    include_transitive_dependencies::Bool
+    base_sysimage::Union{Nothing,String}
+    soname::Union{Nothing,String}
+    compat_level::String
+    extra_precompiles::String
+    executables::Union{Nothing,Vector{Pair{String,String}}}
+    force::Bool
+    c_driver_program::String
+    include_lazy_artifacts::Bool
+    include_preferences::Bool
+    dest_dir::String
+    lib_name::Union{Nothing,String}
+    header_files::Vector{String}
+    julia_init_c_file::Union{Nothing,Vector{String}}
+    julia_init_h_file::Union{Nothing,Vector{String}}
+    version::Union{Nothing,VersionNumber}
+    pkg_ctx
+    packages_sysimg::Set{Base.PkgId}
+    sysimg_stdlibs
+    function Conf(;
+        project::String=dirname(active_project()),
+        packages::Union{Nothing,Symbol,Vector{String},Vector{Symbol}}=nothing,
+        sysimage_path::String="",
+        precompile_execution_file::Union{String,Vector{String}}=String[],
+        precompile_statements_file::Union{String,Vector{String}}=String[],
+        incremental::Bool=true,
+        filter_stdlibs::Bool=false,
+        cpu_target::String=NATIVE_CPU_TARGET,
+        script::Union{Nothing,String}=nothing,
+        sysimage_build_args::Cmd=``,
+        include_transitive_dependencies::Bool=true,
+        base_sysimage::Union{Nothing,String}=nothing,
+        soname=nothing,
+        compat_level::String="major",
+        extra_precompiles::String="",
+        executables::Union{Nothing,Vector{Pair{String,String}}}=nothing,
+        force::Bool=false,
+        c_driver_program::String=String(DEFAULT_EMBEDDING_WRAPPER),
+        include_lazy_artifacts::Bool=false,
+        include_preferences::Bool=true,
+        dest_dir::String="",
+        lib_name=nothing,
+        header_files::Vector{String}=String[],
+        julia_init_c_file::Union{Nothing,String,Vector{String}}=nothing,
+        julia_init_h_file::Union{Nothing,String,Vector{String}}=nothing,
+        version::Union{String,VersionNumber,Nothing}=nothing,
+    )
+
+        if filter_stdlibs && incremental
+            error("must use `incremental=false` to use `filter_stdlibs=true`")
+        end
+
+        if isdir(sysimage_path)
+            error("The provided sysimage_path is a directory: $(sysimage_path). Please specify a full path including the sysimage filename.")
+        end
+
+        if soname === nothing && (Sys.isunix() && !Sys.isapple())
+            soname = basename(sysimage_path)
+        end
+
+        precompile_execution_file = vcat(precompile_execution_file)
+        precompile_statements_file = vcat(precompile_statements_file)
+
+        if version isa String
+            version = parse(VersionNumber, version)
+        end
+
+        packages = if packages !== nothing
+            string.(vcat(packages))
+        end
+
+        if julia_init_c_file isa String
+            julia_init_c_file = [julia_init_c_file]
+        end
+        if julia_init_h_file isa String
+            julia_init_h_file = [julia_init_h_file]
+        end
+        # Add init header files to list of bundled header files if not already present
+        if julia_init_h_file !== nothing
+            for f in julia_init_h_file
+                if !(f in header_files)
+                    push!(header_files, f)
+                end
+            end
+        end
+
+        pkg_ctx = create_pkg_context(project)
+
+        if packages === nothing
+            p = collect(keys(pkg_ctx.env.project.deps))
+            if pkg_ctx.env.pkg !== nothing
+                push!(p, pkg_ctx.env.pkg.name)
+            end
+            packages = string.(vcat(p))
+        end
+
+        check_packages_in_project(pkg_ctx, packages)
+
+        @debug "instantiating project at $(repr(project))"
+        Pkg.instantiate(pkg_ctx, verbose=true, allow_autoprecomp=false)
+
+        packages_sysimg = Set{Base.PkgId}()
+
+        if include_transitive_dependencies
+            # We are not sure that packages actually load their dependencies on `using`
+            # but we still want them to end up in the sysimage. Therefore, explicitly
+            # collect their dependencies, recursively.
+
+            frontier = Set{Base.PkgId}()
+            deps = pkg_ctx.env.project.deps
+            for pkg in packages
+                # Add all dependencies of the package
+                if pkg_ctx.env.pkg !== nothing && pkg == pkg_ctx.env.pkg.name
+                    push!(frontier, Base.PkgId(pkg_ctx.env.pkg.uuid, pkg))
+                else
+                    uuid = pkg_ctx.env.project.deps[pkg]
+                    push!(frontier, Base.PkgId(uuid, pkg))
+                end
+            end
+            copy!(packages_sysimg, frontier)
+            new_frontier = Set{Base.PkgId}()
+            while !(isempty(frontier))
+                for pkgid in frontier
+                    deps = if pkg_ctx.env.pkg !== nothing && pkgid.uuid == pkg_ctx.env.pkg.uuid
+                        pkg_ctx.env.project.deps
+                    else
+                        pkg_ctx.env.manifest[pkgid.uuid].deps
+                    end
+                    pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
+                    for pkgid_dep in pkgid_deps
+                        if !(pkgid_dep in packages_sysimg) #
+                            push!(packages_sysimg, pkgid_dep)
+                            push!(new_frontier, pkgid_dep)
+                        end
+                    end
+                end
+                copy!(frontier, new_frontier)
+                empty!(new_frontier)
+            end
+        end
+
+        sysimg_stdlibs = filter_stdlibs ? gather_stdlibs_project(pkg_ctx) : stdlibs_in_sysimage()
+
+        new(
+            project,
+            packages,
+            sysimage_path,
+            precompile_execution_file,
+            precompile_statements_file,
+            incremental,
+            filter_stdlibs,
+            cpu_target,
+            script,
+            sysimage_build_args,
+            include_transitive_dependencies,
+            base_sysimage,
+            soname,
+            compat_level,
+            extra_precompiles,
+            executables,
+            force,
+            c_driver_program,
+            include_lazy_artifacts,
+            include_preferences,
+            dest_dir,
+            lib_name,
+            header_files,
+            julia_init_c_file,
+            julia_init_h_file,
+            version,
+            pkg_ctx,
+            packages_sysimg,
+            sysimg_stdlibs)
+
+    end
+end
+
+
 #############
 # Pkg utils #
 #############
@@ -308,29 +534,18 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     return tracefile
 end
 
-function create_sysimg_object_file(object_file::String,
-                            packages::Vector{String},
-                            packages_sysimg::Set{Base.PkgId};
-                            project::String,
-                            base_sysimage::String,
-                            precompile_execution_file::Vector{String},
-                            precompile_statements_file::Vector{String},
-                            cpu_target::String,
-                            script::Union{Nothing, String},
-                            sysimage_build_args::Cmd,
-                            extra_precompiles::String,
-                            incremental::Bool)
+function create_sysimg_object_file(object_file::String, base_sysimage::String, conf::Conf)
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
-        copy!(LOAD_PATH, [$(repr(project))]) # Only allow loading packages from current project
+        copy!(LOAD_PATH, [$(repr(conf.project))]) # Only allow loading packages from current project
         Base.init_depot_path()
         """)
 
-    for pkg in packages_sysimg
+    for pkg in conf.packages_sysimg
         print(julia_code_buffer, """
             Base.require(Base.PkgId(Base.UUID("$(string(pkg.uuid))"), $(repr(pkg.name))))
             """)
@@ -340,11 +555,11 @@ function create_sysimg_object_file(object_file::String,
     precompile_files = String[]
     @debug "running precompilation execution script..."
     precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
-    for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
-        tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
+    for file in (isempty(conf.precompile_execution_file) ? (nothing,) : conf.precompile_execution_file)
+        tracefile = run_precompilation_script(conf.project, base_sysimage, file, precompile_dir)
         push!(precompile_files, tracefile)
     end
-    append!(precompile_files, abspath.(precompile_statements_file))
+    append!(precompile_files, abspath.(conf.precompile_statements_file))
     precompile_code = """
         # This @eval prevents symbols from being put into Main
         @eval Module() begin
@@ -413,13 +628,13 @@ function create_sysimg_object_file(object_file::String,
             end
 
             @eval PrecompileStagingArea begin
-                $extra_precompiles
+                $(conf.extra_precompiles)
             end
         end # module
         """
 
     # Make packages available in Main. It is unclear if this is the right thing to do.
-    for pkg in packages
+    for pkg in conf.packages
         print(julia_code_buffer, """
             import $pkg
             """)
@@ -427,9 +642,9 @@ function create_sysimg_object_file(object_file::String,
 
     print(julia_code_buffer, precompile_code)
 
-    if script !== nothing
+    if conf.script !== nothing
         print(julia_code_buffer, """
-        include($(repr(abspath(script))))
+        include($(repr(abspath(conf.script))))
         """)
     end
 
@@ -445,7 +660,7 @@ function create_sysimg_object_file(object_file::String,
             STDLIB = ""
         end
         """)
-    if "--strip-metadata" in sysimage_build_args
+    if "--strip-metadata" in conf.sysimage_build_args
         print(julia_code_buffer, """
             empty!(Base._included_files)
             empty!(Base.pkgorigins)
@@ -459,12 +674,12 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
-            --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
+        cmd = `$(get_julia_cmd()) --cpu-target=$(conf.cpu_target) $(conf.sysimage_build_args)
+            --sysimage=$base_sysimage --project=$(conf.project) --output-o=$(object_file)
             $outputo_file`
         @debug "running $cmd"
 
-    non = incremental ? "" : "non"
+    non = conf.incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
     return
@@ -538,134 +753,84 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          )
+    conf = Conf(; packages,
+        sysimage_path,
+        project,
+        precompile_execution_file,
+        precompile_statements_file,
+        incremental,
+        filter_stdlibs,
+        cpu_target,
+        script,
+        sysimage_build_args,
+        include_transitive_dependencies,
+        base_sysimage,
+        julia_init_c_file,
+        julia_init_h_file,
+        version,
+        soname,
+        compat_level,
+        extra_precompiles)
+
+    create_sysimage(conf)
+end
+
+
+"""
+    create_sysimage(conf::Conf)
+
+Create a sysimage from the given configuration. This handles compiling
+all the necessary code, generating the object files, and linking
+the final sysimage.
+"""
+function create_sysimage(conf::Conf)
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
-    if isdir(sysimage_path)
-        error("The provided sysimage_path is a directory: $(sysimage_path). Please specify a full path including the sysimage filename.")
-    end
-
-    if filter_stdlibs && incremental
-        error("must use `incremental=false` to use `filter_stdlibs=true`")
-    end
-
-    ctx = create_pkg_context(project)
-
-    if packages === nothing
-        packages = collect(keys(ctx.env.project.deps))
-        if ctx.env.pkg !== nothing
-            push!(packages, ctx.env.pkg.name)
-        end
-    end
-
-    packages = string.(vcat(packages))
-    precompile_execution_file  = vcat(precompile_execution_file)
-    precompile_statements_file = vcat(precompile_statements_file)
-
-    check_packages_in_project(ctx, packages)
-
-    # Instantiate the project
-
-    @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
-
-    if !incremental
-        if base_sysimage !== nothing
+    base_sysimage = if !conf.incremental
+        if conf.base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
+        create_fresh_base_sysimage(conf.sysimg_stdlibs; conf.cpu_target, conf.sysimage_build_args)
     else
-        base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
+        something(conf.base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
 
-    ensurecompiled(project, packages, base_sysimage)
-
-    packages_sysimg = Set{Base.PkgId}()
-
-    if include_transitive_dependencies
-        # We are not sure that packages actually load their dependencies on `using`
-        # but we still want them to end up in the sysimage. Therefore, explicitly
-        # collect their dependencies, recursively.
-
-        frontier = Set{Base.PkgId}()
-        deps = ctx.env.project.deps
-        for pkg in packages
-            # Add all dependencies of the package
-            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
-                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
-            else
-                uuid = ctx.env.project.deps[pkg]
-                push!(frontier, Base.PkgId(uuid, pkg))
-            end
-        end
-        copy!(packages_sysimg, frontier)
-        new_frontier = Set{Base.PkgId}()
-        while !(isempty(frontier))
-            for pkgid in frontier
-                deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
-                    ctx.env.project.deps
-                else
-                    ctx.env.manifest[pkgid.uuid].deps
-                end
-                pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
-                for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
-                        push!(packages_sysimg, pkgid_dep)
-                        push!(new_frontier, pkgid_dep)
-                    end
-                end
-            end
-            copy!(frontier, new_frontier)
-            empty!(new_frontier)
-        end
-    end
+    ensurecompiled(conf.project, conf.packages, base_sysimage)
 
     # Create the sysimage
     object_file = tempname() * ".o"
 
-    create_sysimg_object_file(object_file, packages, packages_sysimg;
-                            project,
-                            base_sysimage,
-                            precompile_execution_file,
-                            precompile_statements_file,
-                            cpu_target,
-                            script,
-                            sysimage_build_args,
-                            extra_precompiles,
-                            incremental)
+    create_sysimg_object_file(object_file, base_sysimage, conf)
     object_files = [object_file]
-    if julia_init_c_file !== nothing
-        if julia_init_c_file isa String
-            julia_init_c_file = [julia_init_c_file]
-        end
+
+    if conf.julia_init_c_file !== nothing
+
         mktempdir() do include_dir
-            if julia_init_h_file !== nothing
-                if julia_init_h_file isa String
-                    julia_init_h_file = [julia_init_h_file]
-                end
-                for f in julia_init_h_file
+            if conf.julia_init_h_file !== nothing
+                for f in conf.julia_init_h_file
                     cp(f, joinpath(include_dir, basename(f)))
                 end
             end
-            for f in julia_init_c_file
-                filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
+            for f in conf.julia_init_c_file
+                filename = compile_c_init_julia(f, basename(conf.sysimage_path), include_dir)
                 push!(object_files, filename)
             end
         end
     end
+
     create_sysimg_from_object_file(object_files,
-                                sysimage_path;
-                                compat_level,
-                                version,
-                                soname)
+        conf.sysimage_path;
+        conf.compat_level,
+        conf.version,
+        conf.soname)
 
     rm(object_file; force=true)
 
     if Sys.isapple()
-        cd(dirname(abspath(sysimage_path))) do
-            sysimage_file = basename(sysimage_path)
+        cd(dirname(abspath(conf.sysimage_path))) do
+            sysimage_file = basename(conf.sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
             @debug "running $cmd"
             run(cmd)
@@ -680,10 +845,6 @@ function create_sysimg_from_object_file(object_files::Vector{String},
                                         version,
                                         compat_level::String,
                                         soname::Union{Nothing, String})
-
-    if soname === nothing && (Sys.isunix() && !Sys.isapple())
-        soname = basename(sysimage_path)
-    end
     mkpath(dirname(sysimage_path))
     # Prevent compiler from stripping all symbols from the shared lib.
     o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
@@ -835,35 +996,55 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
+    conf = Conf(;project=package_dir,
+                 dest_dir=app_dir,
+                 executables,
+                 precompile_execution_file,
+                 precompile_statements_file,
+                 incremental,
+                 filter_stdlibs,
+                 force,
+                 c_driver_program,
+                 cpu_target,
+                 include_lazy_artifacts,
+                 sysimage_build_args,
+                 include_transitive_dependencies,
+                 include_preferences,
+                 script)
+    create_app(conf)
+end
+
+"""
+    create_app(conf::Conf)
+
+"""
+function create_app(conf::Conf)
     warn_official()
-    if filter_stdlibs && incremental
-        error("must use `incremental=false` to use `filter_stdlibs=true`")
-    end
+
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
-    ctx = create_pkg_context(package_dir)
+    ctx = create_pkg_context(conf.project)
     ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
-    if executables === nothing
-        executables = [ctx.env.pkg.name => "julia_main"]
+    executables = if conf.executables === nothing
+        [ctx.env.pkg.name => "julia_main"]
+    else
+        conf.executables
     end
-    try_rm_dir(app_dir; force)
-    stdlibs = gather_stdlibs_project(ctx)
-    if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
-    end
-    bundle_julia_libraries(app_dir, stdlibs)
-    bundle_julia_libexec(ctx, app_dir)
-    bundle_julia_executable(app_dir)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
-    bundle_project(ctx, app_dir)
-    include_preferences && bundle_preferences(ctx, app_dir)
-    bundle_cert(app_dir)
 
-    sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
+    try_rm_dir(conf.dest_dir; conf.force)
+    bundle_julia_libraries(conf.dest_dir, conf.sysimg_stdlibs)
+    bundle_julia_libexec(ctx, conf.dest_dir)
+    bundle_julia_executable(conf.dest_dir)
+    bundle_artifacts(ctx, conf.dest_dir; conf.include_lazy_artifacts)
+    bundle_project(ctx, conf.dest_dir)
+    conf.include_preferences && bundle_preferences(ctx, conf.dest_dir)
+    bundle_cert(conf.dest_dir)
+
+    sysimage_path = joinpath(conf.dest_dir, "lib", "julia", "sys." * Libdl.dlext)
 
     package_name = ctx.env.pkg.name
     project = dirname(ctx.env.project_file)
@@ -879,18 +1060,18 @@ function create_app(package_dir::String,
     push!(precompiles, "precompile(Tuple{typeof(popfirst!), Vector{String}})")
 
     create_sysimage([package_name]; sysimage_path, project,
-                    incremental,
-                    filter_stdlibs,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    cpu_target,
-                    sysimage_build_args,
-                    include_transitive_dependencies,
-                    extra_precompiles = join(precompiles, "\n"),
-                    script)
+        conf.incremental,
+        conf.filter_stdlibs,
+        conf.precompile_execution_file,
+        conf.precompile_statements_file,
+        conf.cpu_target,
+        conf.sysimage_build_args,
+        conf.include_transitive_dependencies,
+        extra_precompiles=join(precompiles, "\n"),
+        conf.script)
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+        create_executable_from_sysimg(joinpath(conf.dest_dir, "bin", app_name), conf.c_driver_program, string(package_name, ".", julia_main))
     end
 end
 
@@ -1010,7 +1191,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 - `include_preferences::Bool`: If `true`, store all preferences visible by the project in
-  `project_or_package` in the library bundle. Defaults to `true`.
+  `package_or_project` in the library bundle. Defaults to `true`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -1043,59 +1224,76 @@ function create_library(package_or_project::String,
                         base_sysimage::Union{Nothing, String}=nothing
                         )
 
+    conf = Conf(;project=package_or_project,
+            dest_dir,
+            lib_name,
+            precompile_execution_file,
+            precompile_statements_file,
+            incremental,
+            filter_stdlibs,
+            force,
+            header_files,
+            julia_init_c_file,
+            julia_init_h_file,
+            version,
+            compat_level,
+            cpu_target,
+            include_lazy_artifacts,
+            sysimage_build_args,
+            include_transitive_dependencies,
+            include_preferences,
+            script,
+            base_sysimage
+            )
+    create_library(conf)
+end
+
+"""
+    create_library(conf::Conf)
+
+Creates a library bundle for the given package or project configuration `conf`.
+
+This bundles all package artifacts, dependencies, sysimage, etc into an executable
+library folder according to the given configuration.
+"""
+function create_library(conf::Conf)
 
     warn_official()
 
-    # Add init header files to list of bundled header files if not already present
-    if julia_init_h_file isa String
-        julia_init_h_file = [julia_init_h_file]
-    end
-    for f in julia_init_h_file
-        if !(f in header_files)
-            push!(header_files, f)
-        end
-    end
-
-    if version isa String
-        version = parse(VersionNumber, version)
-    end
-
-    ctx = create_pkg_context(package_or_project)
-    if ctx.env.pkg === nothing && lib_name === nothing
+    ctx = create_pkg_context(conf.project)
+    if ctx.env.pkg === nothing && conf.lib_name === nothing
         error("expected either package with a `name` and `uuid`, or non-empty `lib_name`")
     end
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
-    if lib_name === nothing
-        lib_name = ctx.env.pkg.name
+    lib_name = if conf.lib_name === nothing
+        ctx.env.pkg.name
+    else
+        conf.lib_name
     end
-    try_rm_dir(dest_dir; force)
-    mkpath(dest_dir)
-    stdlibs = gather_stdlibs_project(ctx)
-    if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
-    end
-    bundle_julia_libraries(dest_dir, stdlibs)
-    bundle_julia_libexec(ctx, dest_dir)
-    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
-    bundle_headers(dest_dir, header_files)
-    bundle_project(ctx, dest_dir)
-    include_preferences && bundle_preferences(ctx, dest_dir)
-    bundle_cert(dest_dir)
+    try_rm_dir(conf.dest_dir; conf.force)
+    mkpath(conf.dest_dir)
+    bundle_julia_libraries(conf.dest_dir, conf.sysimg_stdlibs)
+    bundle_julia_libexec(ctx, conf.dest_dir)
+    bundle_artifacts(ctx, conf.dest_dir; conf.include_lazy_artifacts)
+    bundle_headers(conf.dest_dir, conf.header_files)
+    bundle_project(ctx, conf.dest_dir)
+    conf.include_preferences && bundle_preferences(ctx, conf.dest_dir)
+    bundle_cert(conf.dest_dir)
 
-    lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
+    lib_dir = Sys.iswindows() ? joinpath(conf.dest_dir, "bin") : joinpath(conf.dest_dir, "lib")
 
-    sysimg_file = get_library_filename(lib_name; version)
+    sysimg_file = get_library_filename(lib_name; conf.version)
     sysimg_path = joinpath(lib_dir, sysimg_file)
-    compat_file = get_library_filename(lib_name; version, compat_level)
+    compat_file = get_library_filename(lib_name; conf.version, conf.compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
-        julia_init_h_file, version, soname, script, base_sysimage)
+    create_sysimage_workaround(ctx, sysimg_path, conf.precompile_execution_file,
+        conf.precompile_statements_file, conf.incremental, conf.filter_stdlibs, conf.cpu_target;
+        conf.sysimage_build_args, conf.include_transitive_dependencies, conf.julia_init_c_file,
+        conf.julia_init_h_file, conf.version, soname, conf.script, conf.base_sysimage)
 
-    if version !== nothing && Sys.isunix()
+    if conf.version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
             base_file = get_library_filename(lib_name)
             @debug "creating symlinks for $compat_file and $base_file"
@@ -1146,8 +1344,8 @@ end
 function create_sysimage_workaround(
                     ctx,
                     sysimage_path::String,
-                    precompile_execution_file::Union{String, Vector{String}},
-                    precompile_statements_file::Union{String, Vector{String}},
+                    precompile_execution_file::Vector{String},
+                    precompile_statements_file::Vector{String},
                     incremental::Bool,
                     filter_stdlibs::Bool,
                     cpu_target::String;
