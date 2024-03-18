@@ -1025,29 +1025,32 @@ function create_app(conf::Conf)
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
 
-    ctx = create_pkg_context(conf.project)
-    ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
+    conf.pkg_ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
+
+    stdlibs = gather_stdlibs_project(conf.pkg_ctx)
+    if !conf.filter_stdlibs
+        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+    end
 
     executables = if conf.executables === nothing
-        [ctx.env.pkg.name => "julia_main"]
+        [conf.pkg_ctx.env.pkg.name => "julia_main"]
     else
         conf.executables
     end
 
     try_rm_dir(conf.dest_dir; conf.force)
-    bundle_julia_libraries(conf.dest_dir, conf.sysimg_stdlibs)
-    bundle_julia_libexec(ctx, conf.dest_dir)
+    bundle_julia_libraries(conf.dest_dir, stdlibs)
+    bundle_julia_libexec(conf.pkg_ctx, conf.dest_dir)
     bundle_julia_executable(conf.dest_dir)
-    bundle_artifacts(ctx, conf.dest_dir; conf.include_lazy_artifacts)
-    bundle_project(ctx, conf.dest_dir)
-    conf.include_preferences && bundle_preferences(ctx, conf.dest_dir)
+    bundle_artifacts(conf.pkg_ctx, conf.dest_dir; conf.include_lazy_artifacts)
+    bundle_project(conf.pkg_ctx, conf.dest_dir)
+    conf.include_preferences && bundle_preferences(conf.pkg_ctx, conf.dest_dir)
     bundle_cert(conf.dest_dir)
 
     sysimage_path = joinpath(conf.dest_dir, "lib", "julia", "sys." * Libdl.dlext)
 
-    package_name = ctx.env.pkg.name
-    project = dirname(ctx.env.project_file)
+    package_name = conf.pkg_ctx.env.pkg.name
+    project = dirname(conf.pkg_ctx.env.project_file)
 
     # add precompile statements for functions that will be called from the C main() wrapper
     precompiles = String[]
@@ -1260,25 +1263,23 @@ function create_library(conf::Conf)
 
     warn_official()
 
-    ctx = create_pkg_context(conf.project)
-    if ctx.env.pkg === nothing && conf.lib_name === nothing
+    if conf.pkg_ctx.env.pkg === nothing && conf.lib_name === nothing
         error("expected either package with a `name` and `uuid`, or non-empty `lib_name`")
     end
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
     lib_name = if conf.lib_name === nothing
-        ctx.env.pkg.name
+        conf.pkg_ctx.env.pkg.name
     else
         conf.lib_name
     end
     try_rm_dir(conf.dest_dir; conf.force)
     mkpath(conf.dest_dir)
     bundle_julia_libraries(conf.dest_dir, conf.sysimg_stdlibs)
-    bundle_julia_libexec(ctx, conf.dest_dir)
-    bundle_artifacts(ctx, conf.dest_dir; conf.include_lazy_artifacts)
+    bundle_julia_libexec(conf.pkg_ctx, conf.dest_dir)
+    bundle_artifacts(conf.pkg_ctx, conf.dest_dir; conf.include_lazy_artifacts)
     bundle_headers(conf.dest_dir, conf.header_files)
-    bundle_project(ctx, conf.dest_dir)
-    conf.include_preferences && bundle_preferences(ctx, conf.dest_dir)
+    bundle_project(conf.pkg_ctx, conf.dest_dir)
+    conf.include_preferences && bundle_preferences(conf.pkg_ctx, conf.dest_dir)
     bundle_cert(conf.dest_dir)
 
     lib_dir = Sys.iswindows() ? joinpath(conf.dest_dir, "bin") : joinpath(conf.dest_dir, "lib")
@@ -1288,7 +1289,7 @@ function create_library(conf::Conf)
     compat_file = get_library_filename(lib_name; conf.version, conf.compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, conf.precompile_execution_file,
+    create_sysimage_workaround(conf.pkg_ctx, sysimg_path, conf.precompile_execution_file,
         conf.precompile_statements_file, conf.incremental, conf.filter_stdlibs, conf.cpu_target;
         conf.sysimage_build_args, conf.include_transitive_dependencies, conf.julia_init_c_file,
         conf.julia_init_h_file, conf.version, soname, conf.script, conf.base_sysimage)
