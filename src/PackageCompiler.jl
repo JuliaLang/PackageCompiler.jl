@@ -225,7 +225,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
-    tmp_sys_o = joinpath(tmp, "sys.o")
+    tmp_sys_o = joinpath(tmp, "sys-o.a")
     tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
 
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
@@ -623,7 +623,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     end
 
     # Create the sysimage
-    object_file = tempname() * ".o"
+    object_file = tempname() * "-o.a"
 
     create_sysimg_object_file(object_file, packages, packages_sysimg;
                             project,
@@ -1421,7 +1421,7 @@ function bundle_julia_libexec(ctx, dest_dir)
     p7zip_exe = basename(p7zip_path)
     cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
 
-    return 
+    return
 end
 
 function recursive_dir_size(path)
