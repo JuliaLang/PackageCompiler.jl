@@ -18,7 +18,7 @@ const outputo = begin
     o == C_NULL ? "ok" : unsafe_string(o)
 end
 
-fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
+hello_world_path() = joinpath(artifact"HelloWorldC", "bin", "hello_world" * (Sys.iswindows() ? ".exe" : ""))
 
 function julia_main()::Cint
     try
@@ -61,8 +61,8 @@ function real_main()
     @show is_crayons_loaded()
 
     println("Running the artifact")
-    res = read(`$(fooifier_path()) 5 10`, String)
-    println("The result of 2*5^2 - 10 == $res")
+    res = readchomp(`$(hello_world_path())`)
+    println("Artifact printed: $res") 
 
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
