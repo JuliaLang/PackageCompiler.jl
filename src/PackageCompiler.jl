@@ -520,7 +520,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `precompile_execution_args::Cmd`: A set of command line options that is used in the Julia process running the
-  precompile execution file, for example `-O0`.
+  precompile execution file, default: `-O0`.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -541,7 +541,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
-                         precompile_execution_args::Cmd=``
+                         precompile_execution_args::Cmd=`-O0`,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -825,7 +825,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `precompile_execution_args::Cmd`: A set of command line options that is used in the Julia process running the
-  precompile execution file, for example `-O0`.
+  precompile execution file, default: `-O0`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
@@ -844,7 +844,7 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing,
-                    precompile_execution_args::Cmd=``)
+                    precompile_execution_args::Cmd=`-O0`)
     warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
