@@ -686,7 +686,17 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     end
     mkpath(dirname(sysimage_path))
     # Prevent compiler from stripping all symbols from the shared lib.
-    o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_files` : `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
+    if Sys.isapple()
+        cltools_version_cmd = `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`
+        cltools_version = match(r"version: (.*)\n", readchomp(cltools_version_cmd))[1]
+        if startswith(cltools_version, "15")
+            o_file_flags = `-Wl,-all_load $object_files -Wl,-ld_classic`
+        else
+            o_file_flags = `-Wl,-all_load $object_files`
+        end
+    else
+        o_file_flags = `-Wl,--whole-archive $object_files -Wl,--no-whole-archive`
+    end
     extra = get_extra_linker_flags(version, compat_level, soname)
     cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
     run_compiler(cmd; cplusplus=true)
