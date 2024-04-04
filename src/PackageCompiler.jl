@@ -712,9 +712,15 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     mkpath(dirname(sysimage_path))
     # Prevent compiler from stripping all symbols from the shared lib.
     if Sys.isapple()
-        cltools_version_cmd = `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`
-        cltools_version = match(r"version: (.*)\n", readchomp(cltools_version_cmd))[1]
-        if startswith(cltools_version, "15")
+        try
+            cltools_version_cmd = `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`
+            cltools_version = match(r"version: (.*)\n", readchomp(cltools_version_cmd))[1]
+            global major_version = split(cltools_version, ".")[1]
+        catch e
+            @warn "Could not determine the version of the Command Line Tools, assuming greater than 14"
+            global major_version = "15"
+        end
+        if parse(Int64, major_version) > 14
             o_file_flags = `-Wl,-all_load $object_files -Wl,-ld_classic`
         else
             o_file_flags = `-Wl,-all_load $object_files`
