@@ -740,7 +740,9 @@ end
 # App #
 #######
 
-const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+# Previously there was a slash.
+# The slash was removed in https://github.com/JuliaLang/julia/pull/53978
+const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER in ("Official https://julialang.org/ release", "Official https://julialang.org release")
 function warn_official()
     if !IS_OFFICIAL
         @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
