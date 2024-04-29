@@ -54,7 +54,8 @@ end
 
 function cflags()
     flags = IOBuffer()
-    print(flags, "-O2 -std=gnu99")
+    print(flags, " -Werror-implicit-function-declaration")
+    print(flags, " -O2 -std=gnu99")
     include = shell_escape(julia_includedir())
     print(flags, " -I", include)
     if Sys.isunix()
