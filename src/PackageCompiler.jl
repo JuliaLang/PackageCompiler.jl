@@ -193,6 +193,36 @@ function get_compiler_cmd(; cplusplus::Bool=false)
     return compiler_cmd
 end
 
+# Relevant only for Apple systems at the moment: since `gcc` on macOS defaults to `clang`,
+# we need to make sure that users do not accidentally use a newer LLVM than the one shipped
+# by Julia, which seems to cause problems with the generated sysimages/libraries/apps.
+# X-ref: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
+function warn_incompatible_compiler()
+    compiler_cmd = get_compiler_cmd()
+    # Use try/catch to avoid unnecessary warnings if, e.g., gcc is used instead of clang
+    try
+        compiler_output = read(`$compiler_cmd --version`, String)
+
+        m = match(r"^(apple )?clang version ([0-9]+)\."i, compiler_version)
+
+        # We only care about clang
+        if isnothing(m)
+            return nothing
+        end
+
+        compiler_llvm_version = parse(Int, m[2])
+        julia_llvm_version = Int(Base.libllvm_version.major)
+    catch
+        return nothing
+    end
+
+    if compiler_llvm_version > julia_llvm_version
+        @warn """You seem to be using a `clang` compiler with an LLVM version newer than the one shipped
+                 by Julia. This will likely lead to an unusable sysimage. Consider specifying a different
+                 compiler via the environment variable `JULIA_CC`.""" compiler_llvm_version julia_llvm_version
+    end
+end
+
 function run_compiler(cmd::Cmd; cplusplus::Bool=false)
     compiler_cmd = get_compiler_cmd(; cplusplus)
     full_cmd = `$compiler_cmd $cmd`
@@ -541,6 +571,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
+    if Sys.isapple()
+        warn_incompatible_compiler()
+    end
 
     if isdir(sysimage_path)
         error("The provided sysimage_path is a directory: $(sysimage_path). Please specify a full path including the sysimage filename.")
@@ -844,6 +877,9 @@ function create_app(package_dir::String,
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
     get_compiler_cmd()
+    if Sys.isapple()
+        warn_incompatible_compiler()
+    end
 
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
@@ -1044,9 +1080,13 @@ function create_library(package_or_project::String,
                         script::Union{Nothing,String}=nothing,
                         base_sysimage::Union{Nothing, String}=nothing
                         )
-
-
     warn_official()
+    # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
+    # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
+    get_compiler_cmd()
+    if Sys.isapple()
+        warn_incompatible_compiler()
+    end
 
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
