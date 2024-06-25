@@ -1,5 +1,16 @@
 # [Creating a sysimage for fast plotting with Plots.jl](@id examples-plots)
 
+!!! note "Julia Version 1.9 Performance Update"
+
+    Starting from Julia 1.9, the "time to first plot" (TTFP) has seen a
+    significant improvement due to the introduction of native code
+    caching with Package Images.
+    While the techniques presented in this guide for creating a custom
+    sysimage remain applicable and beneficial for further optimization,
+    please note that the relative improvement will be less dramatic due
+    to the enhanced performance of code loading and execution in recent
+    Julia versions.
+
 A common complaint about Julia is that the "time to first plot" is a bit
 longer than desired. In this example, we will create a sysimage that is made
 to improve this.
@@ -49,7 +60,11 @@ julia> @time display(p);
   0.331869 seconds (278.38 k allocations: 7.900 MiB)
 ```
 
-which is a sizeable speedup.
+which is a sizeable speedup. 
+
+When using the sysimage, you may need to call `Plots.__init__()` after loading
+Plots for the plots to display; otherwise, you might need to use `gui` or 
+pass argument `show = true` to `plot`.
 
 Note that since we have more stuff in our sysimage, Julia is slightly slower to
 start (0.35 seconds on this machine):

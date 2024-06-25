@@ -29,7 +29,7 @@ os = "macos"
 
 [[fooifier]]
 arch = "x86_64"
-git-tree-sha1 = "d61f806c76b57e54f343634c5219d00d4c81b077" # FIX!
+git-tree-sha1 = "1351b831192db9091d97e9b4bc84231ade05d210"
 os = "windows"
 
     [[fooifier.download]]

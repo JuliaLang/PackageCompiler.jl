@@ -3,21 +3,38 @@ using Test
 using Libdl
 using Pkg
 
+import TOML
+
 ENV["JULIA_DEBUG"] = "PackageCompiler"
 
 # Make a new depot
-new_depot = mktempdir()
+const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
-is_slow_ci = haskey(ENV, "CI") && Sys.ARCH == :aarch64
+const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64
+const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 
-if haskey(ENV, "CI")
+if is_julia_1_6
+    @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
+end
+
+if is_ci
     @show Sys.ARCH
 end
 
+function remove_llvmextras(project_file)
+    proj = TOML.parsefile(project_file)
+    delete!(proj["deps"], "LLVMExtra_jll")
+    open(project_file, "w") do io
+        TOML.print(io, proj)
+    end
+end
+
 @testset "PackageCompiler.jl" begin
+    @testset "create_sysimage" begin
     new_project = mktempdir()
     old_project = Base.ACTIVE_PROJECT[]
     Base.ACTIVE_PROJECT[] = new_project
@@ -48,32 +65,42 @@ end
     @test occursin("Hello, foo", str)
     @test occursin("I am a script", str)
     @test occursin("opt: -O1", str)
+    end # testset
 
+    @testset "create_app" begin
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
-    for incremental in (is_slow_ci ? (false,) : (true, false))
+    @testset for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
         else
             filter_stdlibs = (false,)
         end
-        for filter in filter_stdlibs
+        @testset for filter in filter_stdlibs
+            @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"), 
-                       executables=["MyApp" => "julia_main", 
+            if is_julia_1_6
+                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove                
+                remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
+            end
+            try
+            create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
+                       precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
+                       executables=["MyApp" => "julia_main",
                                     "SecondApp" => "second_main",
                                     "ReturnType" => "wrong_return_type",
                                     "Error" => "erroring",
                                     "Undefined" => "undefined",
                                     ])
+            finally
             rm(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
-            rm(joinpath(new_depot, "packages"); recursive=true)
-            rm(joinpath(new_depot, "compiled"); recursive=true)
-            rm(joinpath(new_depot, "artifacts"); recursive=true)
+            rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+            rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+            rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end # try
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
             app_output = read(`$(app_path("MyApp")) I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
 
@@ -111,6 +138,11 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
+            if VERSION >= v"1.7-"
+                @test occursin("LLVMExtra path: ok!", app_output)
+            end
+            @test occursin("micromamba_jll path: ok!", app_output)
+
             # Test second app
             app_output = read(`$(app_path("SecondApp"))`, String)
             @test occursin("Hello from second main", app_output)
@@ -127,10 +159,13 @@ end
 
             io = IOBuffer()
             p = run(pipeline(ignorestatus(`$(app_path("Undefined"))`), stderr=io;))
-            @test occursin("UndefVarError: undefined not defined", String(take!(io)))
+            str = String(take!(io))
+            @test all(occursin(str), ["UndefVarError:", "undefined", "not defined"])
             @test p.exitcode == 1
+            @info "done: create_app testset" incremental filter
         end
     end
+    end # testset
 
     if !is_slow_ci
         # Test library creation

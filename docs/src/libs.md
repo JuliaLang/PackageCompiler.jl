@@ -87,7 +87,7 @@ Here you have different options depending on your operating system and needs.
 
 1. Install the libraries in a non-standard location, and update an appropriate environment
    variable to point to the library location.
-   * On Linux and other Unix-like OSes, run `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
+   * On Linux and other Unix-like operating systems, run `export LD_LIBRARY_PATH=/path/to/lib:$LD_LIBRARY_PATH`
    * On Mac, run `export DYLD_FALLBACK_LIBRARY_PATH=/path/to/lib:$DYLD_FALLBACK_LIBRARY_PATH`
    * On Windows, include the library location in `PATH`. (* NOTE: not tested--does this work? *)
 
@@ -116,4 +116,16 @@ Note that on Unix-like operating systems (including Mac), your library must have
 (On windows, the `lib` prefix is optional.)
 
 See [here](https://github.com/simonbyrne/libcg) for a more complete example of how this might look.
+
+### [Preferences](@id library-preferences)
+
+Compile-time preferences used by any of the packages included in the library will be stored in
+the sysimage. To support runtime preferences, all preferences that the library "sees" during the
+compilation process are stored in the library bundle under
+`<dest_dir>/share/julia/LocalPreferences.toml`. Note that preferences loaded at compile time
+are *not* affected by the values in the `LocalPreferences.toml`, but modifying the file
+*will* change the value of preferences loaded at runtime.
+
+To learn more about compile time preferences and runtime preferences, please refer to the
+[Preferences.jl docs](https://juliapackaging.github.io/Preferences.jl/stable/).
 
