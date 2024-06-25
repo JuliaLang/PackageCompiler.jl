@@ -1,23 +1,35 @@
 name = "PackageCompiler"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
-version = "2.0.2"
+version = "2.1.17"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 RelocatableFolders = "05181044-ff0b-4ac5-8273-598c1e38db00"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 
 [compat]
-RelocatableFolders = "0.1"
+Artifacts = "<0.0.1, 1"
+Glob = "1"
+LazyArtifacts = "<0.0.1, 1"
+Libdl = "<0.0.1, 1"
+Pkg = "<0.0.1, 1"
+Printf = "1"
+RelocatableFolders = "0.1, 0.3, 1"
+TOML = "<0.0.1, 1"
+UUIDs = "<0.0.1, 1"
 julia = "1.6"
 
 [extras]
 Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Example"]
+test = ["Test", "Example", "TOML"]

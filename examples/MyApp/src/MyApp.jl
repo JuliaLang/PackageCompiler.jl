@@ -5,6 +5,11 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
+if VERSION >= v"1.7.0"
+    using LLVMExtra_jll
+end
+
+using micromamba_jll
 
 const myrand = rand()
 
@@ -72,13 +77,27 @@ function real_main()
         addprocs(4)
         @eval @everywhere using MyApp
     end
-   
+
     n = @distributed (+) for i = 1:20000000
         1
     end
     println("n = $n")
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
+
+    if VERSION >= v"1.7.0"
+        if isfile(LLVMExtra_jll.libLLVMExtra_path)
+            println("LLVMExtra path: ok!")
+        else
+            println("LLVMExtra path: fail!")
+        end
+    end
+
+    if isfile(micromamba_jll.micromamba_path)
+        println("micromamba_jll path: ok!")
+    else
+        println("micromamba_jll path: fail!")
+    end
     return
 end
 

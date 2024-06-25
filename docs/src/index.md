@@ -23,7 +23,7 @@ There are three main workflows:
    as its entry point.
 
 3. Alternatively, you can create a [C library](@ref libraries). In this case, your package should
-   define c-callable functions to be included in the sysimage. As with apps, generating a
+   define C-callable functions to be included in the sysimage. As with apps, generating a
    library bundles together Julia and all dependencies in a (hopefully) redistributable
    directory structure that can be moved to other machines (of the same architecture).
 
@@ -86,3 +86,4 @@ PackageCompiler 2.0 comes with a few breaking changes.
 - The `audit_app` function has been removed. It caught too few problems to be useful in practice.
 - The keyword `app_name` in `create_app` has been removed and replaced with a more flexible version.
   If you used `app_name="Foo"`, replace it with `executables=["Foo"=>"julia_main"]`.
+- The `@ccallable` in front of the entry point functions of apps should be removed. Failure to do so might lead to strange errors during creation of the app.

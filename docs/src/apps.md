@@ -25,7 +25,7 @@ Pkg.generate("MyApp")
 In the code for the package, there should be a function with the signature
 
 ```julia
-Base.@ccallable function julia_main()::Cint
+function julia_main()::Cint
   # do something based on ARGS?
   return 0 # if things finished successfully
 end
@@ -121,11 +121,10 @@ function using the `executables` keyword argument to `create_app`. As an
 example, if you want to have two executables called `A` and `B` calling the
 julia functions `main_A` and `main_B`, respectively, you would pass
 `executables= ["A" => "main_A", "B" => "main_B"]`.  Note that `main_A` and `main_B`
-both need to be annotated with `Base.@ccallable`, not take any arguments and be
-annotated to return a `Cint`, for example:
+both need to not take any arguments and be annotated to return a `Cint`, for example:
 
 ```jl
-Base.@ccallable function main_A()::Cint
+function main_A()::Cint
     ...
 end
 ```
@@ -202,6 +201,18 @@ The example app uses the artifact system to depend on a very simple toy binary
 that does some simple arithmetic. It is instructive to see how the [artifact
 file](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/MyApp/Artifacts.toml)
 is [used in the source](https://github.com/JuliaLang/PackageCompiler.jl/blob/d722a3d91abe328ebd239e2f45660be35263ebe1/examples/MyApp/src/MyApp.jl#L7-L8).
+
+### [Preferences](@id app-preferences)
+
+Compile-time preferences used by any of the packages included in the app will be stored in
+the sysimage. To support runtime preferences, all preferences that the app "sees" during the
+compilation process are stored in the app bundle under
+`<app_dir>/share/julia/LocalPreferences.toml`. Note that preferences loaded at compile time
+are *not* affected by the values in the `LocalPreferences.toml`, but modifying the file
+*will* change the value of preferences loaded at runtime.
+
+To learn more about compile time preferences and runtime preferences, please refer to the
+[Preferences.jl docs](https://juliapackaging.github.io/Preferences.jl/stable/).
 
 ### Reverse engineering the compiled app
 
@@ -282,3 +293,13 @@ CodeInfo(
 │   %10  = Base.repr(%8)
 ...
 ```
+
+#### Preferences in `<app_dir>/share/julia`
+As described [above](@ref app-preferences), a TOML file with all preferences active during
+the compilation process will be stored with the app bundle. If your preferences may contain
+confidential information, you can either delete the
+`<app_dir>/share/julia/LocalPreferences.toml` file before distributing the app bundle, or
+suppress the preference file generation by passing `include_preferences=false` to
+`create_app`. Note, however, that if the preference file is not present, any preference
+loaded in your app at *runtime* will use their default value (or crash, if no default is
+provided).

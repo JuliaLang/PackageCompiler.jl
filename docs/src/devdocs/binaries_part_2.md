@@ -14,7 +14,7 @@ calling into the Julia runtime library (`libjulia`) from a C program.  A quite
 detail set of docs for how this is done can be found at the [embedding chapter
 in the Julia manual](https://docs.julialang.org/en/v1/manual/embedding/) and it
 is recommended to read before reading on.  Since this is supposed to highlight
-the interals of PackageCompiler, will not use the conveniences shown in that
+the internals of PackageCompiler, will not use the conveniences shown in that
 section (e.g. the `julia-config.jl` script) but it is good to know they exist.
 
 A rough outline of the steps we will take to create an executable are:
@@ -96,7 +96,7 @@ julia --startup-file=no --trace-compile=app_precompile.jl MyApp.jl "FL_insurance
 
 The `custom_sysimage.jl` script look similar to before with the exception that
 we added an include of the app file inside the anonymous module where the
-precompiliation statements are evaluated in:
+precompilation statements are evaluated in:
 
 ```julia
 Base.init_depot_path()
@@ -175,8 +175,17 @@ int main(int argc, char *argv[])
     jl_set_ARGS(argc, argv);
 
     // Set PROGRAM_FILE to argv[0].
-    jl_set_global(jl_base_module,
-        jl_symbol("PROGRAM_FILE"), (jl_value_t*)jl_cstr_to_string(argv[0]));
+    jl_sym_t *var = jl_symbol("PROGRAM_FILE");
+    jl_value_t *val = jl_cstr_to_string(argv[0]);
+#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 10
+    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var);
+    jl_checked_assignment(bp, jl_base_module, var, val);
+#elif JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 9
+    jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var, 1);
+    jl_checked_assignment(bp, val);
+#else
+    jl_set_global(jl_base_module, var, val);
+#endif
 
     // Set Base.ARGS to `String[ unsafe_string(argv[i]) for i = 1:argc ]`
     jl_array_t *ARGS = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
