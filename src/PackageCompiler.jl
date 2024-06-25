@@ -1221,7 +1221,7 @@ end
 
 function bundle_julia_executable(dir::String)
     bindir = joinpath(dir, "bin")
-    name = Sys.iswindows() ? "julia.exe" : "julia"
+    name = Base.julia_exename()
     mkpath(bindir)
     cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
 end
