@@ -740,14 +740,6 @@ end
 # App #
 #######
 
-# Previously there was a slash.
-# The slash was removed in https://github.com/JuliaLang/julia/pull/53978
-const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER in ("Official https://julialang.org/ release", "Official https://julialang.org release")
-function warn_official()
-    if !IS_OFFICIAL
-        @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
-    end
-end
 
 """
     create_app(package_dir::String, compiled_app::String; kwargs...)
@@ -837,7 +829,6 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
-    warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -1044,9 +1035,6 @@ function create_library(package_or_project::String,
                         script::Union{Nothing,String}=nothing,
                         base_sysimage::Union{Nothing, String}=nothing
                         )
-
-
-    warn_official()
 
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
