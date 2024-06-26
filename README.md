@@ -1,6 +1,6 @@
 # PackageCompiler
 
-[![Build Status](https://github.com/JuliaLang/PackageCompiler.jl/actions/workflows/test.yml/badge.svg)](https://github.com/JuliaLang/PackageCompiler.jl/actions/workflows/test.yml) 
+[![Continuous integration](https://github.com/JuliaLang/PackageCompiler.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/JuliaLang/PackageCompiler.jl/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/JuliaLang/PackageCompiler.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/PackageCompiler.jl)
 [![][docs-stable-img]][docs-stable-url]
 

@@ -1,4 +1,4 @@
-name: Run tests
+name: CI
 on:
   pull_request:
     branches:
@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 jobs:
+  ci_started:
+    timeout-minutes: 3
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 0
   test:
     timeout-minutes: 90
     runs-on: ${{ matrix.os }}
@@ -22,8 +27,8 @@ jobs:
       matrix:
         julia-version:
           - '1.6'
-          - '1.8'
-          - '1.9-nightly'
+          - '1.9'
+          - '1.10'
           - 'nightly'
         julia-arch:
           - 'x64'
@@ -45,15 +50,30 @@ jobs:
           - julia-version: '1.8'
             coverage: 'false'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.julia-version }}
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-runtest@latest
         with:
           coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@latest
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1'
+      - name: Build and deploy docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
