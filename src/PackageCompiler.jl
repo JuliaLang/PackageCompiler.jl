@@ -101,11 +101,10 @@ sysimage_modules() = map(x->x.name, Base._sysimage_modules)
 stdlibs_in_sysimage() = intersect(_STDLIBS, sysimage_modules())
 
 # TODO: Also check UUIDs for stdlibs, not only names<
-function gather_stdlibs_project(ctx; only_in_sysimage::Bool=true)
+function gather_stdlibs_project(ctx)
     @assert ctx.env.manifest !== nothing
-    stdlibs = only_in_sysimage ? stdlibs_in_sysimage() : _STDLIBS
     stdlib_names = String[pkg.name for (_, pkg) in ctx.env.manifest]
-    filter!(pkg -> pkg in stdlibs, stdlib_names)
+    filter!(pkg -> pkg in _STDLIBS, stdlib_names)
     return stdlib_names
 end
 
@@ -257,11 +256,12 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path`
-                @debug "reading $cmd"
+                    $new_sysimage_source_path`,
+                    "JULIA_LOAD_PATH" => "@stdlib")
+                @debug "running $cmd"
 
                 read(cmd)
 
@@ -434,9 +434,24 @@ function create_sysimg_object_file(object_file::String,
     end
 
     print(julia_code_buffer, """
+        empty!(Core.ARGS)
+        empty!(Base.ARGS)
         empty!(LOAD_PATH)
         empty!(DEPOT_PATH)
+        empty!(Base.TOML_CACHE.d)
+        Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+        @eval Sys begin
+            BINDIR = ""
+            STDLIB = ""
+        end
         """)
+    if "--strip-metadata" in sysimage_build_args
+        print(julia_code_buffer, """
+            empty!(Base._included_files)
+            empty!(Base.pkgorigins)
+            empty!(Base.Docs.keywords)
+            """)
+    end
 
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
@@ -703,7 +718,7 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, 
     flags = Base.shell_split(cflags())
 
     o_init_file = splitext(julia_init_c_file)[1] * ".o"
-    cmd = `-c -O2 -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
+    cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
     run_compiler(cmd)
     return o_init_file
 end
@@ -724,12 +739,6 @@ end
 # App #
 #######
 
-const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
-function warn_official()
-    if !IS_OFFICIAL
-        @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
-    end
-end
 
 """
     create_app(package_dir::String, compiled_app::String; kwargs...)
@@ -819,7 +828,6 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
-    warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -835,11 +843,14 @@ function create_app(package_dir::String,
         executables = [ctx.env.pkg.name => "julia_main"]
     end
     try_rm_dir(app_dir; force)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
-    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    stdlibs = gather_stdlibs_project(ctx)
+    if !filter_stdlibs
+        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+    end
     bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
+    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
@@ -883,7 +894,7 @@ function create_executable_from_sysimg(exe_path::String,
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
     m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) -O2 $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
@@ -1020,11 +1031,9 @@ function create_library(package_or_project::String,
                         sysimage_build_args::Cmd=``,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
-                        script::Union{Nothing,String}=nothing
+                        script::Union{Nothing,String}=nothing,
+                        base_sysimage::Union{Nothing, String}=nothing
                         )
-
-
-    warn_official()
 
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
@@ -1051,7 +1060,10 @@ function create_library(package_or_project::String,
     end
     try_rm_dir(dest_dir; force)
     mkpath(dest_dir)
-    stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx; only_in_sysimage=false) : _STDLIBS
+    stdlibs = gather_stdlibs_project(ctx)
+    if !filter_stdlibs
+        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+    end
     bundle_julia_libraries(dest_dir, stdlibs)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
@@ -1070,7 +1082,7 @@ function create_library(package_or_project::String,
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
-        julia_init_h_file, version, soname, script)
+        julia_init_h_file, version, soname, script, base_sysimage)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1134,7 +1146,8 @@ function create_sysimage_workaround(
                     julia_init_h_file::Union{Nothing,String,Vector{String}},
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
-                    script::Union{Nothing,String}
+                    script::Union{Nothing,String},
+                    base_sysimage::Union{Nothing, String} = nothing
                     )
     project = dirname(ctx.env.project_file)
 
@@ -1143,8 +1156,6 @@ function create_sysimage_workaround(
         base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
         create_sysimage(String[]; sysimage_path=base_sysimage, project,
                         incremental=false, filter_stdlibs, cpu_target)
-    else
-        base_sysimage = nothing
     end
 
     if ctx.env.pkg === nothing
@@ -1197,7 +1208,7 @@ end
 
 function bundle_julia_executable(dir::String)
     bindir = joinpath(dir, "bin")
-    name = Sys.iswindows() ? "julia.exe" : "julia"
+    name = Base.julia_exename()
     mkpath(bindir)
     cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
 end
@@ -1427,7 +1438,7 @@ function pretty_byte_str(size)
 end
 
 # Copy pasted from Pkg since `collect_artifacts` doesn't allow lazy artifacts to get installed
-function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=HostPlatform(), include_lazy::Bool)
+function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=Base.BinaryPlatforms.HostPlatform(), include_lazy::Bool)
     # Check to see if this package has an (Julia)Artifacts.toml
     artifacts_tomls = Tuple{String,Base.TOML.TOMLDict}[]
 

@@ -27,9 +27,8 @@ jobs:
       matrix:
         julia-version:
           - '1.6'
-          - '1.8'
           - '1.9'
-          - '1.10-nightly'
+          - '1.10'
           - 'nightly'
         julia-arch:
           - 'x64'
@@ -55,14 +54,16 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.julia-version }}
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-runtest@latest
         with:
           coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@latest
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v4
         with:
           file: lcov.info
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   docs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -76,4 +77,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
         run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
-

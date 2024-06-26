@@ -1,6 +1,6 @@
 name = "PackageCompiler"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
-version = "2.1.15"
+version = "2.1.17"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -18,7 +18,7 @@ p7zip_jll = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 Artifacts = "<0.0.1, 1"
 Glob = "1"
 LazyArtifacts = "<0.0.1, 1"
-Libdl = "1"
+Libdl = "<0.0.1, 1"
 Pkg = "<0.0.1, 1"
 Printf = "1"
 RelocatableFolders = "0.1, 0.3, 1"
