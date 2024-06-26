@@ -829,7 +829,6 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
-    warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -1036,9 +1035,6 @@ function create_library(package_or_project::String,
                         script::Union{Nothing,String}=nothing,
                         base_sysimage::Union{Nothing, String}=nothing
                         )
-
-
-    warn_official()
 
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
