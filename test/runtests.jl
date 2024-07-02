@@ -82,7 +82,7 @@ end
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
             if is_julia_1_6
-                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove                
+                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
@@ -117,7 +117,7 @@ end
             # Check jll package runs
             @test occursin("Hello, World!", app_output)
             # Check artifact runs
-            @test occursin("The result of 2*5^2 - 10 == 40.000000", app_output)
+            @test occursin("Artifact printed: Hello, World!", app_output)
             # Check artifact gets run from the correct place
             @test occursin("HelloWorld artifact at $(realpath(app_compiled_dir))", app_output)
             # Check ARGS
