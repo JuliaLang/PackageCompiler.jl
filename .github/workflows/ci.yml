@@ -42,7 +42,7 @@ jobs:
           - 'false' # needed for 1.9+ to test from a session using pkgimages
         exclude:
           - os: macOS-latest
-            github-runner: macos-latest # Apple Silicon
+            julia-version: '1.6'
           - julia-version: '1.6'
             coverage: 'false'
           - julia-version: '1.7'
@@ -50,7 +50,7 @@ jobs:
           - julia-version: '1.8'
             coverage: 'false'
         include:
-          - github-runner: macos-13 # Intel
+          - os: macos-13 # Intel
             julia-version: '1.6'
     steps:
       - uses: actions/checkout@v4
