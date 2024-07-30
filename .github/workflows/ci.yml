@@ -42,13 +42,16 @@ jobs:
           - 'false' # needed for 1.9+ to test from a session using pkgimages
         exclude:
           - os: macOS-latest
-            julia-arch: x86
+            julia-version: '1.6'
           - julia-version: '1.6'
             coverage: 'false'
           - julia-version: '1.7'
             coverage: 'false'
           - julia-version: '1.8'
             coverage: 'false'
+        include:
+          - os: macos-13 # Intel
+            julia-version: '1.6'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
