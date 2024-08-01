@@ -756,12 +756,6 @@ end
 # App #
 #######
 
-const IS_OFFICIAL = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
-function warn_official()
-    if !IS_OFFICIAL
-        @warn "PackageCompiler: This does not look like an official Julia build, functionality may suffer." _module=nothing _file=nothing
-    end
-end
 
 """
     create_app(package_dir::String, compiled_app::String; kwargs...)
@@ -851,7 +845,6 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing)
-    warn_official()
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -1059,9 +1052,6 @@ function create_library(package_or_project::String,
                         base_sysimage::Union{Nothing, String}=nothing
                         )
 
-
-    warn_official()
-
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
         julia_init_h_file = [julia_init_h_file]
@@ -1235,7 +1225,7 @@ end
 
 function bundle_julia_executable(dir::String)
     bindir = joinpath(dir, "bin")
-    name = Sys.iswindows() ? "julia.exe" : "julia"
+    name = Base.julia_exename()
     mkpath(bindir)
     cp(joinpath(Sys.BINDIR::String, name), joinpath(bindir, name); force=true)
 end

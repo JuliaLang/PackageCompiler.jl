@@ -317,7 +317,7 @@ should work to produce the sysimage shared library.
 
 ### 3. Running Julia with the new sysimage
 
-We start Julia with the `-Jsys.so` flag to load the new custom `sys.so` sysimage (or `sys.dylib`, `sys.dll` on macOS and Windows respecitively)
+We start Julia with the `-Jsys.so` flag to load the new custom `sys.so` sysimage (or `sys.dylib`, `sys.dll` on macOS and Windows respectively)
 and indeed loading CSV is now very fast:
 
 ```julia-repl
