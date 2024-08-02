@@ -52,6 +52,8 @@ jobs:
         include:
           - os: macos-13 # Intel
             julia-version: '1.6'
+        allow_failures:
+          - julia_version: nightly
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
