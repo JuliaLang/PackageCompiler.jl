@@ -813,6 +813,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `windows_subsystem::Bool`: If `true`, the executable will be created as a Windows GUI application 
+  rather than as a console application. Defaults to `false`. This option is ignored on non-Windows 
+  platforms.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -828,7 +832,8 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    windows_subsystem::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -883,17 +888,18 @@ function create_app(package_dir::String,
                     script)
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main, windows_subsystem))
     end
 end
 
 
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
-                                       julia_main::String)
+                                       julia_main::String,
+                                       windows_subsystem::Bool=false)
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
-    flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
+    flags = Base.shell_split(join((cflags(), ldflags(windows_subsystem), ldlibs()), " "))
     m = something(march(), ``)
     cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
