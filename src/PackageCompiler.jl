@@ -516,7 +516,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    transitive dependencies into the sysimage. This only makes a difference if some
    packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
-- `import_into_main::Bool`: If `true`, import all packages from the sysimage into `Main`.
+- `import_into_main::Bool`: If `true`, import all packages from `packages` into `Main`.
   This allows calling `using .Package` without the Project.toml the sysimage was built with.
 
 ### Advanced keyword arguments
