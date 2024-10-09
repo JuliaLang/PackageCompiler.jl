@@ -319,7 +319,8 @@ function create_sysimg_object_file(object_file::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
-                            incremental::Bool)
+                            incremental::Bool,
+                            import_into_main::Bool)
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
@@ -419,10 +420,21 @@ function create_sysimg_object_file(object_file::String,
         """
 
     # Make packages available in Main. It is unclear if this is the right thing to do.
-    for pkg in packages
-        print(julia_code_buffer, """
-            import $pkg
+    if import_into_main
+        for pkg in packages
+            print(julia_code_buffer, """
+                if isdefined(Main, Symbol("$pkg"))
+                    @warn(
+                        "Skipping the import of $pkg into Main. A package with this name has " *
+                        "already been imported. You can disable importing packages into Main " *
+                        "by setting the `import_into_main` flag to `false`. " *
+                        "Ref: https://github.com/JuliaLang/PackageCompiler.jl/issues/768"
+                    )
+                else
+                    import $pkg
+                end
             """)
+        end
     end
 
     print(julia_code_buffer, precompile_code)
@@ -504,6 +516,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    transitive dependencies into the sysimage. This only makes a difference if some
    packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
+- `import_into_main::Bool`: If `true`, import all packages from `packages` into `Main`.
+  This allows calling `using .Package` without the Project.toml the sysimage was built with.
+
 ### Advanced keyword arguments
 
 - `base_sysimage::Union{Nothing, String}`: If a `String`, names an existing sysimage upon which to build
@@ -537,6 +552,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
+                         import_into_main::Bool=true,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -634,7 +650,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             script,
                             sysimage_build_args,
                             extra_precompiles,
-                            incremental)
+                            incremental,
+                            import_into_main)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         if julia_init_c_file isa String
