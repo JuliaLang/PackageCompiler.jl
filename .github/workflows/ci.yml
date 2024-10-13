@@ -40,9 +40,14 @@ jobs:
         coverage:
           - 'true'
           - 'false' # needed for 1.9+ to test from a session using pkgimages
+        include:
+          - os: macOS-12
+            julia-version: '1.6'
         exclude:
           - os: macOS-latest
             julia-arch: x86
+          - os: macOS-latest
+            julia-version: '1.6'
           - julia-version: '1.6'
             coverage: 'false'
           - julia-version: '1.7'
