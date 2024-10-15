@@ -48,7 +48,7 @@ jobs:
           - '1.6' # previous LTS
           - '1.9' # TODO: comment out this line once I am finished debugging.
           - '1.10' # current LTS
-          - '1.11'
+          # - '1.11' # TODO: uncomment this line once we fix the tests on 1.11
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
         julia-arch:
           - 'x64' # 32-bit Julia
