@@ -226,6 +226,10 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
     tmp_sys_o = joinpath(tmp, "sys-o.a")
+    # This naming convention (`sys-o.a`) is necessary to make the sysimage
+    # work on macOS.
+    # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
+    # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
     tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
 
     compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
@@ -640,6 +644,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Create the sysimage
     object_file = tempname() * "-o.a"
+    # This naming convention (`-o.a`) is necessary to make the sysimage
+    # work on macOS.
+    # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
+    # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
 
     create_sysimg_object_file(object_file, packages, packages_sysimg;
                             project,
