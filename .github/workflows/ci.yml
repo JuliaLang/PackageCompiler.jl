@@ -56,7 +56,7 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
-          # - macos-13 # macos-13 = Intel. # TODO: uncomment this line once we merge #930
+          - macos-13 # macos-13 = Intel.
           # TODO: uncomment the next line, so that we can start testing on macos-14:
           # - macos-14 # macos-14 = Apple Silicon.
         coverage:
