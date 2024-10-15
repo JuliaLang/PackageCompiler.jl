@@ -1,21 +1,40 @@
 name: CI
+
 on:
   pull_request:
-    branches:
-      - 'master'
-      - 'release-*'
   push:
     branches:
       - 'master'
       - 'release-*'
     tags: '*'
+
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }}
-  cancel-in-progress: true
+  # Skip intermediate builds: all builds except for builds on the `master` branch
+  # Cancel intermediate builds: only pull request builds
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref != 'refs/heads/master' || github.run_number }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
 jobs:
-  ci_started:
-    timeout-minutes: 3
+  finalize-pr-checks:
+    if: always() # this line is important to keep the `finalize` job from being marked as skipped; do not change or delete this line
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - ci_started
+      - test
+      - docs
+      - build-mylib
+    steps:
+      - run: |
+          echo ci_started: ${{ needs.ci_started.result }}
+          echo test: ${{ needs.test.result }}
+          echo docs: ${{ needs.docs.result }}
+          echo build-mylib: ${{ needs.build-mylib.result }}
+      - run: exit 1
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+  ci_started:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - run: exit 0
   test:
@@ -26,23 +45,28 @@ jobs:
       fail-fast: false
       matrix:
         julia-version:
-          - '1.6'
-          - '1.9'
-          - '1.10'
-          - 'nightly'
+          - '1.6' # previous LTS
+          - '1.9' # TODO: comment out this line once I am finished debugging.
+          - '1.10' # current LTS
+          - '1.11'
+          # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
         julia-arch:
-          - 'x64'
-          - 'x86'
+          - 'x64' # 32-bit Julia
+          - 'x86' # 64-bit Julia
         os:
           - ubuntu-latest
-          - macOS-latest
           - windows-latest
+          - macos-13 # macos-13 = Intel.
+          # TODO: uncomment the next line, so that we can start testing on macos-14:
+          # - macos-14 # macos-14 = Apple Silicon.
         coverage:
           - 'true'
-          - 'false' # needed for 1.9+ to test from a session using pkgimages
+          - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
         exclude:
-          - os: macOS-latest
+          # We don't have 32-bit builds of Julia for macOS:
+          - os: macos-latest
             julia-arch: x86
+          # We don't need to run the coverage=false job for Julia < 1.9:
           - julia-version: '1.6'
             coverage: 'false'
           - julia-version: '1.7'
@@ -50,16 +74,16 @@ jobs:
           - julia-version: '1.8'
             coverage: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@latest
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+      - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
         with:
           version: ${{ matrix.julia-version }}
-      - uses: julia-actions/cache@v2
-      - uses: julia-actions/julia-runtest@latest
+      - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
+      - uses: julia-actions/julia-runtest@d0c4f093badade621cd041bba567d1e832480ac2 # v1.10.0
         with:
           coverage: ${{ matrix.coverage }}
-      - uses: julia-actions/julia-processcoverage@latest
-      - uses: codecov/codecov-action@v4
+      - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
+      - uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         with:
           file: lcov.info
         env:
@@ -68,8 +92,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@latest
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+      - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
         with:
           version: '1'
       - name: Build and deploy docs
@@ -77,3 +101,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
         run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
+  build-mylib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+      - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
+        with:
+          version: '1'
+      - uses: julia-actions/julia-buildpkg@90dd6f23eb49626e4e6612cb9d64d456f86e6a1c # v1.6.0
+        with:
+          project: 'examples/MyLib'
+      - uses: julia-actions/julia-buildpkg@90dd6f23eb49626e4e6612cb9d64d456f86e6a1c # v1.6.0
+        with:
+          project: 'examples/MyLib/build'
+      - run: |
+          cd examples/MyLib
+          make
+      - run: ./examples/MyLib/my_application.out
+        env:
+          LD_LIBRARY_PATH: 'examples/MyLib/MyLibCompiled/lib'
