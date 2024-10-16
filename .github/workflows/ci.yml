@@ -98,7 +98,7 @@ jobs:
           # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
           # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
           # based on the architecture of the runner.
-          arch: ${{}}
+          arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
       - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
       - uses: julia-actions/julia-runtest@d0c4f093badade621cd041bba567d1e832480ac2 # v1.10.0
         with:
