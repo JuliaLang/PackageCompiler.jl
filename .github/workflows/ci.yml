@@ -40,7 +40,7 @@ jobs:
       - run: exit 0
   test:
     timeout-minutes: 90
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.github-runner }}
     strategy:
       max-parallel: 20 # leave space for other runs in the JuliaLang org, given these tests are long
       fail-fast: false
@@ -51,32 +51,38 @@ jobs:
           - '1.10' # current LTS
           # - '1.11' # TODO: uncomment this line once we fix the tests on 1.11
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
-        julia-arch:
-          - 'x64' # 32-bit Julia
-          - 'x86' # 64-bit Julia
-        os:
+        julia-wordsize:
+          # The value here only affects the version of Julia binary that we download.
+          # It does not affect the architecture of the GitHub Runner (virtual machine) that
+          # we run on.
+          - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
+          - '64' # 64-bit Julia.
+        github-runner:
           - ubuntu-latest
           - windows-latest
           - macos-13 # macos-13 = Intel.
-          # TODO: uncomment the next line, so that we can start testing on macos-14:
-          # - macos-14 # macos-14 = Apple Silicon.
+          - macos-14 # macos-14 = Apple Silicon.
         coverage:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
         exclude:
           # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
           # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
-          - os: windows-latest
-            julia-arch: x86
+          - github-runner: windows-latest
             julia-version: '1.9'
+            julia-wordsize: '32'
           #
-          # We don't have 32-bit builds of Julia for macOS:
-          - os: macos-latest
-            julia-arch: x86
+          # Julia 1.6 did not support Apple Silicon:
+          - github-runner: macos-14 # macos-14 = Apple Silicon.
+            julia-version: '1.6'
           #
-          # We don't have 32-bit builds of Julia for macOS:
-          - os: macos-latest
-            julia-arch: x86
+          # We don't have 32-bit builds of Julia for Intel macOS:
+          - github-runner: macos-13 # macos-13 = Intel.
+            julia-wordsize: '32'
+          #
+          # We don't have 32-bit builds of Julia for Apple Silicon macOS:
+          - github-runner: macos-14 # macos-14 = Apple Silicon.
+            julia-wordsize: '32'
           #
           # We don't need to run the coverage=false job for Julia < 1.9:
           - julia-version: '1.6'
@@ -90,6 +96,13 @@ jobs:
       - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
         with:
           version: ${{ matrix.julia-version }}
+          # If `julia-wordsize` is 32, then we set `arch` to `x86`, because we know that
+          # 32-bit builds of Julia are only available for x86.
+          #
+          # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
+          # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
+          # based on the architecture of the underlying GitHub Runner (virtual machine).
+          arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
       - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
       - uses: julia-actions/julia-runtest@d0c4f093badade621cd041bba567d1e832480ac2 # v1.10.0
         with:
