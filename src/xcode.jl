@@ -2,7 +2,7 @@
 # output to determine whether or not the compiler is an Xcode Clang.
 #
 # The return value is a NamedTuple of the form (; b, ver)
-# b = a Bool that is true iff he compiler is an Xcode Clang.
+# b = a Bool that is true iff the compiler is an Xcode Clang.
 # ver = the version number of the Xcode Clang. If it's not Xcode Clang, ver is nothing.
 function _is_xcode_clt()
     cmd = `$(get_compiler_cmd()) --version`
@@ -25,7 +25,7 @@ function _is_xcode_clt()
         ver_str = strip(m[1])
         ver = tryparse(VersionNumber, ver_str)
         if isnothing(ver)
-            @warn "Could not determine the version of the Xcode Command Line Tools"
+            @warn "Could not determine the version of the Xcode Command Line Tools" ver_str
             (; b=false, ver=nothing)
         end
         b = true
@@ -43,7 +43,7 @@ end
 function _is_xcode_clt_and_is_gte_xcode_15()
     str = strip(get(ENV, "JULIA_PACKAGECOMPILER_XCODE_CLT_MAJOR_VERSION", ""))
     ver_int = tryparse(Int, str)
-    (ver_int isa Int) && return ver_int
+    (ver_int isa Int) && return (ver_int >= 15)
 
     result = _is_xcode_clt()
     if result.b
