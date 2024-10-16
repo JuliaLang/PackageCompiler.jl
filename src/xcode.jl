@@ -1,45 +1,39 @@
 # Get the compiler command from `get_compiler_cmd()`, and run `cc --version`, and parse the
 # output to determine whether or not the compiler is an Xcode Clang.
+#
+# The return value is a NamedTuple of the form (; b, ver)
+# b = a Bool that is true iff he compiler is an Xcode Clang.
+# ver = the version number of the Xcode Clang. If it's not Xcode Clang, ver is nothing.
 function _is_xcode_clt()
     cmd = `$(get_compiler_cmd()) --version`
     @debug "_active_compiler_is_xcode_clt(): Attempting to run command" cmd
+    # The `ignorestatus` allows us to proceed if the command does not run successfully.
     output = "\n" * strip(read(ignorestatus(cmd), String)) * "\n"
-    is_apple_clang = occursin(r"Apple clang version", output)
     installed_dir_m = match(r"\nInstalledDir: ([\w\/]*?)\n", output)
     if isnothing(installed_dir_m)
-        return false
+        return (; b=false, ver=nothing)
     end
-    installed_dir_str = strip(installed_dir[1])
-    is_xcode_app = startswith(installed_dir_str, "/Applications/Xcode.app/")
-    is_xcode_clt = startswith(installed_dir_str, "/Library/Developer/CommandLineTools/")
-    res = is_apple_clang && (is_xcode_app || is_xcode_clt)
-end
-
-# Run `pkgutil` to get the version number of the Xcode CLT (Command Line Tools), and return
-# the major version number as an integer.
-function _xcode_clt_major_version()
-    cmd = `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`
-    @debug "_xcode_clt_major_version(): Attempting to run command" cmd
-    # The `ignorestatus` allows us to proceed if the command does
-    # not run successfully.
-    output = "\n" * strip(read(ignorestatus(cmd), String)) * "\n"
-    r = r"version: (.*)\n"
-    m = match(r, output)
-    if isnothing(m)
-        major_version_str = nothing
+    installed_dir_str = strip(installed_dir_m[1])
+    is_xcode_app = startswith(installed_dir_str, "/Applications/Xcode.app")
+    is_xcode_clt = startswith(installed_dir_str, "/Library/Developer/CommandLineTools")
+    if is_xcode_app || is_xcode_clt
+        m = match(r"\nApple clang version ([0-9\.]*?) ", output)
+        if isnothing(m)
+            @warn "Could not determine the version of the Xcode Command Line Tools"
+            (; b=false, ver=nothing)
+        end
+        ver_str = strip(m[1])
+        ver = tryparse(VersionNumber, ver_str)
+        if isnothing(ver)
+            @warn "Could not determine the version of the Xcode Command Line Tools"
+            (; b=false, ver=nothing)
+        end
+        b = true
     else
-        major_version_str = split(m[1], '.')[1]
+        b = false
+        ver = nothing
     end
-    major_version_int = parse(Int, major_version_str)
-    return major_version_int
-end
-
-# Return true iff the Xcode CLT version is >= 15.
-# "gte" = greater than or equal to.
-function _is_gte_xcode_15()
-    major_version_int = _xcode_clt_major_version()
-    isnothing(major_version_int) && return nothing
-    return major_version_int >= 15
+    return (; b, ver)
 end
 
 # Return true iff the compiler is Xcode Clang AND the Xcode CLT version is >= 15.
@@ -50,13 +44,11 @@ function _is_xcode_clt_and_is_gte_xcode_15()
     str = strip(get(ENV, "JULIA_PACKAGECOMPILER_XCODE_CLT_MAJOR_VERSION", ""))
     ver_int = tryparse(Int, str)
     (ver_int isa Int) && return ver_int
-    if _is_xcode_clt()
-        b = _is_gte_xcode_15()
-        if isnothing(b)
-            @warn "Could not determine the version of the Command Line Tools, assuming less than or equal to 14"
-        end
-        return b
+
+    (; b, ver) = _is_xcode_clt()
+    if b
+        return ver >= v"15"
     else
-        false
+        return false
     end
 end
