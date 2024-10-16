@@ -45,9 +45,9 @@ function _is_xcode_clt_and_is_gte_xcode_15()
     ver_int = tryparse(Int, str)
     (ver_int isa Int) && return ver_int
 
-    (; b, ver) = _is_xcode_clt()
-    if b
-        return ver >= v"15"
+    result = _is_xcode_clt()
+    if result.b
+        return result.ver >= v"15"
     else
         return false
     end
