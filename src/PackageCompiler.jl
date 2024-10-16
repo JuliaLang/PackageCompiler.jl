@@ -14,9 +14,13 @@ using p7zip_jll: p7zip_path
 
 export create_sysimage, create_app, create_library
 
-include("juliaconfig.jl")
+# Vendored:
 include("../ext/TerminalSpinners.jl")
+
+# Source code for this package:
+include("juliaconfig.jl")
 include("library_selection.jl")
+include("xcode.jl")
 
 
 ##############
@@ -712,7 +716,7 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     mkpath(dirname(sysimage_path))
     # Prevent compiler from stripping all symbols from the shared lib.
     if Sys.isapple()
-        if _xcode_clt_major_version() > 14
+        if _is_xcode_clt_and_is_gte_xcode_15()
             o_file_flags = `-Wl,-all_load $object_files -Wl,-ld_classic`
         else
             o_file_flags = `-Wl,-all_load $object_files`
@@ -724,24 +728,6 @@ function create_sysimg_from_object_file(object_files::Vector{String},
     cmd = `$(bitflag()) $(march()) -shared -L$(julia_libdir()) -L$(julia_private_libdir()) -o $sysimage_path $o_file_flags $(Base.shell_split(ldlibs())) $extra`
     run_compiler(cmd; cplusplus=true)
     return nothing
-end
-
-function _xcode_clt_major_version()
-    cmd = `pkgutil --pkg-info=com.apple.pkg.CLTools_Executables`
-    @debug "_xcode_clt_major_version(): Attempting to run command" cmd
-    # The `ignorestatus` allows us to proceed (with a warning) if
-    # the command does not run successfully.
-    output = strip(read(ignorestatus(cmd), String)) * "\n"
-    r = r"version: (.*)\n"
-    m = match(r, output)
-    if isnothing(m)
-        @warn "Could not determine the version of the Command Line Tools, assuming greater than 14"
-        major_version_str = "15"
-    else
-        major_version_str = split(m[1], '.')[1]
-    end
-    major_version_int = parse(Int, major_version_str)
-    return major_version_int
 end
 
 function get_extra_linker_flags(version, compat_level, soname)
