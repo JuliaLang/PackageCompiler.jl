@@ -72,6 +72,12 @@ jobs:
             julia-version: '1.9'
             julia-wordsize: '32'
           #
+          # To save CI time, we don't test Julia 1.6 on macOS.
+          # We still test the LTS (1.10) and 1.11.
+          - github-runner: macos-13 # macos-13 = Intel.
+            julia-version: '1.6'
+          - github-runner: macos-14 # macos-14 = Apple Silicon.
+            julia-version: '1.6'
           # We don't have 32-bit builds of Julia for Intel macOS:
           - github-runner: macos-13 # macos-13 = Intel.
             julia-wordsize: '32'
