@@ -47,7 +47,7 @@ jobs:
       matrix:
         julia-version:
           - '1.6' # previous LTS
-          # - '1.9' # TODO: uncomment this line once we fix the tests on 1.9
+          - '1.9' # TODO: uncomment this line once we fix the tests on 1.9
           - '1.10' # current LTS
           # - '1.11' # TODO: uncomment this line once we fix the tests on 1.11
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
