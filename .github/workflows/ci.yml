@@ -66,12 +66,6 @@ jobs:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
         exclude:
-          # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
-          # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
-          - github-runner: windows-latest
-            julia-version: '1.9'
-            julia-wordsize: '32'
-          #
           # To save CI time, we don't test Julia 1.6 on macOS.
           # We still test the LTS (1.10) and 1.11.
           - github-runner: macos-13 # macos-13 = Intel.
