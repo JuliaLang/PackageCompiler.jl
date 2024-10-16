@@ -64,10 +64,11 @@ jobs:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
         exclude:
-          # For now, we'll disable testing 32-bit Julia on Windows.
-          # TODO: remove the following once we fix the tests for 32-bit Julia on  Windows.
+          # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
+          # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
           - os: windows-latest
             julia-arch: x86
+            julia-version: '1.9'
           #
           # We don't have 32-bit builds of Julia for macOS:
           - os: macos-latest
