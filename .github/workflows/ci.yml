@@ -58,8 +58,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-13 # macos-13 = Intel.
-          # TODO: uncomment the next line, so that we can start testing on macos-14:
-          # - macos-14 # macos-14 = Apple Silicon.
+          - macos-14 # macos-14 = Apple Silicon.
         coverage:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
