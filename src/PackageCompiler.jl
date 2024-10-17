@@ -211,16 +211,16 @@ function get_julia_cmd()
 end
 
 
-function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
+function rewrite_sysimg_jl_no_stdlibs()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     sysimg_content = read(sysimg_source_path, String)
-    # replaces the hardcoded list of stdlibs in sysimg.jl with
-    # the stdlibs that is given as argument
+
+
     return replace(sysimg_content,
-        r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
+        r"stdlibs = \[(.*?)\]"s => string("stdlibs = []"))
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
+function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -255,7 +255,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
             # Use that to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content = rewrite_sysimg_jl_no_stdlibs()
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
@@ -594,8 +594,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
+        base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
