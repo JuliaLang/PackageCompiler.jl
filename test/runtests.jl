@@ -85,7 +85,7 @@ end
             if is_julia_1_11
                 # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
                 # So, for now, we skip the `incremental=false` tests on Julia 1.11
-                @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976`
+                @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
                 @test_broken false
                 continue
             end
