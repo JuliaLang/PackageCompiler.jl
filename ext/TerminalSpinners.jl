@@ -5,7 +5,7 @@ module TerminalSpinners
 
 using Printf
 
-export Spinner, autospin, spin!, @spin
+export Spinner, @spin
 
 const CSI = "\e["
 
@@ -43,7 +43,7 @@ Base.@kwdef mutable struct Spinner{IO_t <: IO}
     frames::Vector{String} =  ["⠋", "⠙", "⠸", "⢰", "⣠", "⣄", "⡆", "⠇"]
     freq::Float64 = 10.0 # [1/s]
     msg::Any = ""
-    stream::IO_t = stderr   
+    stream::IO_t = stderr
     timer::Union{Nothing, Timer} = nothing
     hidecursor::Bool = true
     silent::Bool=false
@@ -106,7 +106,7 @@ function start!(s::Spinner)
     s.frame_idx = 1
     s.first = true
     s.start = time()
-    
+
     if !s.enabled
         println(s.stream, "- ", s.msg)
         return
@@ -132,7 +132,7 @@ function stop!(s::Spinner)
     if s.timer !== nothing
         close(s.timer)
     end
-    if !s.enabled || s.silent 
+    if !s.enabled || s.silent
         return
     end
     s.hidecursor && show_cursor!(s.stream)

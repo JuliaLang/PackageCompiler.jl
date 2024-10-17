@@ -5,7 +5,11 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
-using LLVMExtra_jll
+if VERSION >= v"1.7.0"
+    using LLVMExtra_jll
+end
+
+using micromamba_jll
 
 const myrand = rand()
 
@@ -14,7 +18,7 @@ const outputo = begin
     o == C_NULL ? "ok" : unsafe_string(o)
 end
 
-fooifier_path() = joinpath(artifact"fooifier", "bin", "fooifier" * (Sys.iswindows() ? ".exe" : ""))
+hello_world_path() = joinpath(artifact"HelloWorldC", "bin", "hello_world" * (Sys.iswindows() ? ".exe" : ""))
 
 function julia_main()::Cint
     try
@@ -57,8 +61,8 @@ function real_main()
     @show is_crayons_loaded()
 
     println("Running the artifact")
-    res = read(`$(fooifier_path()) 5 10`, String)
-    println("The result of 2*5^2 - 10 == $res")
+    res = readchomp(`$(hello_world_path())`)
+    println("Artifact printed: $res") 
 
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
@@ -81,10 +85,18 @@ function real_main()
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
 
-    if isfile(LLVMExtra_jll.libLLVMExtra_path)
-        println("LLVMExtra path: ok!")
+    if VERSION >= v"1.7.0"
+        if isfile(LLVMExtra_jll.libLLVMExtra_path)
+            println("LLVMExtra path: ok!")
+        else
+            println("LLVMExtra path: fail!")
+        end
+    end
+
+    if isfile(micromamba_jll.micromamba_path)
+        println("micromamba_jll path: ok!")
     else
-        println("LLVMExtra path: fail!")
+        println("micromamba_jll path: fail!")
     end
     return
 end
