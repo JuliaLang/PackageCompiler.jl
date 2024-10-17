@@ -594,7 +594,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? gather_stdlibs_project(ctx) : stdlibs_in_sysimage()
+        sysimage_stdlibs = filter_stdlibs ? String[] : stdlibs_in_sysimage()
         base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
