@@ -18,16 +18,20 @@ const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
 
+if is_ci
+    @show Sys.ARCH
+end
+
+if is_slow_ci
+    @warn "This is "slow CI" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
+end
+
 if is_julia_1_6
     @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
 end
 
 if is_julia_1_11
     @warn "This is Julia 1.11. Some tests will be skipped or modified." VERSION
-end
-
-if is_ci
-    @show Sys.ARCH
 end
 
 function remove_llvmextras(project_file)
