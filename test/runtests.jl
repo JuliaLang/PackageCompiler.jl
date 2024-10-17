@@ -16,7 +16,7 @@ Base.init_depot_path()
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
-const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 11
+const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
 
 if is_julia_1_6
     @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
