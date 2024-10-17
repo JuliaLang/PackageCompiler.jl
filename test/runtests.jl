@@ -23,7 +23,7 @@ if is_ci
 end
 
 if is_slow_ci
-    @warn "This is "slow CI" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
+    @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
 if is_julia_1_6
