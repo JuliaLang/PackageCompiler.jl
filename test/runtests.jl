@@ -16,13 +16,22 @@ Base.init_depot_path()
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
+const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
+
+if is_ci
+    @show Sys.ARCH
+end
+
+if is_slow_ci
+    @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
+end
 
 if is_julia_1_6
     @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
 end
 
-if is_ci
-    @show Sys.ARCH
+if is_julia_1_11
+    @warn "This is Julia 1.11. Some tests will be skipped or modified." VERSION
 end
 
 function remove_llvmextras(project_file)
@@ -73,6 +82,13 @@ end
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
     @testset for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
+            if is_julia_1_11
+                # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
+                # So, for now, we skip the `incremental=false` tests on Julia 1.11
+                @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
+                @test_broken false
+                continue
+            end
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
         else
             filter_stdlibs = (false,)
