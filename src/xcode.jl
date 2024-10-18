@@ -9,6 +9,13 @@ function _is_xcode_clt()
     @debug "_active_compiler_is_xcode_clt(): Attempting to run command" cmd
     # The `ignorestatus` allows us to proceed if the command does not run successfully.
     output = "\n" * strip(read(ignorestatus(cmd), String)) * "\n"
+
+    # If this is an Xcode Clang compiler, example output would be:
+    # > Apple clang version 16.0.0 (clang-1600.0.26.3)
+    # > Target: arm64-apple-darwin23.6.0
+    # > Thread model: posix
+    # > InstalledDir: /Library/Developer/CommandLineTools/usr/bin
+
     installed_dir_m = match(r"\nInstalledDir: ([\w\/]*?)\n", output)
     if isnothing(installed_dir_m)
         return (; b=false, ver=nothing)
