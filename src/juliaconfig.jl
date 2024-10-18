@@ -29,11 +29,14 @@ end
 
 julia_includedir() = abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 
-function ldflags()
+function ldflags(windows_subsystem::Bool)
     fl = "-L$(shell_escape(julia_libdir())) -L$(shell_escape(julia_private_libdir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
         fl = fl * " -Wl,--export-all-symbols"
+        if windows_subsystem
+            fl = fl * " -Wl,--subsystem,windows"
+        end
     elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
