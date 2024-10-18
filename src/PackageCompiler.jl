@@ -1614,7 +1614,7 @@ function audit_sysimage_relocatability(sysimg_path::String; paths::Vector{String
 
     for path in paths
         found = String[]
-        for m in eachmatch(Regex("$(path)[^\0]+"), sysimg_contents)
+        for m in eachmatch(Regex("\Q$(path)\E[^\0]+"), sysimg_contents)
             push!(found, "[$(m.offset)] $(m.match)")
         end
         if !isempty(found)
