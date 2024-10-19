@@ -89,7 +89,7 @@ function real_main()
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
 
-    if VERSION >= v"1.7.0"
+    @static if (VERSION >= v"1.7.0") && !(VERSION.major == 1 && VERSION.major == 9)
         if isfile(LLVMExtra_jll.libLLVMExtra_path)
             println("LLVMExtra path: ok!")
         else
