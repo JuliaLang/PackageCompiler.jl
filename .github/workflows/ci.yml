@@ -47,7 +47,7 @@ jobs:
       matrix:
         julia-version:
           - '1.6' # previous LTS
-          # - '1.9' # TODO: uncomment this line once we fix the tests on 1.9
+          - '1.9'
           - '1.10' # current LTS
           - '1.11'
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
@@ -66,6 +66,11 @@ jobs:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
         exclude:
+          # For now, we'll disable testing 32-bit Julia 1.9 on all operating systems.
+          # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 .
+          - github-runner: windows-latest
+            julia-version: '1.9'
+            julia-wordsize: '32'
           # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
           # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
           - github-runner: windows-latest
