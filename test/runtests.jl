@@ -16,6 +16,7 @@ Base.init_depot_path()
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
+const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
 
 if is_ci
@@ -26,12 +27,8 @@ if is_slow_ci
     @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
-if is_julia_1_6
-    @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
-end
-
-if is_julia_1_11
-    @warn "This is Julia 1.11. Some tests will be skipped or modified." VERSION
+if any[(is_julia_1_6, is_julia_1_9, is_julia_1_11])
+    @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
 function remove_llvmextras(project_file)
@@ -97,8 +94,9 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            if is_julia_1_6
-                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove
+            if is_julia_1_6 || is_julia_1_9
+                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
+                # Julia 1.9: There's no issue, but it seems we hit a similar issue.
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
