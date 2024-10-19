@@ -27,7 +27,7 @@ if is_slow_ci
     @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
-if any[(is_julia_1_6, is_julia_1_9, is_julia_1_11])
+if any([is_julia_1_6, is_julia_1_9, is_julia_1_11])
     @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
