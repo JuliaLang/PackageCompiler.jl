@@ -5,7 +5,11 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
-if VERSION >= v"1.7.0"
+
+# We seem to get problems with LLVMExtra_jll on Julia 1.6 and 1.9
+# Issue for 1.6: https://github.com/JuliaLang/PackageCompiler.jl/issues/706
+# There's no GitHub Issue for 1.9
+@static if (VERSION >= v"1.7.0") && !(VERSION.major == 1 && VERSION.major == 9)
     using LLVMExtra_jll
 end
 
