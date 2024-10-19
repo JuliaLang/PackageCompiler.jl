@@ -68,8 +68,7 @@ jobs:
         exclude:
           # For now, we'll disable testing 32-bit Julia 1.9 on all operating systems.
           # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 .
-          - github-runner: windows-latest
-            julia-version: '1.9'
+          - julia-version: '1.9'
             julia-wordsize: '32'
           # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
           # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
