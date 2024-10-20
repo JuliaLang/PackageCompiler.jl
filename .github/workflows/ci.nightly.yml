@@ -24,8 +24,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # We intentionally only run one CI job on Julia nightly,
-          # in order to conserve CI resources.
+          # 1. We intentionally put nightly CI into a separate YAML
+          #    file (`ci.nightly.yml` versus the main `ci.yml` file).
+          # 2. We intentionally only run one CI job on Julia nightly,
+          #    in order to conserve CI resources.
           - julia-version: 'nightly'
             julia-wordsize: '64'
             github-runner: ubuntu-latest
