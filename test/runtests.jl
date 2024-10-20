@@ -14,7 +14,16 @@ ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
-const is_slow_ci = is_ci && Sys.ARCH == :aarch64
+const is_apple_silicon_macos = Sys.ARCH == :aarch64 && Sys.isapple()
+
+# In order to be "slow CI", we must meet all of the following:
+# 1. We are running on CI.
+# 2. We are running on aarch64 (arm64).
+# 3. We are NOT running on Apple Silicon macOS.
+#    (Because for GitHub Actions, the GitHub-hosted Apple Silicon
+#    macOS runners seem to be quite fast.)
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !is_apple_silicon_macos
+
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
@@ -85,7 +94,12 @@ end
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
-    @testset for incremental in (is_slow_ci ? (false,) : (true, false))
+    if is_slow_ci
+        incrementals_list = (true, false)
+    else
+        incrementals_list = (true, false)
+    end
+    @testset for incremental in incrementals_list
         if incremental == false
             if is_julia_1_11 || is_julia_1_12
                 # On Julia 1.11 and 1.12, `incremental=false` is currently broken.
@@ -96,7 +110,11 @@ end
                 @test_skip false
                 continue
             end
-            filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
+            if is_slow_ci
+                filter_stdlibs = (true,)
+            else
+                filter_stdlibs = (true, false)
+            end
         else
             filter_stdlibs = (false,)
         end
