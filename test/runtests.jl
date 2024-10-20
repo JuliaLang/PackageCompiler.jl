@@ -16,6 +16,7 @@ Base.init_depot_path()
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
+const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
 
 if is_ci
@@ -26,12 +27,8 @@ if is_slow_ci
     @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
-if is_julia_1_6
-    @warn "This is Julia 1.6. Some tests will be skipped or modified." VERSION
-end
-
-if is_julia_1_11
-    @warn "This is Julia 1.11. Some tests will be skipped or modified." VERSION
+if any([is_julia_1_6, is_julia_1_9, is_julia_1_11])
+    @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
 function remove_llvmextras(project_file)
@@ -86,7 +83,7 @@ end
                 # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
                 # So, for now, we skip the `incremental=false` tests on Julia 1.11
                 @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
-                @test_broken false
+                @test_skip false
                 continue
             end
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
@@ -97,8 +94,9 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            if is_julia_1_6
-                # Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove
+            if is_julia_1_6 || is_julia_1_9
+                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
+                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
@@ -154,7 +152,11 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            if VERSION >= v"1.7-"
+            if is_julia_1_6 || is_julia_1_9
+                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
+                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
+                @test_skip false
+            else
                 @test occursin("LLVMExtra path: ok!", app_output)
             end
             @test occursin("micromamba_jll path: ok!", app_output)
