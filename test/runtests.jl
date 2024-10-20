@@ -18,6 +18,7 @@ const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
+const is_julia_1_12 = VERSION.major == 1 && VERSION.minor == 12
 
 if is_ci
     @show Sys.ARCH
@@ -27,7 +28,14 @@ if is_slow_ci
     @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
-if any([is_julia_1_6, is_julia_1_9, is_julia_1_11])
+const some_tests_skipped = [
+    is_julia_1_6,
+    is_julia_1_9,
+    is_julia_1_11,
+    is_julia_1_12,
+]
+
+if any(some_tests_skipped)
     @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
@@ -79,10 +87,12 @@ end
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
     @testset for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
-            if is_julia_1_11
-                # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
-                # So, for now, we skip the `incremental=false` tests on Julia 1.11
-                @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
+            if is_julia_1_11 || is_julia_1_12
+                # On Julia 1.11 and 1.12, `incremental=false` is currently broken.
+                # 1.11: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
+                # 1.12: No GitHub issue yet.
+                # So, for now, we skip the `incremental=false` tests on Julia 1.11 and 1.12
+                @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test due to known bug: #976 (for 1.11), issue TODO (for 1.12)"
                 @test_skip false
                 continue
             end
@@ -186,30 +196,52 @@ end
     end # testset
 
     if !is_slow_ci
-        # Test library creation
-        lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
-        lib_target_dir = joinpath(tmp, "MyLibCompiled")
+        if is_julia_1_12
+            # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
+            # 1.12: No GitHub issue yet.
+            # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
+            @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
+            @test_skip false
+        else
+            # Test library creation
+            lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
+            lib_target_dir = joinpath(tmp, "MyLibCompiled")
 
-        incremental = false
-        filter = true
-        lib_name = "inc"
+            # This is why we have to skip this test on 1.12:
+            incremental = false
+            
+            filter = true
+            lib_name = "inc"
 
-        tmp_lib_src_dir = joinpath(tmp, "MyLib")
-        cp(lib_source_dir, tmp_lib_src_dir)
-        create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                    precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
-                    precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
-                    lib_name=lib_name, version=v"1.0.0")
-        rm(tmp_lib_src_dir; recursive=true)
+            tmp_lib_src_dir = joinpath(tmp, "MyLib")
+            cp(lib_source_dir, tmp_lib_src_dir)
+            create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
+                        precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
+                        precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
+                        lib_name=lib_name, version=v"1.0.0")
+            rm(tmp_lib_src_dir; recursive=true)
+        end
     end
 
     # Test creating an empty sysimage
     if !is_slow_ci
-        tmp = mktempdir()
-        sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
-        foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
-        create_sysimage(String[]; sysimage_path=sysimage_path, incremental=false, filter_stdlibs=true, project=tmp)
-        hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
-        @test hello == "hello, world"
+        if is_julia_1_12
+            # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
+            # 1.12: No GitHub issue yet.
+            # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
+            @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
+            @test_skip false
+        else
+            tmp = mktempdir()
+            sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
+            foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
+
+            # This is why we need to skip this test on 1.12:
+            incremental=false
+            
+            create_sysimage(String[]; sysimage_path=sysimage_path, incremental=incremental, filter_stdlibs=true, project=tmp)
+            hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
+            @test hello == "hello, world"
+        end
     end
 end
