@@ -32,8 +32,8 @@ jobs:
           # 2. We intentionally only run one CI job on Julia nightly,
           #    in order to conserve CI resources.
           # 3. This CI only runs on Julia nightly. It doesn't run on
-          #    on Julia pre-releases. For CI on Julia pre-releases,
-          #    see the main CI workflow file.
+          #    Julia pre-releases. For CI on Julia pre-releases, see
+          #    the main CI workflow file.
           - julia-version: 'nightly'
             julia-wordsize: '64'
             github-runner: ubuntu-latest
