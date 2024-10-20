@@ -18,6 +18,7 @@ const is_slow_ci = is_ci && Sys.ARCH == :aarch64
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
+const is_julia_1_12 = VERSION.major == 1 && VERSION.minor == 12
 
 if is_ci
     @show Sys.ARCH
@@ -27,7 +28,14 @@ if is_slow_ci
     @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
 end
 
-if any([is_julia_1_6, is_julia_1_9, is_julia_1_11])
+const some_tests_skipped = [
+    is_julia_1_6,
+    is_julia_1_9,
+    is_julia_1_11,
+    is_julia_1_12,
+]
+
+if any(some_tests_skipped)
     @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
@@ -79,10 +87,10 @@ end
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
     @testset for incremental in (is_slow_ci ? (false,) : (true, false))
         if incremental == false
-            if is_julia_1_11
-                # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
-                # So, for now, we skip the `incremental=false` tests on Julia 1.11
-                @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
+            if is_julia_1_11 || is_julia_1_12
+                # On Julia 1.11 and 1.12, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
+                # So, for now, we skip the `incremental=false` tests on Julia 1.11 and 1.12
+                @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
                 @test_skip false
                 continue
             end
