@@ -47,9 +47,9 @@ jobs:
       matrix:
         julia-version:
           - '1.6' # previous LTS
-          - '1.9'
           - '1.10' # current LTS
-          - '1.11'
+          - '1.11' # current stable
+          # - 'pre' # comment out when there is no pre-release available; uncomment when there is a pre-release available.
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
         julia-wordsize:
           # The value here only affects the version of Julia binary that we download.
@@ -65,6 +65,13 @@ jobs:
         coverage:
           - 'true'
           - 'false' # needed for Julia 1.9+ to test from a session using pkgimages
+        include:
+          # Julia 1.9 is no longer supported (by upstream Julia).
+          # Thus, we intentionally only run one Julia 1.9 CI job in this repo.
+          - julia-version: '1.9'
+            julia-wordsize: '64'
+            github-runner: ubuntu-latest
+            coverage: false
         exclude:
           # For now, we'll disable testing 32-bit Julia 1.9 on all operating systems.
           # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 .
