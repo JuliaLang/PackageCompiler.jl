@@ -85,7 +85,12 @@ end
     # Test creating an app
     app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
     app_compiled_dir = joinpath(tmp, "MyAppCompiled")
-    @testset for incremental in (is_slow_ci ? (false,) : (true, false))
+    if is_slow_ci
+        incrementals_list = (true, false)
+    else
+        incrementals_list = (true, false)
+    end
+    @testset for incremental in incrementals_list
         if incremental == false
             if is_julia_1_11 || is_julia_1_12
                 # On Julia 1.11 and 1.12, `incremental=false` is currently broken.
@@ -96,7 +101,11 @@ end
                 @test_skip false
                 continue
             end
-            filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
+            if is_slow_ci
+                filter_stdlibs = (true,)
+            else
+                filter_stdlibs = (true, false)
+            end
         else
             filter_stdlibs = (false,)
         end
