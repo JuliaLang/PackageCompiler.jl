@@ -14,7 +14,16 @@ ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
-const is_slow_ci = is_ci && Sys.ARCH == :aarch64
+const is_apple_silicon_macos = Sys.ARCH == :aarch64 && Sys.isapple()
+
+# In order to be "slow CI", we must meet all of the following:
+# 1. We are running on CI.
+# 2. We are running on aarch64 (arm64).
+# 3. We are NOT running on Apple Silicon macOS.
+#    (Because for GitHub Actions, the GitHub-hosted Apple Silicon
+#    macOS runners seem to be quite fast.)
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !is_apple_silicon_macos
+
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
