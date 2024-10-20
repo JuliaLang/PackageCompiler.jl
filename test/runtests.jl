@@ -197,12 +197,11 @@ end
 
     if !is_slow_ci
         if is_julia_1_12
-        # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
-        # 1.12: No GitHub issue yet.
-        # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
+            # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
+            # 1.12: No GitHub issue yet.
+            # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
             @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
-                @test_skip false
-                continue
+            @test_skip false
         else
             # Test library creation
             lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
