@@ -83,7 +83,7 @@ end
                 # On Julia 1.11, `incremental=false` is currently broken: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
                 # So, for now, we skip the `incremental=false` tests on Julia 1.11
                 @warn "This is Julia 1.11; skipping incremental=false test due to known bug: https://github.com/JuliaLang/PackageCompiler.jl/issues/976"
-                @test_broken false
+                @test_skip false
                 continue
             end
             filter_stdlibs = (is_slow_ci ? (true, ) : (true, false))
@@ -96,7 +96,7 @@ end
             cp(app_source_dir, tmp_app_source_dir)
             if is_julia_1_6 || is_julia_1_9
                 # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
-                # Julia 1.9: There's no issue, but it seems we hit a similar issue.
+                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
@@ -152,7 +152,11 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            if VERSION >= v"1.7-"
+            if is_julia_1_6 || is_julia_1_9
+                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
+                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
+                @test_skip false
+            else
                 @test occursin("LLVMExtra path: ok!", app_output)
             end
             @test occursin("micromamba_jll path: ok!", app_output)
