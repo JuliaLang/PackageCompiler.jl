@@ -10,7 +10,10 @@ using Random
 # Issue for 1.6: https://github.com/JuliaLang/PackageCompiler.jl/issues/706
 # There's no GitHub Issue for 1.9
 @static if (VERSION >= v"1.7.0") || !(VERSION.major == 1 && VERSION.major == 9)
+    @info "Hit TRUE" VERSION # TODO: delete this line
     using LLVMExtra_jll
+else # TODO: delete this line
+    @info "Hit false" VERSION # TODO: delete this line
 end
 
 using micromamba_jll
@@ -90,11 +93,14 @@ function real_main()
     @everywhere println(Example.domath(3))
 
     @static if (VERSION >= v"1.7.0") || !(VERSION.major == 1 && VERSION.major == 9)
+        @info "Hit TRUE" VERSION # TODO: delete this line
         if isfile(LLVMExtra_jll.libLLVMExtra_path)
             println("LLVMExtra path: ok!")
         else
             println("LLVMExtra path: fail!")
         end
+    else # TODO: delete this line
+        @info "Hit FALSE" VERSION # TODO: delete this line
     end
 
     if isfile(micromamba_jll.micromamba_path)
