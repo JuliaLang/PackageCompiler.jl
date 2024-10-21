@@ -49,7 +49,7 @@ jobs:
           - '1.6' # previous LTS
           - '1.9'
           - '1.10' # current LTS
-          - '1.11'
+          - '1.11' # current stable
           # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
         julia-wordsize:
           # The value here only affects the version of Julia binary that we download.
@@ -133,11 +133,20 @@ jobs:
   build-mylib:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      # Only run 1 of the `build-mylib` job at a time, so that this job doesn't take over
+      # too many CI resources, and also to leave space for other runs in the JuliaLang org.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        julia-version:
+          - '1.10' # current LTS
+          - '1.11' # current stable
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
       - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
         with:
-          version: '1'
+          version: ${{ matrix.julia-version }}
       - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
       - uses: julia-actions/julia-buildpkg@90dd6f23eb49626e4e6612cb9d64d456f86e6a1c # v1.6.0
         with:
