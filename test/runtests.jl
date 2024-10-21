@@ -265,7 +265,7 @@ end
             # But ONLY on GHA (GitHub Actions).
             # On PkgEval, we do run these tests. This is intentional - we want PkgEval to
             # detect regressions, as well as fixes for those regressions.
-            @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
+            @warn "[GHA CI] This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
             @test_skip false
         else
             tmp = mktempdir()
