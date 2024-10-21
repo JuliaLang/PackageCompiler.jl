@@ -13,8 +13,14 @@ mkpath(joinpath(new_depot, "registries"))
 ENV["JULIA_DEPOT_PATH"] = new_depot
 Base.init_depot_path()
 
+# A generic CI variable, not specific to any single CI provider.
+# Lots of different CI providers set the `CI` environment variable,
+# such as GitHub Actions, Buildkite, and Travis CI.
+# If I recall correctly, Julia's PkgEval.jl also sets it.
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
-const is_apple_silicon_macos = Sys.ARCH == :aarch64 && Sys.isapple()
+
+# GHA = GitHub Actions
+const is_gha_ci = tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "")) === true
 
 # In order to be "slow CI", we must meet all of the following:
 # 1. We are running on CI.
@@ -22,29 +28,29 @@ const is_apple_silicon_macos = Sys.ARCH == :aarch64 && Sys.isapple()
 # 3. We are NOT running on Apple Silicon macOS.
 #    (Because for GitHub Actions, the GitHub-hosted Apple Silicon
 #    macOS runners seem to be quite fast.)
-const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !is_apple_silicon_macos
+const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !Sys.isapple()
 
 const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
 const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
 const is_julia_1_11 = VERSION.major == 1 && VERSION.minor == 11
 const is_julia_1_12 = VERSION.major == 1 && VERSION.minor == 12
 
-if is_ci
-    @show Sys.ARCH
+if is_ci || is_gha_ci
+    @info "This is a CI job" Sys.ARCH VERSION is_ci is_gha_ci
 end
 
 if is_slow_ci
-    @warn "This is \"slow CI\" (`is_ci && Sys.ARCH == :aarch64`). Some tests will be skipped or modified." Sys.ARCH
+    @warn "This is \"slow CI\" (defined as any non-macOS CI running on aarch64). Some tests will be skipped or modified." Sys.ARCH
 end
 
-const some_tests_skipped = [
+const jlver_some_tests_skipped = [
     is_julia_1_6,
     is_julia_1_9,
     is_julia_1_11,
     is_julia_1_12,
 ]
 
-if any(some_tests_skipped)
+if any(jlver_some_tests_skipped)
     @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
@@ -101,16 +107,21 @@ end
     end
     @testset for incremental in incrementals_list
         if incremental == false
-            if is_julia_1_11 || is_julia_1_12
+            if is_gha_ci && (is_julia_1_11 || is_julia_1_12)
                 # On Julia 1.11 and 1.12, `incremental=false` is currently broken.
                 # 1.11: https://github.com/JuliaLang/PackageCompiler.jl/issues/976
                 # 1.12: No GitHub issue yet.
                 # So, for now, we skip the `incremental=false` tests on Julia 1.11 and 1.12
-                @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test due to known bug: #976 (for 1.11), issue TODO (for 1.12)"
+                # But ONLY on GHA (GitHub Actions).
+                # On PkgEval, we do run these tests. This is intentional - we want PkgEval to
+                # detect regressions, as well as fixes for those regressions.
+                @warn "[GHA CI] This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test due to known bug: #976 (for 1.11), issue TODO (for 1.12)"
                 @test_skip false
                 continue
             end
             if is_slow_ci
+                @warn "Skipping the (incremental=false, filter_stdlibs=false) test because this is \"slow CI\""
+                @test_skip false
                 filter_stdlibs = (true,)
             else
                 filter_stdlibs = (true, false)
@@ -122,9 +133,10 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            if is_julia_1_6 || is_julia_1_9
+            if is_gha_ci && (is_julia_1_6 || is_julia_1_9)
                 # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
                 # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
+                @test_skip false
                 remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
             end
             try
@@ -214,11 +226,14 @@ end
     end # testset
 
     if !is_slow_ci
-        if is_julia_1_12
+        if is_gha_ci && is_julia_1_12
             # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
             # 1.12: No GitHub issue yet.
             # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
-            @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
+            # But ONLY on GHA (GitHub Actions).
+            # On PkgEval, we do run these tests. This is intentional - we want PkgEval to
+            # detect regressions, as well as fixes for those regressions.
+            @warn "[GHA CI] This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
             @test_skip false
         else
             # Test library creation
@@ -243,11 +258,14 @@ end
 
     # Test creating an empty sysimage
     if !is_slow_ci
-        if is_julia_1_12
+        if is_gha_ci && is_julia_1_12
             # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
             # 1.12: No GitHub issue yet.
             # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
-            @warn "This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
+            # But ONLY on GHA (GitHub Actions).
+            # On PkgEval, we do run these tests. This is intentional - we want PkgEval to
+            # detect regressions, as well as fixes for those regressions.
+            @warn "[GHA CI] This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
             @test_skip false
         else
             tmp = mktempdir()
