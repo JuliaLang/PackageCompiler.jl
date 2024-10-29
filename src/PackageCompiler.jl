@@ -245,7 +245,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     # we can't strip the IR from the base sysimg, so we filter out this flag
     # also presumably `--compile=all` and maybe a few others we missed here...
     sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
-    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
     cd(base_dir) do
