@@ -231,26 +231,15 @@ end
 
     # Test creating an empty sysimage
     if !is_slow_ci
-        if is_gha_ci && is_julia_1_12
-            # On Julia 1.12, `incremental=false` is currently broken when doing `create_library()`.
-            # 1.12: No GitHub issue yet.
-            # So, for now, we skip the `incremental=false` tests on Julia 1.12 when doing `create_library()`.
-            # But ONLY on GHA (GitHub Actions).
-            # On PkgEval, we do run these tests. This is intentional - we want PkgEval to
-            # detect regressions, as well as fixes for those regressions.
-            @warn "[GHA CI] This is Julia $(VERSION.major).$(VERSION.minor); skipping incremental=false test when doing `create_library()` due to known bug: issue TODO (for 1.12)"
-            @test_skip false
-        else
-            tmp = mktempdir()
-            sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
-            foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
+        tmp = mktempdir()
+        sysimage_path = joinpath(tmp, "empty." * Libdl.dlext)
+        foreach(x -> touch(joinpath(tmp, x)), ["Project.toml", "Manifest.toml"])
 
-            # This is why we need to skip this test on 1.12:
-            incremental=false
+        # This is why we need to skip this test on 1.12:
+        incremental=false
 
-            create_sysimage(String[]; sysimage_path=sysimage_path, incremental=incremental, filter_stdlibs=true, project=tmp)
-            hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
-            @test hello == "hello, world"
-        end
+        create_sysimage(String[]; sysimage_path=sysimage_path, incremental=incremental, filter_stdlibs=true, project=tmp)
+        hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
+        @test hello == "hello, world"
     end
 end
