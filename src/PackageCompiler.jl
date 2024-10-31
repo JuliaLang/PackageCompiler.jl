@@ -260,10 +260,15 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
+                # The final positional argument of "" is to pass BUILDROOT="" to Base.jl.
+                # In Julia 1.11 and earlier, this positional argument will be ignored.
+                # In Julia 1.12 and later, this positional argument will be picked up by Base.jl,
+                # and Base.jl will set Base.BUILDROOT to "".
+                # https://github.com/JuliaLang/PackageCompiler.jl/issues/989
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path`,
+                    $new_sysimage_source_path ""`,
                     "JULIA_LOAD_PATH" => "@stdlib")
                 @debug "running $cmd"
 
