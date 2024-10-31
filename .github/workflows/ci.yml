@@ -50,7 +50,14 @@ jobs:
           - '1.9'
           - '1.10' # current LTS
           - '1.11' # current stable
-          # - 'nightly' # TODO: decide whether we want to run any CI jobs on nightly.
+          #
+          # 'pre' will install the latest prerelease build (RCs, betas, and alphas).
+          # Uncomment this line when there is an active prerelease available.
+          # Comment this line out when there is no prerelease available (to save CI time).
+          # - 'pre'
+          #
+          # Note: we have a separate workflow (.github/workflows/ci.nightly.yml)
+          # for Julia nightly.
         julia-wordsize:
           # The value here only affects the version of Julia binary that we download.
           # It does not affect the architecture of the GitHub Runner (virtual machine) that
