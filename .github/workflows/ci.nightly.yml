@@ -51,7 +51,7 @@ jobs:
           # based on the architecture of the underlying GitHub Runner (virtual machine).
           arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
       - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
-      - uses: julia-actions/julia-runtest@d0c4f093badade621cd041bba567d1e832480ac2 # v1.10.0
+      - uses: julia-actions/julia-runtest@1e03e0122a598a569004c1e26950e2547b350ec0 # v1.11.1
         with:
           coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
