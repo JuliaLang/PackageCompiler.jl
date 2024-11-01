@@ -212,7 +212,7 @@ end
 
 function generate_sysimg_jl_contents(stdlibs::Vector{String})
     original_sysimg_source_path = Base.find_source_file("sysimg.jl")
-    original_sysimg_content = read(sysimg_source_path, String)
+    original_sysimg_content = read(original_sysimg_source_path, String)
     if VERSION >= v"1.12-"
         # In Julia 1.12+, we use BuildSettings, and thus we don't need to rewrite sysimg.jl
         # to change the list of stdlibs.
