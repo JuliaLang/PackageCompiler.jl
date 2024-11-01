@@ -210,7 +210,7 @@ function get_julia_cmd()
     end
 end
 
-function generate_sysimg_jl_contents()
+function generate_sysimg_jl_contents(stdlibs::Vector{String})
     original_sysimg_source_path = Base.find_source_file("sysimg.jl")
     original_sysimg_content = read(sysimg_source_path, String)
     if VERSION >= v"1.12-"
@@ -270,8 +270,10 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             if VERSION >= v"1.12-"
                 build_settings_source_path = joinpath(tmp, "buildsettings_packagecompiler_$(uuid1()).jl")
                 open(build_settings_source_path, "w") do io
-                    stdlibs_string = 
-                    println(io, "INCLUDE_STDLIBS = \"FileWatching,Libdl,Artifacts,SHA,Sockets,LinearAlgebra,Random\")"
+                    stdlibs_string = join(stdlibs, ',')
+                    println(io, """
+                        INCLUDE_STDLIBS = "$(stdlibs_string)"
+                    """)
                 end
 
                 # The second positional argument `""` is to pass BUILDROOT="" to Base.jl.
