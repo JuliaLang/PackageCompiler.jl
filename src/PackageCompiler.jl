@@ -210,14 +210,22 @@ function get_julia_cmd()
     end
 end
 
+function generate_sysimg_jl_contents()
+    original_sysimg_source_path = Base.find_source_file("sysimg.jl")
+    original_sysimg_content = read(sysimg_source_path, String)
+    if VERSION >= v"1.12-"
+        # In Julia 1.12+, we use BuildSettings, and thus we don't need to rewrite sysimg.jl
+        # to change the list of stdlibs.
+        new_sysimage_content = original_sysimg_content
+    else
+        # Julia 1.11 and earlier do not support BuildSettings.
+        # So we need to rewrite sysimg.jl to change the list of stdlibs.
 
-function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
-    sysimg_source_path = Base.find_source_file("sysimg.jl")
-    sysimg_content = read(sysimg_source_path, String)
-    # replaces the hardcoded list of stdlibs in sysimg.jl with
-    # the stdlibs that is given as argument
-    return replace(sysimg_content,
-        r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
+        # Replaces the hardcoded list of stdlibs in sysimg.jl with
+        # the stdlibs that is given as argument
+        new_sysimg_content = replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
+    end
+    return new_sysimg_content
 end
 
 function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
@@ -237,7 +245,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     # we can't strip the IR from the base sysimg, so we filter out this flag
     # also presumably `--compile=all` and maybe a few others we missed here...
     sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
-    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
     cd(base_dir) do
@@ -254,21 +262,41 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
 
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
-            # Use that to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content = generate_sysimg_jl_contents(stdlibs)    
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
-            try
-                # The final positional argument of "" is to pass BUILDROOT="" to Base.jl.
-                # In Julia 1.11 and earlier, this positional argument will be ignored.
-                # In Julia 1.12 and later, this positional argument will be picked up by Base.jl,
-                # and Base.jl will set Base.BUILDROOT to "".
+            
+            if VERSION >= v"1.12-"
+                build_settings_source_path = joinpath(tmp, "buildsettings_packagecompiler_$(uuid1()).jl")
+                open(build_settings_source_path, "w") do io
+                    stdlibs_string = 
+                    println(io, "INCLUDE_STDLIBS = \"FileWatching,Libdl,Artifacts,SHA,Sockets,LinearAlgebra,Random\")"
+                end
+
+                # The second positional argument `""` is to pass BUILDROOT="" to Base.jl.
+                # If we don't have the "", then Base.jl will assume that one of our other
+                # arguments is the BUILDROOT, which obviously is incorrect.
                 # https://github.com/JuliaLang/PackageCompiler.jl/issues/989
+                #
+                # The --build-settings argument is to pass our BuildSettings file.
+                # BuildSettings is only available in Julia 1.12+
+                # https://github.com/JuliaLang/julia/pull/54387
+                buildsettings_args = `$new_sysimage_source_path "" --build-settings $(build_settings_source_path)`
+            else
+                # Julia 1.11 and earlier do not support BuildSettings.
+                #
+                # Julia 1.11 and earlier do not require us to pass BUILDROOT as a positional
+                # argument.
+                buildsettings_args = `$new_sysimage_source_path`
+            end
+
+            try
+                # Use the previously-created corecompiler.ji to create sys.ji
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path ""`,
+                    $buildsettings_args`,
                     "JULIA_LOAD_PATH" => "@stdlib")
                 @debug "running $cmd"
 
