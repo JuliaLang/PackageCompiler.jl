@@ -232,8 +232,14 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
     tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
 
-    compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
 
+    @static if VERSION >= v"1.12.0-DEV.1617"
+        compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
+        compiler_args = `./` # build path
+    else
+        compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
+        compiler_args = ``
+    end
     # we can't strip the IR from the base sysimg, so we filter out this flag
     # also presumably `--compile=all` and maybe a few others we missed here...
     sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
@@ -246,7 +252,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             # Create corecompiler.ji
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
-                $compiler_source_path`
+                $compiler_source_path $compiler_args`
             @debug "running $cmd"
 
             read(cmd)
@@ -263,7 +269,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path`,
+                    $new_sysimage_source_path $compiler_args`,
                     "JULIA_LOAD_PATH" => "@stdlib")
                 @debug "running $cmd"
 
