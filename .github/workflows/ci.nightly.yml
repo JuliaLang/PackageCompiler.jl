@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   test-nightly:
-    timeout-minutes: 90
+    timeout-minutes: 150
     runs-on: ${{ matrix.github-runner }}
     strategy:
       max-parallel: 5 # leave space for other runs in the JuliaLang org, given these tests are long
