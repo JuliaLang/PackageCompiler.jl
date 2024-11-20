@@ -235,7 +235,9 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
 
     @static if VERSION >= v"1.12.0-DEV.1617"
         compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
-        compiler_args = `./` # build path
+        buildroot = ""
+        dataroot = relpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR), base_dir) * "/"
+        compiler_args = `--buildroot $buildroot --dataroot $dataroot` # build path
     else
         compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
         compiler_args = ``
