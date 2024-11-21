@@ -60,6 +60,7 @@ void set_depot_load_path(const char *root_dir) {
 #ifdef _WIN32
 int wmain(int argc, wchar_t *wargv[], wchar_t *envp[]) {
     char **argv = (char**)malloc(sizeof(char*) * argc);
+    if (!argv) return 1;
 
     for (int i = 0; i < argc; i++) { // write the command line to UTF8
         wchar_t *warg = wargv[i];
@@ -146,6 +147,10 @@ int main(int argc, char *argv[]) {
     }
 
     // Cleanup and gracefully exit
+#ifdef _WIN32
+    for (int i = 0; i < argc; i++) free(argv[i]);
+    free(argv);    
+#endif
     free(exe_path);
     jl_atexit_hook(retcode);
     return retcode;
