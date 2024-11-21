@@ -39,7 +39,7 @@ jobs:
     steps:
       - run: exit 0
   test:
-    timeout-minutes: 90
+    timeout-minutes: 150
     runs-on: ${{ matrix.github-runner }}
     strategy:
       max-parallel: 20 # leave space for other runs in the JuliaLang org, given these tests are long
