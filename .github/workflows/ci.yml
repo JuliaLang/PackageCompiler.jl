@@ -75,6 +75,10 @@ jobs:
           - github-runner: macos-14 # macos-14 = Apple Silicon.
             julia-version: '1.6'
           #
+          # To save some CI time, on Julia 1.6 we only run the 64-bit job (and skip the 32-bit job).
+          - julia-version: '1.6'
+            julia-wordsize: '32'
+          #
           # We don't have 32-bit builds of Julia for Intel macOS:
           - github-runner: macos-13 # macos-13 = Intel.
             julia-wordsize: '32'
