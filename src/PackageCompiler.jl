@@ -24,7 +24,7 @@ include("library_selection.jl")
 ##############
 
 const NATIVE_CPU_TARGET = "native"
-const TLS_SYNTAX = VERSION >= v"1.7.0-DEV.1205" ? `-DNEW_DEFINE_FAST_TLS_SYNTAX` : ``
+const TLS_SYNTAX = `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
 const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
@@ -78,22 +78,18 @@ function create_pkg_context(project)
 end
 
 function load_all_deps(ctx)
-    ctx_or_env = VERSION <= v"1.7.0-" ? ctx : ctx.env
+    env = ctx.env
     if isdefined(Pkg.Operations, :load_all_deps!)
         pkgs = Pkg.Types.PackageSpec[]
-        Pkg.Operations.load_all_deps!(ctx_or_env, pkgs)
+        Pkg.Operations.load_all_deps!(env, pkgs)
     else
-        pkgs = Pkg.Operations.load_all_deps(ctx_or_env)
+        pkgs = Pkg.Operations.load_all_deps(env)
     end
     return pkgs
 end
 
 function source_path(ctx, pkg)
-    if VERSION <= v"1.7.0-"
-        Pkg.Operations.source_path(ctx, pkg)
-    else
-        Pkg.Operations.source_path(ctx.env.project_file, pkg)
-    end
+    Pkg.Operations.source_path(ctx.env.project_file, pkg)
 end
 
 const _STDLIBS = readdir(Sys.STDLIB)
@@ -379,28 +375,11 @@ function create_sysimg_object_file(object_file::String,
                 isexpr(ps, :call) || continue
                 popfirst!(ps.args) # precompile(...)
                 ps.head = :tuple
-                @static if VERSION <= v"1.9.0"
-                    l = ps.args[end]
-                    if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
-                        # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
-                        # Replacing N with a large number works around it.
-                        l = l.args[end]
-                        if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
-                            push!(l.args, 100) # form Vararg{T, 100} instead
-                        end
-                    end
-                end
                 # println(ps)
                 local ps
                 while true
                     try
                         ps = Core.eval(PrecompileStagingArea, ps)
-                        @static if VERSION <= v"1.9.0-beta1"
-                            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-                            # Skipping them avoids the warning.
-                            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-                            ms isa Vector || @goto skip_precompile
-                        end
                         break
                     catch e
                         if e isa UndefVarError

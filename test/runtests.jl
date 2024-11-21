@@ -30,24 +30,12 @@ const is_gha_ci = tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "")) === true
 #    macOS runners seem to be quite fast.)
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !Sys.isapple()
 
-const is_julia_1_6 = VERSION.major == 1 && VERSION.minor == 6
-const is_julia_1_9 = VERSION.major == 1 && VERSION.minor == 9
-
 if is_ci || is_gha_ci
     @info "This is a CI job" Sys.ARCH VERSION is_ci is_gha_ci
 end
 
 if is_slow_ci
     @warn "This is \"slow CI\" (defined as any non-macOS CI running on aarch64). Some tests will be skipped or modified." Sys.ARCH
-end
-
-const jlver_some_tests_skipped = [
-    is_julia_1_6,
-    is_julia_1_9,
-]
-
-if any(jlver_some_tests_skipped)
-    @warn "This is Julia $(VERSION.major).$(VERSION.minor). Some tests will be skipped or modified." VERSION
 end
 
 function remove_llvmextras(project_file)
@@ -117,7 +105,7 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            if is_gha_ci && (is_julia_1_6 || is_julia_1_9)
+            if is_gha_ci
                 # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
                 # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
                 @test_skip false
@@ -176,13 +164,8 @@ end
             @test occursin("From worker 4:\t8", app_output)
             @test occursin("From worker 5:\t8", app_output)
 
-            if is_julia_1_6 || is_julia_1_9
-                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
-                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
-                @test_skip false
-            else
-                @test occursin("LLVMExtra path: ok!", app_output)
-            end
+
+            @test occursin("LLVMExtra path: ok!", app_output)
             @test occursin("micromamba_jll path: ok!", app_output)
 
             # Test second app

@@ -18,8 +18,4 @@ const required_libraries = Dict(
     "mac" =>     ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libuv", "libz"]
 )
 push!(required_libraries["windows"], "libgcc_s_jlj")
-if Sys.VERSION < v"1.7.0"
-    push!(required_libraries["mac"], "libosxunwind")
-else
-    push!(required_libraries["mac"], "libunwind")
-end
+push!(required_libraries["mac"], "libunwind")
