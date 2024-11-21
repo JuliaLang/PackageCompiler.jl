@@ -39,6 +39,9 @@ jobs:
     steps:
       - run: exit 0
   test:
+    # We do not run the full test suite on tags, because we already ran it on master before we made the release.
+    # We do build the docs on tags.
+    if: (github.event_name != 'push') || (if: github.ref_type == 'tag')
     timeout-minutes: 150
     runs-on: ${{ matrix.github-runner }}
     strategy:
@@ -109,6 +112,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   docs:
+    # We do build the docs on tags.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
