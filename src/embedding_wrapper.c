@@ -66,7 +66,7 @@ int wmain(int argc, wchar_t *wargv[], wchar_t *envp[]) {
         wchar_t *warg = wargv[i];
         size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
         if (!len) return 1;
-        char *arg = (char*)alloca(len);
+        char *arg = (char*)malloc(len);
         if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = arg;
     }
@@ -147,10 +147,6 @@ int main(int argc, char *argv[]) {
     }
 
     // Cleanup and gracefully exit
-#ifdef _WIN32
-    for (int i = 0; i < argc; i++) free(argv[i]);
-    free(argv);    
-#endif
     free(exe_path);
     jl_atexit_hook(retcode);
     return retcode;
