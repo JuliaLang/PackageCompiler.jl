@@ -39,6 +39,9 @@ jobs:
     steps:
       - run: exit 0
   test:
+    # We do not run the full test suite on tags, because we already ran it on master before we made the release.
+    # We do build the docs on tags.
+    if: (github.event_name != 'push') || (github.ref_type == 'tag')
     timeout-minutes: 150
     runs-on: ${{ matrix.github-runner }}
     strategy:
@@ -47,7 +50,6 @@ jobs:
       matrix:
         julia-version:
           - '1.6' # previous LTS
-          - '1.9'
           - '1.10' # current LTS
           - '1.11' # current stable
           #
@@ -72,19 +74,13 @@ jobs:
         coverage:
           - 'true'
         exclude:
-          # For now, we'll disable testing 32-bit Julia 1.9 on all operating systems.
-          # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 .
-          - julia-version: '1.9'
-            julia-wordsize: '32'
-          # For now, we'll disable testing 32-bit Julia 1.9 on Windows.
-          # TODO: remove the following once we fix the tests for 32-bit Julia 1.9 on Windows.
-          - github-runner: windows-latest
-            julia-version: '1.9'
-            julia-wordsize: '32'
-          #
           # Julia 1.6 did not support Apple Silicon:
           - github-runner: macos-14 # macos-14 = Apple Silicon.
             julia-version: '1.6'
+          #
+          # To save some CI time, on Julia 1.6 we only run the 64-bit job (and skip the 32-bit job).
+          - julia-version: '1.6'
+            julia-wordsize: '32'
           #
           # We don't have 32-bit builds of Julia for Intel macOS:
           - github-runner: macos-13 # macos-13 = Intel.
@@ -93,14 +89,6 @@ jobs:
           # We don't have 32-bit builds of Julia for Apple Silicon macOS:
           - github-runner: macos-14 # macos-14 = Apple Silicon.
             julia-wordsize: '32'
-          #
-          # We don't need to run the coverage=false job for Julia < 1.9:
-          - julia-version: '1.6'
-            coverage: 'false'
-          - julia-version: '1.7'
-            coverage: 'false'
-          - julia-version: '1.8'
-            coverage: 'false'
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
       - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
@@ -124,6 +112,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   docs:
+    # We do build the docs on tags.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
