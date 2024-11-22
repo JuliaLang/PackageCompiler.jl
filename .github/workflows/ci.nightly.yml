@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   test-nightly:
+    # We do not run the full test suite on tags, because we already ran it on master before we made the release.
+    # We do build the docs on tags.
+    if: (github.event_name != 'push') || (github.ref_type == 'tag')
     timeout-minutes: 150
     runs-on: ${{ matrix.github-runner }}
     strategy:
@@ -37,7 +40,7 @@ jobs:
           - julia-version: 'nightly'
             julia-wordsize: '64'
             github-runner: ubuntu-latest
-            coverage: false
+            coverage: true
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
       - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
