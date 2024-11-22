@@ -19,9 +19,6 @@ Base.init_depot_path()
 # If I recall correctly, Julia's PkgEval.jl also sets it.
 const is_ci = tryparse(Bool, get(ENV, "CI", "")) === true
 
-# GHA = GitHub Actions
-const is_gha_ci = tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "")) === true
-
 # In order to be "slow CI", we must meet all of the following:
 # 1. We are running on CI.
 # 2. We are running on aarch64 (arm64).
@@ -30,20 +27,12 @@ const is_gha_ci = tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "")) === true
 #    macOS runners seem to be quite fast.)
 const is_slow_ci = is_ci && Sys.ARCH == :aarch64 && !Sys.isapple()
 
-if is_ci || is_gha_ci
-    @info "This is a CI job" Sys.ARCH VERSION is_ci is_gha_ci
+if is_ci
+    @info "This is a CI job" Sys.ARCH VERSION is_ci
 end
 
 if is_slow_ci
     @warn "This is \"slow CI\" (defined as any non-macOS CI running on aarch64). Some tests will be skipped or modified." Sys.ARCH
-end
-
-function remove_llvmextras(project_file)
-    proj = TOML.parsefile(project_file)
-    delete!(proj["deps"], "LLVMExtra_jll")
-    open(project_file, "w") do io
-        TOML.print(io, proj)
-    end
 end
 
 @testset "PackageCompiler.jl" begin
@@ -105,12 +94,6 @@ end
             @info "starting: create_app testset" incremental filter
             tmp_app_source_dir = joinpath(tmp, "MyApp")
             cp(app_source_dir, tmp_app_source_dir)
-            if is_gha_ci
-                # Julia 1.6: Issue #706 "Cannot locate artifact 'LLVMExtra'" on 1.6 so remove.
-                # Julia 1.9: There's no GitHub Issue, but it seems we hit a similar problem.
-                @test_skip false
-                remove_llvmextras(joinpath(tmp_app_source_dir, "Project.toml"))
-            end
             try
             create_app(tmp_app_source_dir, app_compiled_dir; incremental=incremental, force=true, filter_stdlibs=filter, include_lazy_artifacts=true,
                        precompile_execution_file=joinpath(app_source_dir, "precompile_app.jl"),
