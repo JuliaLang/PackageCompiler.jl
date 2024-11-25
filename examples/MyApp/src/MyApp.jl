@@ -5,13 +5,7 @@ using HelloWorldC_jll
 using Artifacts
 using Distributed
 using Random
-
-# We seem to get problems with LLVMExtra_jll on Julia 1.6 and 1.9
-# Issue for 1.6: https://github.com/JuliaLang/PackageCompiler.jl/issues/706
-# There's no GitHub Issue for 1.9
-@static if (VERSION.major, VERSION.minor) ∉ ((1, 6), (1, 9),)
-    using LLVMExtra_jll
-end
+using LLVMExtra_jll
 
 using micromamba_jll
 
@@ -66,7 +60,7 @@ function real_main()
 
     println("Running the artifact")
     res = readchomp(`$(hello_world_path())`)
-    println("Artifact printed: $res") 
+    println("Artifact printed: $res")
 
     @show unsafe_string(Base.JLOptions().image_file)
     @show Example.domath(5)
@@ -89,12 +83,10 @@ function real_main()
     @eval @everywhere using Example
     @everywhere println(Example.domath(3))
 
-    @static if (VERSION.major, VERSION.minor) ∉ ((1, 6), (1, 9),)
-        if isfile(LLVMExtra_jll.libLLVMExtra_path)
-            println("LLVMExtra path: ok!")
-        else
-            println("LLVMExtra path: fail!")
-        end
+    if isfile(LLVMExtra_jll.libLLVMExtra_path)
+        println("LLVMExtra path: ok!")
+    else
+        println("LLVMExtra path: fail!")
     end
 
     if isfile(micromamba_jll.micromamba_path)
