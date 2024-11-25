@@ -111,7 +111,7 @@ end
             rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
-            app_output = read(`$(app_path("MyApp")) I get --args --julia-args --threads=3 --check-bounds=yes -O1`, String)
+            app_output = read(`$(app_path("MyApp")) I get --args áéíóú --julia-args --threads=3 --check-bounds=yes -O1`, String)
 
             # Check stdlib filtering
             if filter == true
@@ -130,7 +130,7 @@ end
             # Check artifact gets run from the correct place
             @test occursin("HelloWorld artifact at $(realpath(app_compiled_dir))", app_output)
             # Check ARGS
-            @test occursin("""ARGS = ["I", "get", "--args"]""", app_output)
+            @test occursin("""ARGS = ["I", "get", "--args", "áéíóú"]""", app_output)
             # Check julia-args
             @test occursin("(Base.JLOptions()).opt_level = 1", app_output)
             @test occursin("(Base.JLOptions()).nthreads = 3", app_output)

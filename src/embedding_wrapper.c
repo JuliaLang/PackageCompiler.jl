@@ -57,8 +57,23 @@ void set_depot_load_path(const char *root_dir) {
 
 // main function (windows UTF16 -> UTF8 argument conversion code copied from
 // julia's ui/repl.c)
+#ifdef _WIN32
+int wmain(int argc, wchar_t *wargv[], wchar_t *envp[]) {
+    char **argv = (char **)malloc(sizeof(char *) * argc);
+    if (!argv) return 1;
+
+    for (int i = 0; i < argc; i++) { // write the command line to UTF8
+        wchar_t *warg = wargv[i];
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
+        if (!len) return 1;
+        char *arg = (char *)malloc(len);
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
+        argv[i] = arg;
+    }
+#else
 int main(int argc, char *argv[]) {
-    argv = uv_setup_args(argc, argv); // no-op on Windows
+    argv = uv_setup_args(argc, argv);
+#endif
 
     // Find where eventual julia arguments start
     int program_argc = argc;
