@@ -1,19 +1,19 @@
 [[mingw-w64]]
 arch = "x86_64"
-git-tree-sha1 = "fdff308295487f361ef6e8dc2d27f5abe8a6eee9"
+git-tree-sha1 = "b17bda08a19173572926f43a48aad5ef3d845e7c"
 os = "windows"
 lazy = true
 
     [[mingw-w64.download]]
-    sha256 = "fe3f401bc936fbe6af940b26c5e0f266f762a3416f979c706e599b24082dc5c7"
-    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/x86_64-8.1.0-release-posix-seh-rt_v6-rev0.tar.gz"
+    sha256 = "53645e06775a55733580426341395c67dda20a664af83bcda76a1d052b618b59"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v2.1.24/x86_64-14.2.0-release-posix-seh-msvcrt-rt_v12-rev0.tar.gz"
 
 [[mingw-w64]]
 arch = "i686"
-git-tree-sha1 = "bc760d8ef1b4840e55a36bd361587b4975af811f"
+git-tree-sha1 = "76b9f278e7de1d7dfdfe3a786afbe9c1e29003ea"
 os = "windows"
 lazy = true
 
     [[mingw-w64.download]]
-    sha256 = "ab0abb76384ce9b657141d3a54150d0b865f9c06576caa7901a6c8429c9008e5"
-    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v1.0.0/i686-8.1.0-release-posix-sjlj-rt_v6-rev0.tar.gz"
+    sha256 = "d049bd771e01b02f2ca9274435f0e6f9f4f295bf2af72a8059dd851c52144910"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v2.1.24/i686-14.2.0-release-posix-dwarf-msvcrt-rt_v12-rev0.tar.gz"
