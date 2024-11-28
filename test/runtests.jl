@@ -208,4 +208,9 @@ end
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
     end
+
+    @testset "examples/MyLib" begin
+        include("examples_mylib.jl")
+    end
+
 end
