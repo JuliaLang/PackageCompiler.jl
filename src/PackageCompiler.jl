@@ -1,5 +1,7 @@
 module PackageCompiler
 
+# Hello world.
+
 using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
