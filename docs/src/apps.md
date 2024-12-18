@@ -73,6 +73,14 @@ archive and sent to another machine or an installer could be wrapped around the
 directory, perhaps providing a better user experience than just an archive of
 files.
 
+To make the non-compiled app runnable from the command line, one may, e.g., create a script
+`MyApp/main.jl` with the contents
+```julia
+import MyApp
+MyApp.julia_main()
+```
+which can be invoked by calling `julia --project=MyApp MyApp/main.jl args...`.
+
 ### Compilation of functions
 
 In the same way as [files for precompilation could be given when creating
