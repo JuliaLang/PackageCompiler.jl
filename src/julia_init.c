@@ -42,8 +42,10 @@ const char *get_sysimage_path(const char *libname) {
 
 void set_depot_load_path(const char *root_dir) {
 #ifdef _WIN32
+    char *path_sep = ";";
     char *julia_share_subdir = "\\share\\julia";
 #else
+    char *path_sep = ":";
     char *julia_share_subdir = "/share/julia";
 #endif
     int share_path_len = strlen(root_dir) + strlen(julia_share_subdir) + 1;
@@ -54,7 +56,7 @@ void set_depot_load_path(const char *root_dir) {
     char *new_depot_path = calloc(sizeof (char), new_depot_path_len);
     if (curr_depot_path_len > 0) {
         strcat(new_depot_path, curr_depot_path);
-        strcat(new_depot_path, ":");
+        strcat(new_depot_path, path_sep);
     }
     strcat(new_depot_path, root_dir);
     strcat(new_depot_path, julia_share_subdir);
@@ -65,7 +67,7 @@ void set_depot_load_path(const char *root_dir) {
     char *new_load_path = calloc(sizeof (char), new_load_path_len);
     if (curr_load_path_len > 0) {
         strcat(new_load_path, curr_load_path);
-        strcat(new_load_path, ":");
+        strcat(new_load_path, path_sep);
     }
     strcat(new_load_path, root_dir);
     strcat(new_load_path, julia_share_subdir);
