@@ -1,0 +1,13 @@
+steps:
+  - label: ":test_tube: :${AGENT_OS}: Julia ${JULIA_VERSION}, ${AGENT_OS} ${AGENT_ARCH}, coverage=${JULIA_TEST_COVERAGE}"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "${JULIA_VERSION}"
+      # This buildkite plugin has a `command` hook inside of it,
+      # so we don't need to specify a `commands` block for this step.
+      - JuliaCI/julia-test#v1:
+          coverage: "${JULIA_TEST_COVERAGE}"
+    agents:
+      queue: "juliaecosystem"
+      os: "${AGENT_OS}"
+      arch: "${AGENT_ARCH}"

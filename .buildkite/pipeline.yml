@@ -1,0 +1,27 @@
+steps:
+  - label: ":runner: Launch matrix of jobs"
+    commands: |
+      AGENT_OS_AND_ARCH=( linux-x86_64 windows-x86_64 macos-aarch64 )
+      JULIA_VERSIONS=( 1.6 1.8 1.9 nightly )
+      JULIA_TEST_COVERAGE=false
+
+      for AGENT_OS_AND_ARCH in "$${AGENT_OS_AND_ARCH[@]}"; do
+        IFS=- read AGENT_OS AGENT_ARCH <<<"$${AGENT_OS_AND_ARCH}"
+        for JULIA_VERSION in "$${JULIA_VERSIONS[@]}"; do
+          # Skip julia versions that do not exist
+          if [[ "$${AGENT_OS_AND_ARCH}" == "macos-aarch64" ]] && [[ "$${JULIA_VERSION}" == "1.6" ]]; then
+            continue
+          fi
+
+          # Template `runtests.yml` with the values from our matrix
+          export AGENT_OS AGENT_ARCH JULIA_VERSION JULIA_TEST_COVERAGE
+          buildkite-agent pipeline upload .buildkite/runtests.yml
+
+          # For 1.9, we need a `coverage=false` build due to pkgimages
+          if [[ "$${JULIA_VERSION}" == "1.9" ]]; then
+            JULIA_TEST_COVERAGE=true buildkite-agent pipeline upload .buildkite/runtests.yml
+          fi
+        done
+      done
+    agents:
+      queue: "juliaecosystem"
