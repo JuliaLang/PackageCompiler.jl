@@ -248,7 +248,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler .ji image (incremental=false)")
         TerminalSpinners.@spin spinner begin
             # Create corecompiler.ji
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+            cmd = `$(get_julia_cmd()) --threads=1 --cpu-target $cpu_target
                 --output-ji $tmp_corecompiler_ji $sysimage_build_args
                 $compiler_source_path $compiler_args`
             @debug "running $cmd"
@@ -264,7 +264,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
-                cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
+                cmd = addenv(`$(get_julia_cmd()) --threads=1 --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_ji
                     $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path $compiler_args`,
@@ -462,7 +462,7 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
-        cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
+        cmd = `$(get_julia_cmd()) --threads=1 --cpu-target=$cpu_target $sysimage_build_args
             --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
             $outputo_file`
         @debug "running $cmd"
