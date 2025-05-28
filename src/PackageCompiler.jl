@@ -465,8 +465,8 @@ function create_sysimg_object_file(object_file::String,
     # Make sure, that the final system image is built single-threaded and
     # override any values set by "-t", "--threads" in `sysimage_build_args`
     # or provided via JULIA_NUM_THREADS.
-    # This is needed until the underlying bug is fixed (see #963 and especially
-    # #990 containing a `git bisect` to the commit introducing the problem)
+    # This is needed until the underlying bug is fixed (see https://github.com/JuliaLang/PackageCompiler.jl/issues/963 and especially
+    # https://github.com/JuliaLang/PackageCompiler.jl/issues/990 containing a `git bisect` to the commit introducing the problem)
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
         --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
         --threads=1 $outputo_file`
