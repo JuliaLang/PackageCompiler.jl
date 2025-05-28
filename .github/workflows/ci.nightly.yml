@@ -53,12 +53,12 @@ jobs:
           # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
           # based on the architecture of the underlying GitHub Runner (virtual machine).
           arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
-      - uses: julia-actions/cache@2b1bf4d8a138668ac719ea7ca149b53ed8d8401e # v2.0.7
+      - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
       - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
           coverage: ${{ matrix.coverage }}
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-      - uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3 # v5.3.1
+      - uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
         with:
           files: lcov.info
         env:
