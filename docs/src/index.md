@@ -58,7 +58,7 @@ Pkg.add("PackageCompiler")
 
 !!! note
     It is strongly recommended to use the official binaries that are downloaded from 
-    https://julialang.org/downloads/. Distribution-provided Julia installations are
+    <https://julialang.org/downloads/>. Distribution-provided Julia installations are
     unlikely to work properly with this package.
  
 To use PackageCompiler a C-compiler needs to be available:
