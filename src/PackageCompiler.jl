@@ -528,6 +528,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `excluded_packages::Union{Vector{String}, Vector{Symbol}}`: Names of the packages to 
+  be excluded in the sysimge.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -539,6 +542,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
+                         excluded_packages::Union{Vector{String}, Vector{Symbol}}=String[],
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
@@ -572,6 +576,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     end
 
     packages = string.(vcat(packages))
+    excluded_packages = string.(vcat(excluded_packages))
     precompile_execution_file  = vcat(precompile_execution_file)
     precompile_statements_file = vcat(precompile_statements_file)
 
@@ -633,6 +638,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             empty!(new_frontier)
         end
     end
+
+    # Exclude requested packages 
+    packages = filter(x -> !(x in excluded_packages), packages)
+    packages_sysimg = filter(x -> !(x.name in excluded_packages), packages_sysimg)
 
     # Create the sysimage
     object_file = tempname() * "-o.a"
