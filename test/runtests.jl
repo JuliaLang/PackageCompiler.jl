@@ -110,8 +110,12 @@ end
             rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
             rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
+            test_load_path = mktempdir()
+            test_depot_path = mktempdir()
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
-            app_output = read(`$(app_path("MyApp")) I get --args áéíóú --julia-args --threads=3 --check-bounds=yes -O1`, String)
+            app_output = withenv("JULIA_DEPOT_PATH" => test_depot_path, "JULIA_LOAD_PATH" => test_load_path) do
+                read(`$(app_path("MyApp")) I get --args áéíóú --julia-args --threads=3 --check-bounds=yes -O1`, String)
+            end
 
             # Check stdlib filtering
             if filter == true
@@ -140,6 +144,9 @@ end
             # Check app is precompiled in a normal process
             @test occursin("outputo: ok", app_output)
             @test occursin("myrand: ok", app_output)
+            # Check env-provided depot and load paths are accepted
+            @test occursin("DEPOT_PATH: [\"$test_depot_path", app_output)
+            @test occursin("LOAD_PATH: [\"$test_load_path", app_output)
             # Check distributed
             @test occursin("n = 20000000", app_output)
             @test occursin("From worker 2:\t8", app_output)
