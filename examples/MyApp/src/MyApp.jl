@@ -38,14 +38,6 @@ function real_main()
     @show Base.PROGRAM_FILE
     @show DEPOT_PATH
     @show LOAD_PATH
-    try
-    @show ENV["JULIA_DEPOT_PATH"]
-    catch
-    end
-    try
-    @show ENV["JULIA_LOAD_PATH"]
-    catch
-    end
     @show pwd()
     @show Base.active_project()
     @show Sys.BINDIR
