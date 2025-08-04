@@ -8,6 +8,9 @@ const jll_mapping = Dict(
     "OpenBLAS_jll" => ["libopenblas64_", "libopenblas"],
     "nghttp2_jll" => ["libnghttp2"],
     "LibGit2_jll" => ["libgit2"],
+    "OpenSSL_jll" => ["libcrypto", "libssl"],
+    "Zlib_jll" => ["libz"],
+    "Zstd_jll" => ["libzstd"],
     "SuiteSparse_jll" => ["libamd", "libbtf", "libcamd", "libccolamd", "libcholmod", "libcolamd", "libklu", "libldl", "librbio", "libspqr", "libsuitesparseconfig", "libumfpack"],
     "OpenSSL_jll" => ["libcrypto", "libssl"],
 )
