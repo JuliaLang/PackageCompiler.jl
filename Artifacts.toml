@@ -10,7 +10,7 @@ lazy = true
 
 [[mingw-w64]]
 arch = "i686"
-git-tree-sha1 = "76b9f278e7de1d7dfdfe3a786afbe9c1e29003ea"
+git-tree-sha1 = "85a99abd904b7d85813340fa459899f61fe2e9cc"
 os = "windows"
 lazy = true
 
