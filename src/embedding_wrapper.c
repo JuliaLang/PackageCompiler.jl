@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
 #if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 12
     jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var);
     jl_checked_assignment(bp, jl_base_module, var, firstarg);
-#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 11
+#elif JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 11
     jl_binding_t *bp = jl_get_binding_wr(jl_base_module, var, /* alloc */ 1);
     jl_checked_assignment(bp, jl_base_module, var, firstarg);
 #elif JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR >= 10
