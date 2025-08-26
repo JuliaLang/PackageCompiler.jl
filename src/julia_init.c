@@ -70,13 +70,11 @@ void init_julia(int argc, char **argv) {
     set_depot_load_path(root_dir);
     free(_sysimage_path);
     jl_options.image_file = sysimage_path;
-    #if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR <= 11
+#if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR <= 11
     julia_init(JL_IMAGE_CWD);
-    #else
-    jl_image_buf_t sysimage = jl_preload_sysimg(jl_options.image_file);
-    jl_init_(sysimage);
-    #endif
-    
+#else
+    jl_init_with_image_file(NULL, sysimage_path);
+#endif
 }
 
 void shutdown_julia(int retcode) { jl_atexit_hook(retcode); }
