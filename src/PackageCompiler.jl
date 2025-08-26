@@ -1097,10 +1097,29 @@ function create_library(package_or_project::String,
     compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
-        julia_init_h_file, version, soname, script, base_sysimage)
+    if ctx.env.pkg === nothing
+        # If environment is not a package, create sysimage with all packages in project
+        packages = nothing
+    else
+        # Otherwise, only include package in sysimage
+        packages = [ctx.env.pkg.name]
+    end
+
+    create_sysimage(packages;
+                    sysimage_path=sysimg_path,
+                    project=dirname(ctx.env.project_file),
+                    incremental,
+                    script,
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    cpu_target,
+                    base_sysimage,
+                    julia_init_c_file,
+                    julia_init_h_file,
+                    version,
+                    soname,
+                    sysimage_build_args,
+                    include_transitive_dependencies)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1146,60 +1165,6 @@ function get_library_filename(name::String;
     return sysimg_file
 end
 
-# Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
-# by first creating a normal "empty" sysimage and then use that to finally create the one
-# with the @ccallable function.
-# This function can be removed when https://github.com/JuliaLang/julia/pull/37530 is merged
-function create_sysimage_workaround(
-                    ctx,
-                    sysimage_path::String,
-                    precompile_execution_file::Union{String, Vector{String}},
-                    precompile_statements_file::Union{String, Vector{String}},
-                    incremental::Bool,
-                    filter_stdlibs::Bool,
-                    cpu_target::String;
-                    sysimage_build_args::Cmd,
-                    include_transitive_dependencies::Bool,
-                    julia_init_c_file::Union{Nothing,String,Vector{String}},
-                    julia_init_h_file::Union{Nothing,String,Vector{String}},
-                    version::Union{Nothing,VersionNumber},
-                    soname::Union{Nothing,String},
-                    script::Union{Nothing,String},
-                    base_sysimage::Union{Nothing, String} = nothing
-                    )
-    project = dirname(ctx.env.project_file)
-
-    if !incremental
-        tmp = mktempdir()
-        base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
-        create_sysimage(String[]; sysimage_path=base_sysimage, project,
-                        incremental=false, filter_stdlibs, cpu_target)
-    end
-
-    if ctx.env.pkg === nothing
-        # If environment is not a package, create sysimage with all packages in project
-        packages = nothing
-    else
-        # Otherwise, only include package in sysimage
-        packages = [ctx.env.pkg.name]
-    end
-
-    create_sysimage(packages; sysimage_path, project,
-                    incremental=true,
-                    script=script,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    cpu_target,
-                    base_sysimage,
-                    julia_init_c_file,
-                    julia_init_h_file,
-                    version,
-                    soname,
-                    sysimage_build_args,
-                    include_transitive_dependencies)
-
-    return
-end
 ############
 # Bundling #
 ############
