@@ -9,6 +9,7 @@ const jll_mapping = Dict(
     "nghttp2_jll" => ["libnghttp2"],
     "LibGit2_jll" => ["libgit2"],
     "SuiteSparse_jll" => ["libamd", "libbtf", "libcamd", "libccolamd", "libcholmod", "libcolamd", "libklu", "libldl", "librbio", "libspqr", "libsuitesparseconfig", "libumfpack"],
+    "OpenSSL_jll" => ["libcrypto", "libssl"],
 )
 
 # Manually fixup of libLLVM

@@ -51,11 +51,12 @@ jobs:
         julia-version:
           - '1.10' # current LTS
           - '1.11' # current stable
+
           #
           # 'pre' will install the latest prerelease build (RCs, betas, and alphas).
           # Uncomment this line when there is an active prerelease available.
           # Comment this line out when there is no prerelease available (to save CI time).
-          # - 'pre'
+          - 'pre'
           #
           # Note: we have a separate workflow (.github/workflows/ci.nightly.yml)
           # for Julia nightly.
