@@ -4,7 +4,7 @@ using Downloads
 using Libdl
 using Glob
 
-v = v"1.12.0"
+v = v"1.9.0"
 v2 = VersionNumber(v.major, v.minor)
 
 url = download_url(v, Linux(:x86_64; libc = :glibc))
