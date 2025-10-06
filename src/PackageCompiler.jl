@@ -220,7 +220,8 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
-    tmp_corecompiler_ji = joinpath(tmp, "corecompiler.ji")
+    tmp_corecompiler_o = joinpath(tmp, "corecompiler-o.a")
+    tmp_corecompiler_sl = joinpath(tmp, "corecompiler." * Libdl.dlext)
     tmp_sys_o = joinpath(tmp, "sys-o.a")
     # This naming convention (`sys-o.a`) is necessary to make the sysimage
     # work on macOS.
@@ -245,27 +246,34 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
     cd(base_dir) do
-        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler .ji image (incremental=false)")
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
-            # Create corecompiler.ji
+            # Create corecompiler object file
             cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                --output-ji $tmp_corecompiler_ji $sysimage_build_args
+                --output-o $tmp_corecompiler_o $sysimage_build_args
                 $compiler_source_path $compiler_args`
             @debug "running $cmd"
 
             read(cmd)
+
+            # Create shared library from object file
+            create_sysimg_from_object_file(String[tmp_corecompiler_o],
+                                    tmp_corecompiler_sl;
+                                    version=nothing,
+                                    soname=nothing,
+                                    compat_level="major")
         end
 
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
-            # Use that to create sys.ji
+            # Use the compiler sysimage to create sys.ji
             new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
             try
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                    --sysimage=$tmp_corecompiler_ji
+                    --sysimage=$tmp_corecompiler_sl
                     $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path $compiler_args`,
                     "JULIA_LOAD_PATH" => "@stdlib")
@@ -281,7 +289,8 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
 
             finally
                 rm(new_sysimage_source_path; force=true)
-                rm(tmp_corecompiler_ji; force=true)
+                rm(tmp_corecompiler_o; force=true)
+                rm(tmp_corecompiler_sl; force=true)
                 rm(tmp_sys_o; force=true)
             end
         end
