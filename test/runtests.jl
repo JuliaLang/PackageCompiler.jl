@@ -145,8 +145,8 @@ end
             @test occursin("outputo: ok", app_output)
             @test occursin("myrand: ok", app_output)
             # Check env-provided depot and load paths are accepted
-            @test occursin("DEPOT_PATH = [\"$test_depot_path", app_output)
-            @test occursin("LOAD_PATH = [\"$test_load_path", app_output)
+            @test occursin("DEPOT_PATH = [\"$(escape_string(test_depot_path))", app_output)
+            @test occursin("LOAD_PATH = [\"$(escape_string(test_load_path))", app_output)
             # Check distributed
             @test occursin("n = 20000000", app_output)
             @test occursin("From worker 2:\t8", app_output)
