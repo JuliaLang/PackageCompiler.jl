@@ -93,8 +93,8 @@ function source_path(ctx, pkg)
 end
 
 const _STDLIBS = readdir(Sys.STDLIB)
-sysimage_modules() = map(x->x.name, Base._sysimage_modules)
-stdlibs_in_sysimage() = intersect(_STDLIBS, sysimage_modules())
+sysimage_modules() = Base._sysimage_modules
+stdlibs_in_sysimage() = filter(pkg -> pkg.name in _STDLIBS, sysimage_modules())
 
 # TODO: Also check UUIDs for stdlibs, not only names<
 function gather_stdlibs_project(ctx)
@@ -207,16 +207,15 @@ function get_julia_cmd()
 end
 
 
-function rewrite_sysimg_jl_only_needed_stdlibs(stdlibs::Vector{String})
+function rewrite_sysimg_jl_only_needed_stdlibs()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     sysimg_content = read(sysimg_source_path, String)
-    # replaces the hardcoded list of stdlibs in sysimg.jl with
-    # the stdlibs that is given as argument
-    return replace(sysimg_content,
-        r"stdlibs = \[(.*?)\]"s => string("stdlibs = [", join(":" .* stdlibs, ",\n"), "]"))
+    # replaces the hardcoded list of stdlibs in sysimg.jl with an empty list
+    # TODO: Use the mechanism in https://github.com/JuliaLang/PackageCompiler.jl/pull/997
+    return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
 end
 
-function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String, sysimage_build_args::Cmd)
+function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
@@ -267,7 +266,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
             # Use the compiler sysimage to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs(stdlibs)
+            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs()
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
@@ -275,8 +274,7 @@ function create_fresh_base_sysimage(stdlibs::Vector{String}; cpu_target::String,
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
                     --sysimage=$tmp_corecompiler_sl
                     $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path $compiler_args`,
-                    "JULIA_LOAD_PATH" => "@stdlib")
+                    $new_sysimage_source_path $compiler_args`)
                 @debug "running $cmd"
 
                 read(cmd)
@@ -595,8 +593,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        sysimage_stdlibs = filter_stdlibs ? String[] : stdlibs_in_sysimage()
-        base_sysimage = create_fresh_base_sysimage(sysimage_stdlibs; cpu_target, sysimage_build_args)
+        base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
@@ -641,6 +638,11 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             copy!(frontier, new_frontier)
             empty!(new_frontier)
         end
+    end
+
+    # Add stdlibs to packages_sysimg when building from fresh base sysimage
+    if !incremental && !filter_stdlibs
+        union!(packages_sysimg, stdlibs_in_sysimage())
     end
 
     # Create the sysimage
@@ -872,7 +874,7 @@ function create_app(package_dir::String,
     try_rm_dir(app_dir; force)
     stdlibs = gather_stdlibs_project(ctx)
     if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_sysimage())))
     end
     bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_libexec(ctx, app_dir)
@@ -1089,7 +1091,7 @@ function create_library(package_or_project::String,
     mkpath(dest_dir)
     stdlibs = gather_stdlibs_project(ctx)
     if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, stdlibs_in_sysimage()))
+        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_sysimage())))
     end
     bundle_julia_libraries(dest_dir, stdlibs)
     bundle_julia_libexec(ctx, dest_dir)
