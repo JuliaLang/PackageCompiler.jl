@@ -93,8 +93,72 @@ function source_path(ctx, pkg)
 end
 
 const _STDLIBS = readdir(Sys.STDLIB)
-sysimage_modules() = Base._sysimage_modules
-stdlibs_in_sysimage() = filter(pkg -> pkg.name in _STDLIBS, sysimage_modules())
+
+# Hardcoded list of stdlibs in the default sysimage for each Julia version
+function default_sysimage_stdlibs()
+    if VERSION < v"1.11"
+        # Julia 1.10
+        return [
+            Base.PkgId(Base.UUID("29816b5a-b9ab-546f-933c-edad1886dfa8"), "LibSSH2_jll"),
+            Base.PkgId(Base.UUID("4536629a-c528-5b80-bd46-f80d51c5b363"), "OpenBLAS_jll"),
+            Base.PkgId(Base.UUID("8e850ede-7688-5339-a07c-302acd2aaf8d"), "nghttp2_jll"),
+            Base.PkgId(Base.UUID("9e88b42a-f829-5b0c-bbe9-9e923198166b"), "Serialization"),
+            Base.PkgId(Base.UUID("e37daf67-58a4-590a-8e99-b0245dd2ffc5"), "LibGit2_jll"),
+            Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
+            Base.PkgId(Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce"), "SHA"),
+            Base.PkgId(Base.UUID("f43a241f-c20a-4ad4-852c-f6b1247861c6"), "Downloads"),
+            Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"),
+            Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
+            Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
+            Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64"),
+            Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates"),
+            Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
+            Base.PkgId(Base.UUID("8e850b90-86db-534c-a0d3-1478176c7d93"), "libblastrampoline_jll"),
+            Base.PkgId(Base.UUID("d6f4376e-aef5-505a-96c1-9c027394607a"), "Markdown"),
+            Base.PkgId(Base.UUID("3f19e933-33d8-53b3-aaab-bd5110c3b7a0"), "p7zip_jll"),
+            Base.PkgId(Base.UUID("4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"), "Unicode"),
+            Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"),
+            Base.PkgId(Base.UUID("14a3606d-f60d-562e-9121-12d972cd8159"), "MozillaCACerts_jll"),
+            Base.PkgId(Base.UUID("deac9b47-8bc7-5906-a0fe-35ac56dc84c0"), "LibCURL_jll"),
+            Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"),
+            Base.PkgId(Base.UUID("8bf52ea8-c179-5cab-976a-9e18b702a9bc"), "CRC32c"),
+            Base.PkgId(Base.UUID("56ddb016-857b-54e1-b83d-db4d58db5568"), "Logging"),
+            Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"),
+            Base.PkgId(Base.UUID("c8ffd9c3-330d-5841-b78e-0817d7145fa1"), "MbedTLS_jll"),
+            Base.PkgId(Base.UUID("b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"), "LibCURL"),
+            Base.PkgId(Base.UUID("ca575930-c2e3-43a9-ace4-1e988b2c1908"), "NetworkOptions"),
+            Base.PkgId(Base.UUID("a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"), "Tar"),
+            Base.PkgId(Base.UUID("76f85450-5226-5b5a-8eaa-529ad045b433"), "LibGit2"),
+            Base.PkgId(Base.UUID("a63ad114-7e13-5084-954f-fe012c677804"), "Mmap"),
+            Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra"),
+            Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"),
+            Base.PkgId(Base.UUID("6462fe0b-24de-5631-8697-dd941f90decc"), "Sockets"),
+            Base.PkgId(Base.UUID("9fa8497b-333b-5362-9e8d-4d0656e87820"), "Future"),
+            Base.PkgId(Base.UUID("de0858da-6303-5e67-8744-51eddeeeb8d7"), "Printf"),
+            Base.PkgId(Base.UUID("0dad84c5-d112-42e6-8d28-ef12dabb789f"), "ArgTools"),
+        ]
+    else
+        # Julia 1.11, 1.12, 1.13+
+        stdlibs = [
+            Base.PkgId(Base.UUID("4536629a-c528-5b80-bd46-f80d51c5b363"), "OpenBLAS_jll"),
+            Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"),
+            Base.PkgId(Base.UUID("ea8e919c-243c-51af-8825-aaa63cd721ce"), "SHA"),
+            Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching"),
+            Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
+            Base.PkgId(Base.UUID("8e850b90-86db-534c-a0d3-1478176c7d93"), "libblastrampoline_jll"),
+            Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra"),
+            Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"),
+            Base.PkgId(Base.UUID("6462fe0b-24de-5631-8697-dd941f90decc"), "Sockets"),
+        ]
+        # Julia 1.13+ adds CompilerSupportLibraries_jll as a transitive dependency of OpenBLAS_jll
+        if VERSION >= v"1.13-"
+            push!(stdlibs, Base.PkgId(Base.UUID("e66e0078-7015-5450-92f7-15fbd957f2ae"), "CompilerSupportLibraries_jll"))
+        end
+        return stdlibs
+    end
+end
+
+stdlibs_in_default_sysimage() = default_sysimage_stdlibs()
 
 # TODO: Also check UUIDs for stdlibs, not only names<
 function gather_stdlibs_project(ctx)
@@ -642,7 +706,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     # Add stdlibs to packages_sysimg when building from fresh base sysimage
     if !incremental && !filter_stdlibs
-        union!(packages_sysimg, stdlibs_in_sysimage())
+        union!(packages_sysimg, stdlibs_in_default_sysimage())
     end
 
     # Create the sysimage
@@ -874,7 +938,7 @@ function create_app(package_dir::String,
     try_rm_dir(app_dir; force)
     stdlibs = gather_stdlibs_project(ctx)
     if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_sysimage())))
+        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
     bundle_julia_libraries(app_dir, stdlibs)
     bundle_julia_libexec(ctx, app_dir)
@@ -1091,7 +1155,7 @@ function create_library(package_or_project::String,
     mkpath(dest_dir)
     stdlibs = gather_stdlibs_project(ctx)
     if !filter_stdlibs
-        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_sysimage())))
+        stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
     bundle_julia_libraries(dest_dir, stdlibs)
     bundle_julia_libexec(ctx, dest_dir)
