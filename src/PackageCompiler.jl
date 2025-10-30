@@ -211,7 +211,7 @@ const WARNED_CPP_COMPILER = Ref{Bool}(false)
 function get_compiler_cmd(; cplusplus::Bool=false)
     cc = get(ENV, "JULIA_CC", nothing)
     path = nothing
-    @static if Sys.iswindows()
+    @static if Sys.iswindows() && cc === nothing
         path = joinpath(LazyArtifacts.artifact"mingw-w64", "extracted_files", (Int==Int64 ? "mingw64" : "mingw32"), "bin", cplusplus ? "g++.exe" : "gcc.exe")
         compiler_cmd = `$path`
     end
