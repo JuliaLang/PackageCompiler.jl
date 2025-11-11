@@ -620,6 +620,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          import_into_main::Bool=true,
+                         audit_relocatability::Bool = true
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -761,6 +762,13 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
             @debug "running $cmd"
             run(cmd)
+        end
+    end
+
+    if audit_relocatability
+        @info "Auditing sysimage relocatability"
+        if audit_sysimage_relocatability(sysimage_path)
+            @info "No issues found"
         end
     end
 
@@ -1664,6 +1672,25 @@ function bundle_headers(dest_dir, header_files)
         cp(header_file, new_file; force=true)
     end
     return
+end
+
+function audit_sysimage_relocatability(sysimg_path::String; paths::Vector{String} = [homedir(), DEPOT_PATH...])
+
+    none_found = true
+    sysimg_contents = open(io -> String(read(io)), sysimg_path, read=true)
+
+    for path in paths
+        found = String[]
+        for m in eachmatch(Regex("\\Q$(path)\\E[^\0]+"), sysimg_contents)
+            push!(found, "[$(m.offset)] $(m.match)")
+        end
+        if !isempty(found)
+            @warn """absolute path `$path` found in $(length(found)) places:\n$(join(found, "\n"))"""
+            none_found = false
+        end
+    end
+
+    return none_found
 end
 
 function bundle_cert(dest_dir)
