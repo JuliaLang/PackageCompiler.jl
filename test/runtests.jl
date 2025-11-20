@@ -1,4 +1,4 @@
-using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_library
+using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_distribution, create_library
 using Test
 using Libdl
 using Pkg
@@ -183,23 +183,53 @@ end
     end # testset
 
     if !is_slow_ci
-        # Test library creation
-        lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
-        lib_target_dir = joinpath(tmp, "MyLibCompiled")
+        @testset "create_distribution" begin
+            dist_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+            tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
+            cp(dist_source_dir, tmp_dist_source_dir)
+            ctx = PackageCompiler.create_pkg_context(tmp_dist_source_dir)
+            expected_entries = PackageCompiler.gather_dependency_entries(ctx)
+            expected_names = [something(entry.name, string(entry.uuid)) for entry in expected_entries]
+            dist_target_dir = joinpath(tmp, "CustomJulia")
+            try
+                create_distribution(tmp_dist_source_dir, dist_target_dir; force=true, include_lazy_artifacts=true)
+            finally
+                rm(tmp_dist_source_dir; recursive=true)
+                rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+            julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
+            output = read(`$(julia_bin) -e 'using Example; print(Example.hello("distribution"))'`, String)
+            @test occursin("Hello, distribution", output)
+            stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
+            for name in expected_names
+                project_path = joinpath(stdlib_version_dir, name, "Project.toml")
+                stub_path = joinpath(stdlib_version_dir, name, "src", string(name, ".jl"))
+                @test isfile(project_path)
+                @test isfile(stub_path)
+            end
+        end
 
-        # This is why we have to skip this test on 1.12:
-        incremental = false
+        @testset "create_library" begin
+            # Test library creation
+            lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
+            lib_target_dir = joinpath(tmp, "MyLibCompiled")
 
-        filter = true
-        lib_name = "inc"
+            # This is why we have to skip this test on 1.12:
+            incremental = false
 
-        tmp_lib_src_dir = joinpath(tmp, "MyLib")
-        cp(lib_source_dir, tmp_lib_src_dir)
-        create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                    precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
-                    precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
-                    lib_name=lib_name, version=v"1.0.0")
-        rm(tmp_lib_src_dir; recursive=true)
+            filter = true
+            lib_name = "inc"
+
+            tmp_lib_src_dir = joinpath(tmp, "MyLib")
+            cp(lib_source_dir, tmp_lib_src_dir)
+            create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
+                        precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
+                        precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
+                        lib_name=lib_name, version=v"1.0.0")
+            rm(tmp_lib_src_dir; recursive=true)
+        end
     end
 
     # Test creating an empty sysimage
