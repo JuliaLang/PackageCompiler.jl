@@ -2045,9 +2045,8 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
 end
 
 @timeit TO "bundle libexec" function bundle_julia_libexec(ctx, dest_dir)
-    # We only bundle the `7z` executable at the moment
-    @assert ctx.env.manifest !== nothing
-    if !any(x -> x.name == "p7zip_jll", values(ctx.env.manifest))
+    source_libexec_dir = joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR)
+    if !isdir(source_libexec_dir)
         return
     end
 
@@ -2055,8 +2054,13 @@ end
     bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
     mkpath(bundle_libexec_dir)
 
-    p7zip_exe = basename(p7zip_path)
-    cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
+    # Copy all files from the libexec directory (7z, dsymutil, lld, etc.)
+    for file in readdir(source_libexec_dir)
+        src_path = joinpath(source_libexec_dir, file)
+        if isfile(src_path)
+            cp(src_path, joinpath(bundle_libexec_dir, file); force=true)
+        end
+    end
 
     return
 end
