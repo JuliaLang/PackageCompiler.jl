@@ -1039,10 +1039,11 @@ function create_distribution(project_dir::String,
     stdlibs = gather_stdlibs_project(ctx)
     stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     bundle_julia_libraries(dist_dir, stdlibs)
-    bundle_default_stdlibs(dist_dir)
 
     manifest_pkg_entries = gather_dependency_entries(ctx)
+    bundle_default_stdlibs(dist_dir)
     bundle_custom_stdlibs(ctx, dist_dir, manifest_pkg_entries, copy_globs)
+    bundle_julia_test_files(dist_dir)
 
     bundle_julia_libexec(ctx, dist_dir)
     bundle_julia_executable(dist_dir)
@@ -1389,6 +1390,17 @@ end
 function ensure_default_depot_paths(dest_dir)
     mkpath(joinpath(dest_dir, "share", "julia"))
     mkpath(joinpath(dest_dir, "local", "share", "julia"))
+end
+
+function bundle_julia_test_files(dest_dir)
+    src_test = abspath(Sys.BINDIR, "..", "share", "julia", "test")
+    if isdir(src_test)
+        dest_test = joinpath(dest_dir, "share", "julia", "test")
+        if isdir(dest_test)
+            rm(dest_test; recursive=true, force=true)
+        end
+        cp(src_test, dest_test; force=true)
+    end
 end
 
 function bundle_default_stdlibs(dest_dir)
