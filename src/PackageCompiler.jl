@@ -1655,24 +1655,29 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 end
 
 function bundle_julia_libexec(ctx, dest_dir)
-    # We only bundle the `7z` executable at the moment
-    @assert ctx.env.manifest !== nothing
-    if !any(x -> x.name == "p7zip_jll", values(ctx.env.manifest))
-        return
-    end
-
-    # Use Julia-private `libexec` folder if it exsts
+    # Use Julia-private `libexec` folder if it exists
     # (normpath is required in case `bin` does not exist in `dest_dir`)
     libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
         Base.PRIVATE_LIBEXECDIR
     else
         Base.LIBEXECDIR
     end
+
+    source_libexec_dir = joinpath(Sys.BINDIR, libexecdir_rel)
+    if !isdir(source_libexec_dir)
+        return
+    end
+
     bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
     mkpath(bundle_libexec_dir)
 
-    p7zip_exe = basename(p7zip_path)
-    cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
+    # Copy all files from the libexec directory (7z, dsymutil, lld, etc.)
+    for file in readdir(source_libexec_dir)
+        src_path = joinpath(source_libexec_dir, file)
+        if isfile(src_path)
+            cp(src_path, joinpath(bundle_libexec_dir, file); force=true)
+        end
+    end
 
     return
 end
