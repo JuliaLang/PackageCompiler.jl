@@ -1504,6 +1504,12 @@ function bundle_stdlib_project(dest_dir, packages_in_sysimage::Vector{String})
         if haskey(pkg_proj, "deps")
             entry["deps"] = collect(keys(pkg_proj["deps"]))
         end
+        if haskey(pkg_proj, "weakdeps")
+            entry["weakdeps"] = collect(keys(pkg_proj["weakdeps"]))
+        end
+        if haskey(pkg_proj, "extensions")
+            entry["extensions"] = pkg_proj["extensions"]
+        end
         manifest["deps"][name] = [entry]
     end
 
@@ -1527,13 +1533,14 @@ function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
         ]; io=stdout)
         """
 
-    # Set JULIA_PROJECT to the stdlib directory so precompilepkgs knows what to precompile
-    # Set JULIA_LOAD_PATH to @stdlib like Julia's makefile does
+    # Match Julia's pkgimage.mk approach:
+    # - JULIA_LOAD_PATH has @stdlib AND the stdlib dir (which contains Project.toml/Manifest.toml)
+    # - JULIA_PROJECT is NOT set (important for correct extension handling)
+    pathsep = Sys.iswindows() ? ";" : ":"
     env = Dict(
         "JULIA_DEPOT_PATH" => depot_path,
-        "JULIA_LOAD_PATH" => "@stdlib",
-        "JULIA_CPU_TARGET" => cpu_target,
-        "JULIA_PROJECT" => stdlib_dir
+        "JULIA_LOAD_PATH" => "@stdlib$(pathsep)$(stdlib_dir)",
+        "JULIA_CPU_TARGET" => cpu_target
     )
 
     cmd = setenv(`$julia_exe --sysimage=$sysimage_path --startup-file=no -e $precompile_code`, env)
