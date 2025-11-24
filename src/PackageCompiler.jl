@@ -1521,8 +1521,6 @@ function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
 
     # Precompile all packages in the stdlib that aren't in the sysimage
     precompile_code = """
-        println("Active project: ", Base.active_project())
-        println("DEPOT_PATH: ", Base.DEPOT_PATH)
         Base.Precompilation.precompilepkgs(configs=[
             `` => Base.CacheFlags(debug_level=2, opt_level=3),
             `` => Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
