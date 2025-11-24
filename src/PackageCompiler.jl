@@ -1036,14 +1036,22 @@ function create_distribution(project_dir::String,
     try_rm_dir(dist_dir; force)
     ensure_default_depot_paths(dist_dir)
 
-    stdlibs = gather_stdlibs_project(ctx)
-    stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
-    bundle_julia_libraries(dist_dir, stdlibs)
+    # For distributions, we need to bundle libraries for ALL stdlibs from the running Julia
+    all_stdlibs = readdir(Sys.STDLIB)
+    bundle_julia_libraries(dist_dir, all_stdlibs)
 
     manifest_pkg_entries = gather_dependency_entries(ctx)
     bundle_default_stdlibs(dist_dir)
     bundle_custom_stdlibs(ctx, dist_dir, manifest_pkg_entries, copy_globs)
     bundle_julia_test_files(dist_dir)
+    bundle_julia_base_files(dist_dir)
+    bundle_julia_compiler_files(dist_dir)
+    bundle_julia_support_files(dist_dir)
+
+    # Get stdlibs that will be in the sysimage (as deps of custom packages)
+    stdlib_deps_in_sysimage = gather_dependency_entries(ctx; include_stdlibs=true)
+    stdlib_deps_names = [pkg.name for pkg in stdlib_deps_in_sysimage]
+    bundle_stdlib_project(dist_dir, stdlib_deps_names)
 
     bundle_julia_libexec(ctx, dist_dir)
     bundle_julia_executable(dist_dir)
@@ -1063,6 +1071,8 @@ function create_distribution(project_dir::String,
                     include_transitive_dependencies,
                     script,
                     import_into_main=false)
+
+    precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
 
     return nothing
 end
@@ -1401,6 +1411,137 @@ function bundle_julia_test_files(dest_dir)
         end
         cp(src_test, dest_test; force=true)
     end
+end
+
+function bundle_julia_base_files(dest_dir)
+    src_base = abspath(Sys.BINDIR, "..", "share", "julia", "base")
+    if isdir(src_base)
+        dest_base = joinpath(dest_dir, "share", "julia", "base")
+        if isdir(dest_base)
+            rm(dest_base; recursive=true, force=true)
+        end
+        cp(src_base, dest_base; force=true)
+    end
+end
+
+function bundle_julia_compiler_files(dest_dir)
+    src_compiler = abspath(Sys.BINDIR, "..", "share", "julia", "Compiler")
+    if isdir(src_compiler)
+        dest_compiler = joinpath(dest_dir, "share", "julia", "Compiler")
+        if isdir(dest_compiler)
+            rm(dest_compiler; recursive=true, force=true)
+        end
+        cp(src_compiler, dest_compiler; force=true)
+    end
+end
+
+function bundle_julia_support_files(dest_dir)
+    src_share = abspath(Sys.BINDIR, "..", "share", "julia")
+    dest_share = joinpath(dest_dir, "share", "julia")
+
+    # Bundle individual files and directories
+    for item in ["julia-config.jl", "juliac", "terminfo"]
+        src_item = joinpath(src_share, item)
+        dest_item = joinpath(dest_share, item)
+        if isfile(src_item)
+            cp(src_item, dest_item; force=true)
+        elseif isdir(src_item)
+            if isdir(dest_item)
+                rm(dest_item; recursive=true, force=true)
+            end
+            cp(src_item, dest_item; force=true)
+        end
+    end
+end
+
+function bundle_stdlib_project(dest_dir, packages_in_sysimage::Vector{String})
+    # Dynamically generate stdlib Project.toml and Manifest.toml from running Julia's stdlibs
+    # Include all stdlibs in manifest for dependency resolution, but only list non-sysimage ones in Project.toml
+    dest_stdlib = joinpath(dest_dir, "share", "julia", "stdlib")
+    mkpath(dest_stdlib)
+
+    # Get list of packages in the sysimage
+    sysimage_pkgs = Set(map(pkg -> pkg.name, stdlibs_in_default_sysimage()))
+    union!(sysimage_pkgs, packages_in_sysimage)
+
+    # Collect stdlib packages for Project.toml (only non-sysimage)
+    stdlib_deps = Dict{String, String}()
+    # Collect ALL stdlib packages for Manifest.toml (needed for dependency resolution)
+    all_stdlib_deps = Dict{String, String}()
+    for pkg_name in readdir(Sys.STDLIB)
+        pkg_project = joinpath(Sys.STDLIB, pkg_name, "Project.toml")
+        if isfile(pkg_project)
+            proj = TOML.parsefile(pkg_project)
+            if haskey(proj, "uuid")
+                all_stdlib_deps[pkg_name] = proj["uuid"]
+                # Only add to Project.toml if not in sysimage
+                if !(pkg_name in sysimage_pkgs)
+                    stdlib_deps[pkg_name] = proj["uuid"]
+                end
+            end
+        end
+    end
+
+    # Generate Project.toml
+    project = Dict("deps" => stdlib_deps)
+    open(joinpath(dest_stdlib, "Project.toml"), "w") do io
+        TOML.print(io, project)
+    end
+
+    # Generate Manifest.toml
+    manifest = Dict{String, Any}()
+    manifest["julia_version"] = string(VERSION)
+    manifest["manifest_format"] = "2.0"
+    manifest["deps"] = Dict{String, Any}()
+
+    # Add each stdlib as a manifest entry (use all_stdlib_deps for complete dependency resolution)
+    for (name, uuid) in all_stdlib_deps
+        pkg_proj = TOML.parsefile(joinpath(Sys.STDLIB, name, "Project.toml"))
+        entry = Dict{String, Any}("uuid" => uuid)
+        if haskey(pkg_proj, "version")
+            entry["version"] = pkg_proj["version"]
+        end
+        if haskey(pkg_proj, "deps")
+            entry["deps"] = collect(keys(pkg_proj["deps"]))
+        end
+        manifest["deps"][name] = [entry]
+    end
+
+    open(joinpath(dest_stdlib, "Manifest.toml"), "w") do io
+        TOML.print(io, manifest)
+    end
+end
+
+function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
+    julia_exe = joinpath(dist_dir, "bin", "julia")
+    depot_path = joinpath(dist_dir, "share", "julia")
+    stdlib_dir = joinpath(depot_path, "stdlib")
+    compiled_dir = joinpath(depot_path, "compiled")
+    mkpath(compiled_dir)
+
+    # Precompile all packages in the stdlib that aren't in the sysimage
+    precompile_code = """
+        println("Active project: ", Base.active_project())
+        println("DEPOT_PATH: ", Base.DEPOT_PATH)
+        Base.Precompilation.precompilepkgs(configs=[
+            `` => Base.CacheFlags(debug_level=2, opt_level=3),
+            `` => Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
+        ]; io=stdout)
+        """
+
+    # Set JULIA_PROJECT to the stdlib directory so precompilepkgs knows what to precompile
+    # Set JULIA_LOAD_PATH to @stdlib like Julia's makefile does
+    env = Dict(
+        "JULIA_DEPOT_PATH" => depot_path,
+        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_CPU_TARGET" => cpu_target,
+        "JULIA_PROJECT" => stdlib_dir
+    )
+
+    cmd = setenv(`$julia_exe --sysimage=$sysimage_path --startup-file=no -e $precompile_code`, env)
+
+    @info "Precompiling stdlibs for the distribution..."
+    run(cmd)
 end
 
 function bundle_default_stdlibs(dest_dir)
