@@ -953,6 +953,7 @@ function create_app(package_dir::String,
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
     bundle_julia_libraries(app_dir, stdlibs)
+    bundle_windows_import_libraries(app_dir)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
@@ -1039,6 +1040,7 @@ function create_distribution(project_dir::String,
     # For distributions, we need to bundle libraries for ALL stdlibs from the running Julia
     all_stdlibs = readdir(Sys.STDLIB)
     bundle_julia_libraries(dist_dir, all_stdlibs)
+    bundle_windows_import_libraries(dist_dir)
 
     manifest_pkg_entries = gather_dependency_entries(ctx)
     bundle_default_stdlibs(dist_dir)
@@ -1256,6 +1258,7 @@ function create_library(package_or_project::String,
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
     bundle_julia_libraries(dest_dir, stdlibs)
+    bundle_windows_import_libraries(dest_dir)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
@@ -1810,6 +1813,39 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     println("  Total library file size: ", pretty_byte_str(tot_libsize))
 
     return
+end
+
+# On Windows, bundle import libraries (.a files) needed for linking during package precompilation
+function bundle_windows_import_libraries(dest_dir)
+    Sys.iswindows() || return
+
+    # Import libraries are in lib/ and lib/julia/
+    src_lib_dir = julia_libdir()
+    src_libjulia_dir = julia_private_libdir()
+
+    # Destination mirrors the source structure
+    dest_lib_dir = joinpath(dest_dir, "lib")
+    dest_libjulia_dir = joinpath(dest_lib_dir, "julia")
+    mkpath(dest_lib_dir)
+    mkpath(dest_libjulia_dir)
+
+    # Import libraries in lib/ (libjulia.dll.a, libjulia-internal.dll.a, libopenlibm.dll.a, libssp.dll.a)
+    for file in readdir(src_lib_dir)
+        endswith(file, ".dll.a") || continue
+        src = joinpath(src_lib_dir, file)
+        dest = joinpath(dest_lib_dir, file)
+        isfile(dest) && continue
+        cp(src, dest; force=true)
+    end
+
+    # Import/static libraries in lib/julia/ (libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a)
+    for file in readdir(src_libjulia_dir)
+        endswith(file, ".a") || continue
+        src = joinpath(src_libjulia_dir, file)
+        dest = joinpath(dest_libjulia_dir, file)
+        isfile(dest) && continue
+        cp(src, dest; force=true)
+    end
 end
 
 function bundle_julia_libexec(ctx, dest_dir)
