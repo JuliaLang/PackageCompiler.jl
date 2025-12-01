@@ -1820,8 +1820,9 @@ function bundle_windows_import_libraries(dest_dir)
     Sys.iswindows() || return
 
     # Import libraries are in lib/ and lib/julia/
-    src_lib_dir = julia_libdir()
-    src_libjulia_dir = julia_private_libdir()
+    # Note: julia_libdir() returns bin/ on Windows (where DLLs are), but import libraries are in lib/
+    src_lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
+    src_libjulia_dir = joinpath(src_lib_dir, "julia")
 
     # Destination mirrors the source structure
     dest_lib_dir = joinpath(dest_dir, "lib")
