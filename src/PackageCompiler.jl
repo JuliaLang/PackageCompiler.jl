@@ -476,6 +476,7 @@ function create_sysimg_object_file(object_file::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
+                            release_banner::Union{Nothing, String},
                             incremental::Bool,
                             import_into_main::Bool)
     julia_code_buffer = IOBuffer()
@@ -506,8 +507,12 @@ function create_sysimg_object_file(object_file::String,
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, abspath.(precompile_statements_file))
+    banner_code = release_banner === nothing ? "" : """
+        @eval Base const TAGGED_RELEASE_BANNER = $(repr(release_banner))
+        """
     precompile_code = """
         # This @eval prevents symbols from being put into Main
+        $banner_code
         @eval Module() begin
             using Base.Meta
             PrecompileStagingArea = Module()
@@ -705,6 +710,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
+                         release_banner::Union{Nothing, String}=nothing,
                          import_into_main::Bool=true,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
@@ -783,6 +789,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                                 script,
                                 sysimage_build_args,
                                 extra_precompiles,
+                                release_banner,
                                 incremental,
                                 import_into_main)
         if julia_init_c_file !== nothing
@@ -1094,7 +1101,8 @@ function create_distribution(project_dir::String,
                              include_transitive_dependencies::Bool=true,
                              include_preferences::Bool=true,
                              script::Union{Nothing, String}=nothing,
-                             copy_globs::Vector{String}=String[])
+                             copy_globs::Vector{String}=String[],
+                             release_banner::Union{Nothing, String}=nothing)
     ctx = create_pkg_context(project_dir)
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
@@ -1136,6 +1144,7 @@ function create_distribution(project_dir::String,
                     sysimage_build_args,
                     include_transitive_dependencies,
                     script,
+                    release_banner,
                     import_into_main=false)
 
     precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
