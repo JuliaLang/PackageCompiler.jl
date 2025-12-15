@@ -296,7 +296,8 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     @static if VERSION >= v"1.12.0-DEV.1617"
         compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
         buildroot = ""
-        dataroot = relpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR), base_dir) * "/"
+        # Use realpath to handle symlinked directories (common in local Julia builds)
+        dataroot = relpath(realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR)), realpath(base_dir)) * "/"
         compiler_args = `--buildroot $buildroot --dataroot $dataroot` # build path
     else
         compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
