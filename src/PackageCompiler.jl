@@ -949,6 +949,7 @@ function create_app(package_dir::String,
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
 
+    # Sysimage always goes in lib/julia/ (this is hardcoded in the Julia binary)
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
     package_name = ctx.env.pkg.name
@@ -1368,13 +1369,18 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
     lib_dir = julia_libdir()
     libjulia_dir = Sys.isunix() ? joinpath(lib_dir, "julia") : lib_dir
-    # File structure is slightly different on locally built julias:
-    if !isempty(glob(glob_pattern_lib("libLLVM"), lib_dir))
+    # File structure is different on locally built julias:
+    # libraries are in lib/ directly instead of lib/julia/, and the DEP_LIBS
+    # embedded in libjulia.so reflect this. We must copy libraries to the same
+    # relative location to match the binary's expectations.
+    if is_local_julia_build()
         libjulia_dir = lib_dir
+        app_libjulia_dir = app_lib_dir
     end
 
     mkpath(app_lib_dir)
-    Sys.isunix() && mkpath(app_libjulia_dir)
+    # Always create lib/julia/ for the sysimage (even for local builds where libraries go to lib/)
+    Sys.isunix() && mkpath(joinpath(app_lib_dir, "julia"))
 
     tot_libsize = 0
     printstyled("PackageCompiler: bundled libraries:\n")
