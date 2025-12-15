@@ -50,7 +50,7 @@ jobs:
       matrix:
         julia-version:
           - '1.10' # current LTS
-          - '1.11' # current stable
+          - '1.12' # current stable
 
           #
           # 'pre' will install the latest prerelease build (RCs, betas, and alphas).
