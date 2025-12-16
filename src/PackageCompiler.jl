@@ -1309,7 +1309,7 @@ end
 function glob_pattern_lib(lib)
     Sys.iswindows() ? lib * "*.dll" :
     Sys.isapple() ? lib * "*.dylib" :
-    Sys.islinux() ? lib * "*.so*" :
+    (Sys.islinux() || Sys.isbsd()) ? lib * "*.so*" :
     error("unknown os")
 end
 
@@ -1394,7 +1394,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
 
     # Required libraries
     println("  ├── Base:")
-    os = Sys.islinux() ? "linux" : Sys.isapple() ? "mac" : "windows"
+    os = Sys.isapple() ? "mac" : (Sys.islinux() || Sys.isbsd()) ? "linux" : "windows"
     for lib in required_libraries[os]
         if Sys.islinux() && lib == "libstdc++"
             matches = libstdcxx
@@ -1429,7 +1429,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     major, minor, patch = VERSION.major, VERSION.minor, VERSION.patch
     r = if  Sys.isapple()
         Regex("^libjulia(\\.$major(\\.$minor(\\.$patch)?)?)?\\.dylib\$")
-    elseif Sys.islinux()
+    elseif Sys.islinux() || Sys.isbsd()
         Regex("^libjulia\\.so(\\.$major(\\.$minor(\\.$patch)?)?)?\$")
     elseif Sys.iswindows()
         Regex("^libjulia\\.dll\$")

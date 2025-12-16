@@ -34,16 +34,16 @@ function ldflags()
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
         fl = fl * " -Wl,--export-all-symbols"
-    elseif Sys.islinux()
+    elseif Sys.islinux() || (Sys.isbsd() && !Sys.isapple())
         fl = fl * " -Wl,--export-dynamic"
     end
     return fl
 end
 
 function ldlibs()
-    libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
+    libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" :
                                 "-ljulia       -ljulia-internal"
-    if Sys.islinux()
+    if Sys.islinux() || (Sys.isbsd() && !Sys.isapple())
         return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
     elseif Sys.iswindows()
         return "$libnames -lopenlibm"
