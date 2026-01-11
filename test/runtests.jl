@@ -138,7 +138,7 @@ end
             # Check julia-args
             @test occursin("(Base.JLOptions()).opt_level = 1", app_output)
             # From Julia 1.12, --threads=3 adds 1 interactive thread
-            expected_threads = VERSION >= v"1.12" ? 4 : 3
+            expected_threads = VERSION >= v"1.12-" ? 4 : 3
             @test occursin("(Base.JLOptions()).nthreads = $expected_threads", app_output)
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
             # Check transitive inclusion of dependencies
