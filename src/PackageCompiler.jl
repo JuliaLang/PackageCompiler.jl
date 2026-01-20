@@ -344,7 +344,7 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
             write(new_sysimage_source_path, new_sysimage_content)
             try
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                    --sysimage=$tmp_corecompiler_sl
+                    --sysimage=$tmp_corecompiler_sl --threads=1
                     $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path $compiler_args`)
                 @debug "running $cmd"
