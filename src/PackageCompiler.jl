@@ -1578,7 +1578,7 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
     mkpath(version_dir)
     for pkg in packages
         pkg_source_path = source_path(ctx, pkg)
-        pkg_source_path === nothing && error("Unable to locate source for $(pkg.name); ensure the package exists in the current project.")
+        pkg_source_path === nothing && error("Unable to locate source for $(pkg.name) [$(pkg.uuid)]; ensure the package exists in the current project.")
         project_toml = joinpath(pkg_source_path, "Project.toml")
         isfile(project_toml) || error("Project.toml for package $(pkg.name) not found at $(project_toml)")
         pkg_name = something(pkg.name, string(pkg.uuid))
