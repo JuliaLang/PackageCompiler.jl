@@ -1913,7 +1913,7 @@ function pretty_byte_str(size)
 end
 
 # Copy pasted from Pkg since `collect_artifacts` doesn't allow lazy artifacts to get installed
-function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=Base.BinaryPlatforms.HostPlatform(), include_lazy::Bool)
+function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.AbstractPlatform=Base.BinaryPlatforms.HostPlatform(), include_lazy::Bool, pkg_uuid::Union{Nothing, Base.UUID}=nothing)
     # Check to see if this package has an (Julia)Artifacts.toml
     artifacts_tomls = Tuple{String,Base.TOML.TOMLDict}[]
 
@@ -1937,7 +1937,7 @@ function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.Abs
                 push!(artifacts_tomls, (artifacts_toml, TOML.parse(meta_toml)))
             else
                 # Otherwise, use the standard selector from `Artifacts`
-                artifacts = Pkg.Artifacts.select_downloadable_artifacts(artifacts_toml; platform, include_lazy)
+                artifacts = Pkg.Artifacts.select_downloadable_artifacts(artifacts_toml; platform, include_lazy, pkg_uuid)
                 push!(artifacts_tomls, (artifacts_toml, artifacts))
             end
             break
@@ -1954,35 +1954,36 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     depot_path = joinpath(dest_dir, "share", "julia")
     artifact_app_path = joinpath(depot_path, "artifacts")
 
-    source_paths_names = Tuple{String, String}[]
+    source_paths_names = Tuple{String, String, Union{Nothing, Base.UUID}}[]
     for pkg in pkgs
         pkg_source_path = source_path(ctx, pkg)
         pkg_source_path === nothing && continue
-        push!(source_paths_names, (pkg_source_path, pkg.name))
+        push!(source_paths_names, (pkg_source_path, pkg.name, pkg.uuid))
     end
     # Also want artifacts for the project itself
-    push!(source_paths_names, (dirname(ctx.env.project_file), ctx.env.project_file))
+    push!(source_paths_names, (dirname(ctx.env.project_file), ctx.env.project_file, nothing))
 
-    bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
+    bundled_artifacts = Pair{String, Vector{Tuple{String, String, String}}}[]
 
-    for (pkg_source_path, pkg_name) in source_paths_names
-        bundled_artifacts_pkg = Pair{String, String}[]
+    for (pkg_source_path, pkg_name, pkg_uuid) in source_paths_names
+        bundled_artifacts_pkg = Tuple{String, String, String}[]
         if isdefined(Pkg.Operations, :collect_artifacts)
-            for (artifacts_toml, artifacts) in _collect_artifacts(pkg_source_path; platform, include_lazy=include_lazy_artifacts)
+            for (artifacts_toml, artifacts) in _collect_artifacts(pkg_source_path; platform, include_lazy=include_lazy_artifacts, pkg_uuid)
                 for (name, data) in artifacts
                     Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml; platform)
                     hash = Base.SHA1(data["git-tree-sha1"])
-                    push!(bundled_artifacts_pkg, name => artifact_path(hash))
+                    push!(bundled_artifacts_pkg, (name, bytes2hex(hash.bytes), artifact_path(hash)))
                 end
             end
         else
             for f in Pkg.Artifacts.artifact_names
                 artifacts_toml_path = joinpath(pkg_source_path, f)
                 if isfile(artifacts_toml_path)
-                    artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts)
+                    artifacts = Artifacts.select_downloadable_artifacts(artifacts_toml_path; platform, include_lazy=include_lazy_artifacts, pkg_uuid)
                     for name in keys(artifacts)
-                        artifact_path = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
-                        push!(bundled_artifacts_pkg, name => artifact_path)
+                        hash_hex = artifacts[name]["git-tree-sha1"]
+                        artifact_resolved = Pkg.ensure_artifact_installed(name, artifacts[name], artifacts_toml_path; platform)
+                        push!(bundled_artifacts_pkg, (name, hash_hex, artifact_resolved))
                     end
                     break
                 end
@@ -2011,8 +2012,8 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
         if !std_jll
             println()
         end
-        for (j, (artifact, artifact_path)) in enumerate(artifacts)
-            git_tree_sha_artifact = basename(artifact_path)
+        for (j, (artifact, hash_hex, artifact_path)) in enumerate(artifacts)
+            git_tree_sha_artifact = hash_hex
             already_bundled = git_tree_sha_artifact in bundled_shas
             size = already_bundled ? 0 : recursive_dir_size(artifact_path)
             total_size += size
