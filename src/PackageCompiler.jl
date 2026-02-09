@@ -1600,7 +1600,6 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
                     source_dir = joinpath(pkg_source_path, base_dir)
 
                     if !isdir(source_dir)
-                        @warn "Directory $source_dir not found for pattern $pattern in package $pkg_name"
                         continue
                     end
 
