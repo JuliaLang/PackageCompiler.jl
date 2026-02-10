@@ -150,6 +150,13 @@ function default_sysimage_stdlibs()
             Base.PkgId(Base.UUID("9a3f8284-a2c9-5f02-9a11-845980a1fd5c"), "Random"),
             Base.PkgId(Base.UUID("6462fe0b-24de-5631-8697-dd941f90decc"), "Sockets"),
         ]
+        # In Julia 1.12 MbedTLS_jll is replaced by OpenSSL_jll, and JuliaSyntaxHighlighting is added
+        if VERSION >= v"1.12-"
+            push!(stdlibs, Base.PkgId(Base.UUID("ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"), "JuliaSyntaxHighlighting"))
+            push!(stdlibs, Base.PkgId(Base.UUID("458c3c95-2e84-50aa-8efc-19380b2a3a95"), "OpenSSL_jll"))
+        else
+            push!(stdlibs, Base.PkgId(Base.UUID("c8ffd9c3-330d-5841-b78e-0817d7145fa1"), "MbedTLS_jll"))
+        end
         # Julia 1.13+ adds CompilerSupportLibraries_jll as a transitive dependency of OpenBLAS_jll
         if VERSION >= v"1.13-"
             push!(stdlibs, Base.PkgId(Base.UUID("e66e0078-7015-5450-92f7-15fbd957f2ae"), "CompilerSupportLibraries_jll"))
@@ -308,7 +315,8 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     @static if VERSION >= v"1.12.0-DEV.1617"
         compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
         buildroot = ""
-        dataroot = relpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR), base_dir) * "/"
+        # Use realpath to handle symlinked directories (common in local Julia builds)
+        dataroot = relpath(realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR)), realpath(base_dir)) * "/"
         compiler_args = `--buildroot $buildroot --dataroot $dataroot` # build path
     else
         compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
@@ -348,7 +356,7 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
             write(new_sysimage_source_path, new_sysimage_content)
             try
                 cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                    --sysimage=$tmp_corecompiler_sl
+                    --sysimage=$tmp_corecompiler_sl --threads=1
                     $sysimage_build_args --output-o=$tmp_sys_o
                     $new_sysimage_source_path $compiler_args`)
                 @debug "running $cmd"
@@ -968,6 +976,7 @@ function create_app(package_dir::String,
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
 
+    # Sysimage always goes in lib/julia/ (this is hardcoded in the Julia binary)
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
 
     package_name = ctx.env.pkg.name
@@ -1731,13 +1740,18 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
     lib_dir = julia_libdir()
     libjulia_dir = Sys.isunix() ? joinpath(lib_dir, "julia") : lib_dir
-    # File structure is slightly different on locally built julias:
-    if !isempty(glob(glob_pattern_lib("libLLVM"), lib_dir))
+    # File structure is different on locally built julias:
+    # libraries are in lib/ directly instead of lib/julia/, and the DEP_LIBS
+    # embedded in libjulia.so reflect this. We must copy libraries to the same
+    # relative location to match the binary's expectations.
+    if is_local_julia_build()
         libjulia_dir = lib_dir
+        app_libjulia_dir = app_lib_dir
     end
 
     mkpath(app_lib_dir)
-    Sys.isunix() && mkpath(app_libjulia_dir)
+    # Always create lib/julia/ for the sysimage (even for local builds where libraries go to lib/)
+    Sys.isunix() && mkpath(joinpath(app_lib_dir, "julia"))
 
     tot_libsize = 0
     printstyled("PackageCompiler: bundled libraries:\n")

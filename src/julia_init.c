@@ -87,16 +87,31 @@ void init_julia(int argc, char **argv) {
     setup_args(argc, argv);
 
     const char *sysimage_path = get_sysimage_path(JULIAC_PROGRAM_LIBNAME);
-    char *_sysimage_path = strdup(sysimage_path);
+    // Convert to absolute path since jl_init_with_image_file (Julia 1.12+)
+    // resolves relative paths against bindir, which would be incorrect.
+#ifdef _WIN32
+    char *abs_sysimage_path = _fullpath(NULL, sysimage_path, 0);
+#else
+    char *abs_sysimage_path = realpath(sysimage_path, NULL);
+#endif
+    char *_sysimage_path = strdup(abs_sysimage_path);
     char *root_dir = dirname(dirname(_sysimage_path));
     set_depot_load_path(root_dir);
-    free(_sysimage_path);
-    jl_options.image_file = sysimage_path;
 #if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR <= 11
+    jl_options.image_file = abs_sysimage_path;
     julia_init(JL_IMAGE_CWD);
 #else
-    jl_init_with_image_file(NULL, sysimage_path);
+    // Julia 1.12+: Pass explicit bindir to avoid incorrect auto-construction on Unix.
+    // When bindir is NULL, Julia constructs it as libdir/../bin (Unix) or libdir (Windows).
+    // PackageCompiler has libdir=root/lib/julia and bindir=root/bin, so on Unix the
+    // auto-constructed path would be root/lib/julia/../bin = root/lib/bin (incorrect).
+    size_t bindir_len = strlen(root_dir) + 5;
+    char *bindir = (char *)malloc(bindir_len);
+    snprintf(bindir, bindir_len, "%s/bin", root_dir);
+    jl_init_with_image_file(bindir, abs_sysimage_path);
+    free(bindir);
 #endif
+    free(_sysimage_path);
 }
 
 void shutdown_julia(int retcode) { jl_atexit_hook(retcode); }

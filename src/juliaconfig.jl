@@ -13,6 +13,13 @@ function julia_libdir()
     return dirname(abspath(Libdl.dlpath(libname)))
 end
 
+# Detect if Julia is a local build (libraries in lib/ directly instead of lib/julia/)
+function is_local_julia_build()
+    lib_dir = julia_libdir()
+    # In local builds, libLLVM is directly in lib/, not in lib/julia/
+    return any(startswith(f, "libLLVM") for f in readdir(lib_dir))
+end
+
 function julia_private_libdir()
     if Base.DARWIN_FRAMEWORK # taken from Libdl tests
         if isdebugbuild() != 0

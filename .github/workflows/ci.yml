@@ -50,7 +50,7 @@ jobs:
       matrix:
         julia-version:
           - '1.10' # current LTS
-          - '1.11' # current stable
+          - '1.12' # current stable
 
           #
           # 'pre' will install the latest prerelease build (RCs, betas, and alphas).
@@ -128,7 +128,7 @@ jobs:
       matrix:
         julia-version:
           - '1.10' # current LTS
-          - '1.11' # current stable
+          - '1.12' # current stable
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
