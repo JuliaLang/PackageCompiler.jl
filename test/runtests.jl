@@ -183,7 +183,7 @@ end
     end # testset
 
     if !is_slow_ci
-        @testset "create_distribution" skip=(VERSION < v"1.11-") begin
+        VERSION >= v"1.11-" && @testset "create_distribution" begin
             dist_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
             tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
             cp(dist_source_dir, tmp_dist_source_dir)
