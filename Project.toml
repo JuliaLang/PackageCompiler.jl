@@ -2,6 +2,9 @@ name = "PackageCompiler"
 uuid = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
 version = "2.2.5"
 
+[workspace]
+projects = ["test/subproject"]
+
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"

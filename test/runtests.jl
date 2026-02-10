@@ -217,4 +217,13 @@ end
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
     end
+
+    @testset "Workspace bundling" begin
+        ctx = PackageCompiler.create_pkg_context(joinpath(@__DIR__, "subproject"))
+        pkgs = PackageCompiler.load_all_deps(ctx)
+        # on >=1.12; don't load the full workspace
+        # on <1.12; it doesn't know it is in a workspace
+        @test length(pkgs) == 1
+        @test only(pkgs).name == "Example"
+    end
 end

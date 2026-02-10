@@ -79,11 +79,11 @@ end
 
 function load_all_deps(ctx)
     env = ctx.env
-    if isdefined(Pkg.Operations, :load_all_deps!)
-        pkgs = Pkg.Types.PackageSpec[]
-        Pkg.Operations.load_all_deps!(env, pkgs)
+    pkgs = if isdefined(Pkg.Operations, :load_all_deps_loadable)
+        # 1.12+, avoids loading full workspace
+        Pkg.Operations.load_all_deps_loadable(env)
     else
-        pkgs = Pkg.Operations.load_all_deps(env)
+        Pkg.Operations.load_all_deps(env)
     end
     return pkgs
 end
