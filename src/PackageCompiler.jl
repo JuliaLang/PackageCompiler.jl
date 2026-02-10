@@ -1540,12 +1540,33 @@ function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
     compiled_dir = joinpath(depot_path, "compiled")
     mkpath(compiled_dir)
 
-    # Precompile all packages in the stdlib that aren't in the sysimage
+    # Precompile all packages in the stdlib that aren't in the sysimage.
+    # The API differs across Julia versions:
+    #   Julia 1.12+: Base.Precompilation is bound at startup
+    #   Julia 1.11:  Precompilation is a stdlib that must be imported
+    #   Julia 1.10:  No Precompilation module available
     precompile_code = """
-        Base.Precompilation.precompilepkgs(configs=[
-            `` => Base.CacheFlags(debug_level=2, opt_level=3),
-            `` => Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
-        ]; io=stdout)
+        local _Precomp = nothing
+        if isdefined(Base, :Precompilation)
+            _Precomp = Base.Precompilation
+        else
+            try
+                _Precomp = Base.require(Base, :Precompilation)
+            catch
+            end
+        end
+        if _Precomp !== nothing && isdefined(_Precomp, :precompilepkgs)
+            if isdefined(Base, :CacheFlags)
+                _Precomp.precompilepkgs(configs=[
+                    `` => Base.CacheFlags(debug_level=2, opt_level=3),
+                    `` => Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
+                ]; io=stdout)
+            else
+                _Precomp.precompilepkgs(; io=stdout)
+            end
+        else
+            @warn "Stdlib precompilation not available on Julia \$VERSION; skipping."
+        end
         """
 
     # Match Julia's pkgimage.mk approach:

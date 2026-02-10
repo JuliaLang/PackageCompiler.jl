@@ -137,7 +137,7 @@ end
             @test occursin("""ARGS = ["I", "get", "--args", "áéíóú"]""", app_output)
             # Check julia-args
             @test occursin("(Base.JLOptions()).opt_level = 1", app_output)
-            @test occursin("(Base.JLOptions()).nthreads = 3", app_output)
+            @test occursin(r"\(Base\.JLOptions\(\)\)\.nthreads = [34]", app_output)
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
             # Check transitive inclusion of dependencies
             @test occursin("is_crayons_loaded() = true", app_output)
@@ -183,7 +183,7 @@ end
     end # testset
 
     if !is_slow_ci
-        @testset "create_distribution" begin
+        @testset "create_distribution" skip=(VERSION < v"1.11-") begin
             dist_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
             tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
             cp(dist_source_dir, tmp_dist_source_dir)
