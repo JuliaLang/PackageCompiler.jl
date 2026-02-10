@@ -200,7 +200,11 @@ end
                 rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end
             julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
-            output = read(`$(julia_bin) -e 'using Example; print(Example.hello("distribution"))'`, String)
+            # Unset JULIA_DEPOT_PATH so the distribution uses its default depot
+            # (which includes <BINDIR>/../share/julia/ where artifacts are bundled)
+            output = withenv("JULIA_DEPOT_PATH" => nothing) do
+                read(`$(julia_bin) -e 'using Example; print(Example.hello("distribution"))'`, String)
+            end
             @test occursin("Hello, distribution", output)
             stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
             for name in expected_names
