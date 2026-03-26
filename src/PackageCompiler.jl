@@ -10,6 +10,7 @@ using UUIDs: UUID, uuid1
 using RelocatableFolders
 using TOML
 using Glob
+using TimerOutputs
 using p7zip_jll: p7zip_path
 
 export create_sysimage, create_app, create_library
@@ -17,6 +18,8 @@ export create_sysimage, create_app, create_library
 include("juliaconfig.jl")
 include("../ext/TerminalSpinners.jl")
 include("library_selection.jl")
+
+const TO = TimerOutput()
 
 
 ##############
@@ -325,10 +328,10 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
                 $compiler_source_path $compiler_args`
             @debug "running $cmd"
 
-            read(cmd)
+            @timeit TO "corecompiler --output-o" read(cmd)
 
             # Create shared library from object file
-            create_sysimg_from_object_file(String[tmp_corecompiler_o],
+            @timeit TO "link corecompiler" create_sysimg_from_object_file(String[tmp_corecompiler_o],
                                     tmp_corecompiler_sl;
                                     version=nothing,
                                     soname=nothing,
@@ -349,9 +352,9 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
                     $new_sysimage_source_path $compiler_args`)
                 @debug "running $cmd"
 
-                read(cmd)
+                @timeit TO "base sysimage --output-o" read(cmd)
 
-                create_sysimg_from_object_file(String[tmp_sys_o],
+                @timeit TO "link base sysimage" create_sysimg_from_object_file(String[tmp_sys_o],
                                         tmp_sys_sl;
                                         version=nothing,
                                         soname=nothing,
@@ -428,7 +431,7 @@ function create_sysimg_object_file(object_file::String,
     precompile_files = String[]
     @debug "running precompilation execution script..."
     precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
-    for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
+    @timeit TO "run precompile scripts" for file in (isempty(precompile_execution_file) ? (nothing,) : precompile_execution_file)
         tracefile = run_precompilation_script(project, base_sysimage, file, precompile_dir)
         push!(precompile_files, tracefile)
     end
@@ -553,7 +556,7 @@ function create_sysimg_object_file(object_file::String,
 
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
-    @monitor_oom TerminalSpinners.@spin spinner run(cmd)
+    @timeit TO "compile --output-o" @monitor_oom TerminalSpinners.@spin spinner run(cmd)
     return
 end
 
@@ -607,6 +610,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `show_timing::Bool`: If `true`, print a timing report to stdout after the sysimage is built. Defaults to `false`.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -628,10 +633,13 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          import_into_main::Bool=true,
+                         _reset_timer::Bool=true,
+                         show_timing::Bool=false,
                          )
+    _reset_timer && reset_timer!(TO)
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
-    get_compiler_cmd()
+    @timeit TO "check compiler" get_compiler_cmd()
 
     if isdir(sysimage_path)
         error("The provided sysimage_path is a directory: $(sysimage_path). Please specify a full path including the sysimage filename.")
@@ -641,7 +649,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
 
-    ctx = create_pkg_context(project)
+    ctx = @timeit TO "pkg context" create_pkg_context(project)
 
     if packages === nothing
         packages = collect(keys(ctx.env.project.deps))
@@ -659,18 +667,18 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     # Instantiate the project
 
     @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    @timeit TO "pkg instantiate" Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     if !incremental
         if base_sysimage !== nothing
             error("cannot specify `base_sysimage`  when `incremental=false`")
         end
-        base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
+        base_sysimage = @timeit TO "build base sysimage" create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
         base_sysimage = something(base_sysimage, unsafe_string(Base.JLOptions().image_file))
     end
 
-    ensurecompiled(project, packages, base_sysimage)
+    @timeit TO "precompile packages" ensurecompiled(project, packages, base_sysimage)
 
     packages_sysimg = Set{Base.PkgId}()
 
@@ -724,7 +732,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
 
-    create_sysimg_object_file(object_file, packages, packages_sysimg;
+    @timeit TO "create object file" create_sysimg_object_file(object_file, packages, packages_sysimg;
                             project,
                             base_sysimage,
                             precompile_execution_file,
@@ -755,7 +763,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
             end
         end
     end
-    create_sysimg_from_object_file(object_files,
+    @timeit TO "link sysimage" create_sysimg_from_object_file(object_files,
                                 sysimage_path;
                                 compat_level,
                                 version,
@@ -763,7 +771,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     rm(object_file; force=true)
 
-    if Sys.isapple()
+    @timeit TO "install_name_tool" if Sys.isapple()
         cd(dirname(abspath(sysimage_path))) do
             sysimage_file = basename(sysimage_path)
             cmd = `install_name_tool -id @rpath/$(sysimage_file) $sysimage_file`
@@ -772,6 +780,10 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
         end
     end
 
+    if show_timing
+        show(stdout, TO; sortby=:firstexec)
+        println()
+    end
     return nothing
 end
 
@@ -913,6 +925,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `show_timing::Bool`: If `true`, print a timing report to stdout after the app is built. Defaults to `false`.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -928,17 +942,19 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    show_timing::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
+    reset_timer!(TO)
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
-    get_compiler_cmd()
+    @timeit TO "check compiler" get_compiler_cmd()
 
-    ctx = create_pkg_context(package_dir)
+    ctx = @timeit TO "pkg context" create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    @timeit TO "pkg instantiate" Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     if executables === nothing
         executables = [ctx.env.pkg.name => "julia_main"]
@@ -948,13 +964,15 @@ function create_app(package_dir::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    bundle_julia_libraries(app_dir, stdlibs)
-    bundle_julia_libexec(ctx, app_dir)
-    bundle_julia_executable(app_dir)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
-    bundle_project(ctx, app_dir)
-    include_preferences && bundle_preferences(ctx, app_dir)
-    bundle_cert(app_dir)
+    @timeit TO "bundle" begin
+        @timeit TO "julia libraries" bundle_julia_libraries(app_dir, stdlibs)
+        @timeit TO "libexec" bundle_julia_libexec(ctx, app_dir)
+        @timeit TO "executable" bundle_julia_executable(app_dir)
+        @timeit TO "artifacts" bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
+        @timeit TO "project" bundle_project(ctx, app_dir)
+        include_preferences && @timeit TO "preferences" bundle_preferences(ctx, app_dir)
+        @timeit TO "cert" bundle_cert(app_dir)
+    end
 
     # Sysimage always goes in lib/julia/ (this is hardcoded in the Julia binary)
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
@@ -972,7 +990,7 @@ function create_app(package_dir::String,
     push!(precompiles, "precompile(Tuple{typeof(empty!), Vector{String}})")
     push!(precompiles, "precompile(Tuple{typeof(popfirst!), Vector{String}})")
 
-    create_sysimage([package_name]; sysimage_path, project,
+    @timeit TO "create sysimage" create_sysimage([package_name]; sysimage_path, project,
                     incremental,
                     filter_stdlibs,
                     precompile_execution_file,
@@ -981,10 +999,16 @@ function create_app(package_dir::String,
                     sysimage_build_args,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
-                    script)
+                    script,
+                    show_timing=false,
+                    _reset_timer=false)
 
-    for (app_name, julia_main) in executables
+    @timeit TO "link executables" for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+    end
+    if show_timing
+        show(stdout, TO; sortby=:firstexec)
+        println()
     end
 end
 
@@ -1114,6 +1138,8 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `show_timing::Bool`: If `true`, print a timing report to stdout after the library is built. Defaults to `false`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
@@ -1134,9 +1160,11 @@ function create_library(package_or_project::String,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing,
-                        base_sysimage::Union{Nothing, String}=nothing
+                        base_sysimage::Union{Nothing, String}=nothing,
+                        show_timing::Bool=false
                         )
 
+    reset_timer!(TO)
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
         julia_init_h_file = [julia_init_h_file]
@@ -1151,11 +1179,11 @@ function create_library(package_or_project::String,
         version = parse(VersionNumber, version)
     end
 
-    ctx = create_pkg_context(package_or_project)
+    ctx = @timeit TO "pkg context" create_pkg_context(package_or_project)
     if ctx.env.pkg === nothing && lib_name === nothing
         error("expected either package with a `name` and `uuid`, or non-empty `lib_name`")
     end
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    @timeit TO "pkg instantiate" Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     if lib_name === nothing
         lib_name = ctx.env.pkg.name
@@ -1166,13 +1194,15 @@ function create_library(package_or_project::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    bundle_julia_libraries(dest_dir, stdlibs)
-    bundle_julia_libexec(ctx, dest_dir)
-    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
-    bundle_headers(dest_dir, header_files)
-    bundle_project(ctx, dest_dir)
-    include_preferences && bundle_preferences(ctx, dest_dir)
-    bundle_cert(dest_dir)
+    @timeit TO "bundle" begin
+        @timeit TO "julia libraries" bundle_julia_libraries(dest_dir, stdlibs)
+        @timeit TO "libexec" bundle_julia_libexec(ctx, dest_dir)
+        @timeit TO "artifacts" bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
+        @timeit TO "headers" bundle_headers(dest_dir, header_files)
+        @timeit TO "project" bundle_project(ctx, dest_dir)
+        include_preferences && @timeit TO "preferences" bundle_preferences(ctx, dest_dir)
+        @timeit TO "cert" bundle_cert(dest_dir)
+    end
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1181,7 +1211,7 @@ function create_library(package_or_project::String,
     compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
+    @timeit TO "create sysimage" create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
         julia_init_h_file, version, soname, script, base_sysimage)
@@ -1193,6 +1223,10 @@ function create_library(package_or_project::String,
             symlink(sysimg_file, compat_file)
             symlink(sysimg_file, base_file)
         end
+    end
+    if show_timing
+        show(stdout, TO; sortby=:firstexec)
+        println()
     end
 end
 
@@ -1257,7 +1291,7 @@ function create_sysimage_workaround(
         tmp = mktempdir()
         base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
         create_sysimage(String[]; sysimage_path=base_sysimage, project,
-                        incremental=false, filter_stdlibs, cpu_target)
+                        incremental=false, filter_stdlibs, cpu_target, _reset_timer=false)
     end
 
     if ctx.env.pkg === nothing
@@ -1280,7 +1314,8 @@ function create_sysimage_workaround(
                     version,
                     soname,
                     sysimage_build_args,
-                    include_transitive_dependencies)
+                    include_transitive_dependencies,
+                    _reset_timer=false)
 
     return
 end
