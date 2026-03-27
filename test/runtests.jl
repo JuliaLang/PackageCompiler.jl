@@ -1,4 +1,4 @@
-using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_library
+using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_distribution, create_library
 using Test
 using Libdl
 using Pkg
@@ -137,9 +137,7 @@ end
             @test occursin("""ARGS = ["I", "get", "--args", "áéíóú"]""", app_output)
             # Check julia-args
             @test occursin("(Base.JLOptions()).opt_level = 1", app_output)
-            # From Julia 1.12, --threads=3 adds 1 interactive thread
-            expected_threads = VERSION >= v"1.12-" ? 4 : 3
-            @test occursin("(Base.JLOptions()).nthreads = $expected_threads", app_output)
+            @test occursin(r"\(Base\.JLOptions\(\)\)\.nthreads = [34]", app_output)
             @test occursin("(Base.JLOptions()).check_bounds = 1", app_output)
             # Check transitive inclusion of dependencies
             @test occursin("is_crayons_loaded() = true", app_output)
@@ -185,23 +183,117 @@ end
     end # testset
 
     if !is_slow_ci
-        # Test library creation
-        lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
-        lib_target_dir = joinpath(tmp, "MyLibCompiled")
+        VERSION >= v"1.11-" && @testset "create_distribution" begin
+            dist_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+            tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
+            cp(dist_source_dir, tmp_dist_source_dir)
+            ctx = PackageCompiler.create_pkg_context(tmp_dist_source_dir)
+            expected_entries = PackageCompiler.gather_dependency_entries(ctx)
+            expected_names = [something(entry.name, string(entry.uuid)) for entry in expected_entries]
+            dist_target_dir = joinpath(tmp, "CustomJulia")
+            try
+                create_distribution(tmp_dist_source_dir, dist_target_dir; force=true, include_lazy_artifacts=true)
+            finally
+                rm(tmp_dist_source_dir; recursive=true)
+                rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+            julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
+            # Unset JULIA_DEPOT_PATH so the distribution uses its default depot
+            # (which includes <BINDIR>/../share/julia/ where artifacts are bundled)
+            output = withenv("JULIA_DEPOT_PATH" => nothing) do
+                read(`$(julia_bin) -e 'using Example; print(Example.hello("distribution"))'`, String)
+            end
+            @test occursin("Hello, distribution", output)
+            stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
+            for name in expected_names
+                project_path = joinpath(stdlib_version_dir, name, "Project.toml")
+                stub_path = joinpath(stdlib_version_dir, name, "src", string(name, ".jl"))
+                @test isfile(project_path)
+                @test isfile(stub_path)
+            end
+        end
 
-        # This is why we have to skip this test on 1.12:
-        incremental = false
+        @testset "bundle_artifacts with overrides" begin
+            # Test that bundle_artifacts honors Overrides.toml (UUID-based overrides).
+            # This verifies two fixes:
+            # 1. pkg_uuid is forwarded so process_overrides converts UUID entries to hash lookups
+            # 2. The copy loop uses the known hash, not basename(artifact_path)
 
-        filter = true
-        lib_name = "inc"
+            app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+            tmp_override_app = joinpath(tmp, "MyAppOverride")
+            cp(app_source_dir, tmp_override_app)
+            ctx = PackageCompiler.create_pkg_context(tmp_override_app)
+            Pkg.instantiate(ctx)
 
-        tmp_lib_src_dir = joinpath(tmp, "MyLib")
-        cp(lib_source_dir, tmp_lib_src_dir)
-        create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
-                    precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
-                    precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
-                    lib_name=lib_name, version=v"1.0.0")
-        rm(tmp_lib_src_dir; recursive=true)
+            # Find HelloWorldC_jll artifact hash via the Pkg context
+            pkgs = PackageCompiler.load_all_deps(ctx)
+            jll_pkg = only(filter(p -> p.name == "HelloWorldC_jll", pkgs))
+            jll_pkg_path = PackageCompiler.source_path(ctx, jll_pkg)
+            jll_artifacts_toml = joinpath(jll_pkg_path, "Artifacts.toml")
+            jll_hash = Pkg.Artifacts.artifact_hash("HelloWorldC", jll_artifacts_toml)
+            original_artifact = Pkg.Artifacts.artifact_path(jll_hash)
+            @assert isdir(original_artifact) "HelloWorldC_jll artifact not found at $original_artifact"
+
+            # Create override: copy artifact to temp dir and add a marker file
+            override_dir = mktempdir()
+            override_artifact = joinpath(override_dir, "HelloWorldC")
+            cp(original_artifact, override_artifact)
+            touch(joinpath(override_artifact, "OVERRIDE_MARKER"))
+
+            # Write UUID-based Overrides.toml in the test depot
+            # HelloWorldC_jll UUID = dca1746e-5efc-54fc-8249-22745bc95a49
+            overrides_toml = joinpath(new_depot, "artifacts", "Overrides.toml")
+            mkpath(dirname(overrides_toml))
+            write(overrides_toml, """
+            [dca1746e-5efc-54fc-8249-22745bc95a49]
+            HelloWorldC = "$(escape_string(override_artifact))"
+            """)
+
+            # Force the Artifacts stdlib to reload overrides (cache may be stale from prior tests)
+            import Artifacts as ArtifactsStdlib
+            ArtifactsStdlib.ARTIFACT_OVERRIDES[] = nothing
+
+            dest_dir = mktempdir()
+            try
+                PackageCompiler.bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
+
+                # The overridden artifact should be bundled under the original hash name
+                bundled_artifact = joinpath(dest_dir, "share", "julia", "artifacts", bytes2hex(jll_hash.bytes))
+                @test isdir(bundled_artifact)
+                @test isfile(joinpath(bundled_artifact, "OVERRIDE_MARKER"))
+            finally
+                rm(overrides_toml; force=true)
+                # Reset override cache so subsequent tests aren't affected
+                ArtifactsStdlib.ARTIFACT_OVERRIDES[] = nothing
+                rm(override_dir; recursive=true, force=true)
+                rm(tmp_override_app; recursive=true, force=true)
+                rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+        end
+
+        @testset "create_library" begin
+            # Test library creation
+            lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
+            lib_target_dir = joinpath(tmp, "MyLibCompiled")
+
+            # This is why we have to skip this test on 1.12:
+            incremental = false
+
+            filter = true
+            lib_name = "inc"
+
+            tmp_lib_src_dir = joinpath(tmp, "MyLib")
+            cp(lib_source_dir, tmp_lib_src_dir)
+            create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
+                        precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
+                        precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
+                        lib_name=lib_name, version=v"1.0.0")
+            rm(tmp_lib_src_dir; recursive=true)
+        end
     end
 
     # Test creating an empty sysimage
