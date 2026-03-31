@@ -1057,6 +1057,8 @@ function create_distribution(project_dir::String,
     bundle_julia_base_files(dist_dir)
     bundle_julia_compiler_files(dist_dir)
     bundle_julia_support_files(dist_dir)
+    bundle_julia_include(dist_dir)
+    bundle_julia_etc(dist_dir)
 
     # Get stdlibs that will be in the sysimage (as deps of custom packages)
     stdlib_deps_in_sysimage = gather_dependency_entries(ctx; include_stdlibs=true)
@@ -1444,6 +1446,22 @@ function bundle_julia_compiler_files(dest_dir)
             rm(dest_compiler; recursive=true, force=true)
         end
         cp(src_compiler, dest_compiler; force=true)
+    end
+end
+
+function bundle_julia_include(dest_dir)
+    src_include = abspath(Sys.BINDIR, "..", "include")
+    if isdir(src_include)
+        dest_include = joinpath(dest_dir, "include")
+        cp(src_include, dest_include; force=true)
+    end
+end
+
+function bundle_julia_etc(dest_dir)
+    src_etc = abspath(Sys.BINDIR, "..", "etc")
+    if isdir(src_etc)
+        dest_etc = joinpath(dest_dir, "etc")
+        cp(src_etc, dest_etc; force=true)
     end
 end
 
