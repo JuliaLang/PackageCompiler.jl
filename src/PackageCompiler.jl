@@ -684,23 +684,25 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     packages_sysimg = Set{Base.PkgId}()
 
+    # Resolve packages into PkgIds for the sysimage.
+    # If the project is a package, only add the package itself — its deps
+    # will be pulled in either by `using` or by the transitive dependency walk.
+    # If the project is not a package, add the direct project deps.
+    frontier = Set{Base.PkgId}()
+    if ctx.env.pkg !== nothing
+        push!(frontier, Base.PkgId(ctx.env.pkg.uuid, ctx.env.pkg.name))
+    else
+        for pkg in packages
+            uuid = ctx.env.project.deps[pkg]
+            push!(frontier, Base.PkgId(uuid, pkg))
+        end
+    end
+    copy!(packages_sysimg, frontier)
+
     if include_transitive_dependencies
         # We are not sure that packages actually load their dependencies on `using`
         # but we still want them to end up in the sysimage. Therefore, explicitly
         # collect their dependencies, recursively.
-
-        frontier = Set{Base.PkgId}()
-        deps = ctx.env.project.deps
-        for pkg in packages
-            # Add all dependencies of the package
-            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
-                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
-            else
-                uuid = ctx.env.project.deps[pkg]
-                push!(frontier, Base.PkgId(uuid, pkg))
-            end
-        end
-        copy!(packages_sysimg, frontier)
         new_frontier = Set{Base.PkgId}()
         while !(isempty(frontier))
             for pkgid in frontier
@@ -711,7 +713,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                 end
                 pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
                 for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
+                    if !(pkgid_dep in packages_sysimg)
                         push!(packages_sysimg, pkgid_dep)
                         push!(new_frontier, pkgid_dep)
                     end
