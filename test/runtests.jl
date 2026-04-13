@@ -80,6 +80,9 @@ function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
 end
 
 @testset "PackageCompiler.jl" begin
+    expected_sysimage_cpu_target = VERSION >= v"1.13-" ? "sysimage" : "native"
+    @test PackageCompiler.DEFAULT_SYSIMAGE_CPU_TARGET == expected_sysimage_cpu_target
+
     @testset "julia_libdir / julia_private_libdir" begin
         lib_dir = PackageCompiler.julia_libdir()
         private_libdir = PackageCompiler.julia_private_libdir()
