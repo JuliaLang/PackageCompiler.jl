@@ -12,6 +12,8 @@ PackageCompiler is a Julia package with three main purposes:
 
   3. Creating a relocatable C library bundle form of Julia code.
 
+  4. Creating custom Julia distributions that look like the official binaries but ship with extra packages baked into the sysimage.
+
 For installation and usage instructions, see the [documentation][docs-stable-url].
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
