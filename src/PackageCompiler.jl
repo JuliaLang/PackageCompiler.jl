@@ -1036,8 +1036,11 @@ runtime behavior.
 - `include_transitive_dependencies::Bool=true`: If `true`, include transitive dependencies in the sysimage.
 - `include_preferences::Bool=true`: Bundle package preferences into `share/julia/LocalPreferences.toml`.
 - `script::Union{Nothing,String}=nothing`: Optional script executed while generating the sysimage.
-- `copy_globs::Vector{String}=String[]`: Glob patterns for copying package files to the stdlib directory.
+- `copy_globs::Vector=String[]`: Glob patterns for copying package files to the stdlib directory.
   Patterns are relative to each package root and apply to all packages in the distribution.
+  Accepts anything that `Glob.glob` accepts as a pattern: strings, `GlobMatch` objects,
+  `Regex`, or any object implementing `occursin`. Use `Glob.FilenameMatch` (e.g. `fn"license*"i`)
+  for case-insensitive matching.
   Example: `["assets/**", "data/**"]` copies assets and data directories for all packages.
 """
 function create_distribution(project_dir::String,
@@ -1052,7 +1055,7 @@ function create_distribution(project_dir::String,
                              include_transitive_dependencies::Bool=true,
                              include_preferences::Bool=true,
                              script::Union{Nothing, String}=nothing,
-                             copy_globs::Vector{String}=String[],
+                             copy_globs::Vector=String[],
                              release_banner::Union{Nothing, String}=nothing,
                              compress::Bool=false)
     ctx = create_pkg_context(project_dir)
@@ -1613,7 +1616,7 @@ function bundle_default_stdlibs(dest_dir)
 end
 
 function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.PackageEntry},
-                               copy_globs::Vector{String}=String[])
+                               copy_globs::Vector=String[])
     isempty(packages) && return
     version_dir = joinpath(dest_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
     mkpath(version_dir)
@@ -1634,8 +1637,8 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
         # Copy files matching glob patterns if specified
         if !isempty(copy_globs)
             for pattern in copy_globs
-                # For patterns ending with ** or **/*, copy entire directory tree recursively
-                if endswith(pattern, "**") || endswith(pattern, "**/*")
+                # For string patterns ending with ** or **/*, copy entire directory tree recursively
+                if pattern isa AbstractString && (endswith(pattern, "**") || endswith(pattern, "**/*"))
                     base_dir = replace(replace(pattern, "**/*" => ""), "**" => "")
                     base_dir = rstrip(base_dir, ['/', '\\'])
                     source_dir = joinpath(pkg_source_path, base_dir)
@@ -1655,7 +1658,7 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
                         end
                     end
                 else
-                    # Use glob for specific patterns
+                    # Use glob for specific patterns (supports strings, GlobMatch, Regex, etc.)
                     matched_files = glob(pattern, pkg_source_path)
                     for src_file in matched_files
                         if isfile(src_file)
