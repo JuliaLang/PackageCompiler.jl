@@ -211,6 +211,66 @@ end
             end
         end
 
+        @testset "bundle_artifacts with overrides" begin
+            # Test that bundle_artifacts honors Overrides.toml (UUID-based overrides).
+            # This verifies two fixes:
+            # 1. pkg_uuid is forwarded so process_overrides converts UUID entries to hash lookups
+            # 2. The copy loop uses the known hash, not basename(artifact_path)
+
+            app_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+            tmp_override_app = joinpath(tmp, "MyAppOverride")
+            cp(app_source_dir, tmp_override_app)
+            ctx = PackageCompiler.create_pkg_context(tmp_override_app)
+            Pkg.instantiate(ctx)
+
+            # Find HelloWorldC_jll artifact hash via the Pkg context
+            pkgs = PackageCompiler.load_all_deps(ctx)
+            jll_pkg = only(filter(p -> p.name == "HelloWorldC_jll", pkgs))
+            jll_pkg_path = PackageCompiler.source_path(ctx, jll_pkg)
+            jll_artifacts_toml = joinpath(jll_pkg_path, "Artifacts.toml")
+            jll_hash = Pkg.Artifacts.artifact_hash("HelloWorldC", jll_artifacts_toml)
+            original_artifact = Pkg.Artifacts.artifact_path(jll_hash)
+            @assert isdir(original_artifact) "HelloWorldC_jll artifact not found at $original_artifact"
+
+            # Create override: copy artifact to temp dir and add a marker file
+            override_dir = mktempdir()
+            override_artifact = joinpath(override_dir, "HelloWorldC")
+            cp(original_artifact, override_artifact)
+            touch(joinpath(override_artifact, "OVERRIDE_MARKER"))
+
+            # Write UUID-based Overrides.toml in the test depot
+            # HelloWorldC_jll UUID = dca1746e-5efc-54fc-8249-22745bc95a49
+            overrides_toml = joinpath(new_depot, "artifacts", "Overrides.toml")
+            mkpath(dirname(overrides_toml))
+            write(overrides_toml, """
+            [dca1746e-5efc-54fc-8249-22745bc95a49]
+            HelloWorldC = "$(escape_string(override_artifact))"
+            """)
+
+            # Force the Artifacts stdlib to reload overrides (cache may be stale from prior tests)
+            import Artifacts as ArtifactsStdlib
+            ArtifactsStdlib.ARTIFACT_OVERRIDES[] = nothing
+
+            dest_dir = mktempdir()
+            try
+                PackageCompiler.bundle_artifacts(ctx, dest_dir; include_lazy_artifacts=true)
+
+                # The overridden artifact should be bundled under the original hash name
+                bundled_artifact = joinpath(dest_dir, "share", "julia", "artifacts", bytes2hex(jll_hash.bytes))
+                @test isdir(bundled_artifact)
+                @test isfile(joinpath(bundled_artifact, "OVERRIDE_MARKER"))
+            finally
+                rm(overrides_toml; force=true)
+                # Reset override cache so subsequent tests aren't affected
+                ArtifactsStdlib.ARTIFACT_OVERRIDES[] = nothing
+                rm(override_dir; recursive=true, force=true)
+                rm(tmp_override_app; recursive=true, force=true)
+                rm(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+        end
+
         @testset "create_library" begin
             # Test library creation
             lib_source_dir = joinpath(@__DIR__, "..", "examples/MyLib")
