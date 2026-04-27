@@ -35,6 +35,21 @@ if is_slow_ci
     @warn "This is \"slow CI\" (defined as any non-macOS CI running on aarch64). Some tests will be skipped or modified." Sys.ARCH
 end
 
+# Sometimes directories seem to fail to clean up on CI (for undiagnosed
+# reasons), so retry them.
+function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
+                       attempts::Int=5, delay::Real=0.5)
+    for i in 1:attempts
+        try
+            rm(path; recursive=recursive, force=force)
+            return
+        catch e
+            (e isa Base.IOError && i < attempts) || rethrow()
+            sleep(delay)
+        end
+    end
+end
+
 @testset "PackageCompiler.jl" begin
     @testset "create_sysimage" begin
     new_project = mktempdir()
@@ -104,11 +119,11 @@ end
                                     "Undefined" => "undefined",
                                     ])
             finally
-            rm(tmp_app_source_dir; recursive=true)
+            rm_with_retry(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
-            rm(joinpath(new_depot, "packages"); recursive=true, force=true)
-            rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
-            rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
             test_load_path = mktempdir()
             test_depot_path = mktempdir()
@@ -201,7 +216,7 @@ end
                     precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
                     precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
                     lib_name=lib_name, version=v"1.0.0")
-        rm(tmp_lib_src_dir; recursive=true)
+        rm_with_retry(tmp_lib_src_dir; recursive=true)
     end
 
     # Test creating an empty sysimage
