@@ -5,8 +5,6 @@ using Pkg
 
 import TOML
 
-ENV["JULIA_DEBUG"] = "PackageCompiler"
-
 # Make a new depot
 const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
