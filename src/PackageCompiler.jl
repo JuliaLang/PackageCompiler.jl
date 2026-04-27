@@ -806,7 +806,7 @@ function get_extra_linker_flags(version, compat_level, soname)
     soname_arg = soname === nothing ? `` : `-Wl,-soname,$soname`
     rpath_args = rpath_sysimage()
 
-    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` :
+    extra = Sys.iswindows() ? (VERSION >= v"1.11" ? `-Wl,--export-all-symbols` : ``) :
             Sys.isapple() ? `-fPIC $compat_ver_arg $current_ver_arg $rpath_args` :
             Sys.isunix() ? `-fPIC $soname_arg $rpath_args` :
                 error("unknown machine type, not windows, macOS not UNIX")

@@ -40,7 +40,18 @@ function ldflags()
     fl = "-L$(shell_escape(julia_libdir())) -L$(shell_escape(julia_private_libdir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
-        fl = fl * " -Wl,--export-all-symbols"
+        if VERSION >= v"1.11"
+            # This should not really be necessary if users are using DLLEXPORT as required
+            # on Windows in any compiled / init `.c` files, but we keep these flag for
+            # backwards-compatibility on v1.11+ where it is mostly harmless now that LLVM
+            # 16+ emits `-exclude-symbols` directives
+            #
+            # On Julia 1.10, users must annotate their code with DLLEXPORT for it to link,
+            # since this flag would cause Julia to easily hit COFF symbol limits.
+            #
+            # (see https://github.com/JuliaLang/julia/pull/59736)
+            fl = fl * " -Wl,--export-all-symbols"
+        end
     elseif Sys.islinux()
         fl = fl * " -Wl,--export-dynamic"
     end
