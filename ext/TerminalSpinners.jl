@@ -128,10 +128,15 @@ function start!(s::Spinner)
     return s
 end
 
-function stop!(s::Spinner)
+function close_timer!(s::Spinner)
     if s.timer !== nothing
         close(s.timer)
+        s.timer = nothing
     end
+end
+
+function stop!(s::Spinner)
+    close_timer!(s)
     if !s.enabled || s.silent
         return
     end
@@ -140,12 +145,16 @@ function stop!(s::Spinner)
 end
 
 function success!(s)
+    # Stop the timer before the final render so a pending tick can't
+    # overwrite the ✔ line with a spinner frame.
+    close_timer!(s)
     if s.enabled && !s.silent
         render(s, "✔", :light_green)
     end
     stop!(s)
 end
 function fail!(s)
+    close_timer!(s)
     if s.enabled && !s.silent
         render(s, "✖", :light_red)
     end
