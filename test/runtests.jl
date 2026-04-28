@@ -36,7 +36,12 @@ end
 # Sometimes directories seem to fail to clean up on CI (for undiagnosed
 # reasons), so retry them.
 function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
-                       attempts::Int=5, delay::Real=0.5)
+                       attempts::Int=20, max_delay::Real=5.0)
+    if isdir(path)
+        Base.Filesystem.prepare_for_deletion(path)
+    end
+    # exponentially increase delay for the first ~half of attempts
+    delay = Float64(max_delay) / 2.0^(attempts ÷ 2)
     for i in 1:attempts
         try
             rm(path; recursive=recursive, force=force)
@@ -44,6 +49,7 @@ function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
         catch e
             (e isa Base.IOError && i < attempts) || rethrow()
             sleep(delay)
+            delay = min(delay * 2, max_delay)
         end
     end
 end
