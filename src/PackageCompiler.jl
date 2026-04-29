@@ -23,7 +23,11 @@ include("library_selection.jl")
 # Arch utils #
 ##############
 
-const NATIVE_CPU_TARGET = "native"
+const DEFAULT_SYSIMAGE_CPU_TARGET = @static if VERSION >= v"1.13-"
+    Sys.sysimage_target()
+else
+    "native"
+end
 const TLS_SYNTAX = `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
@@ -601,7 +605,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image. Defaults
-  to `native`.
+  to `Sys.sysimage_target()` on Julia 1.13+ and `native` on older versions.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -615,7 +619,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
                          filter_stdlibs::Bool=false,
-                         cpu_target::String=NATIVE_CPU_TARGET,
+                         cpu_target::String=DEFAULT_SYSIMAGE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
                          include_transitive_dependencies::Bool=true,
