@@ -32,13 +32,13 @@ const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
 default_julia_init() = String(DEFAULT_JULIA_INIT)
 default_julia_init_header() = String(DEFAULT_JULIA_INIT_HEADER)
 
-# See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
+# See https://github.com/JuliaCI/julia-buildbot/blob/16890ab559a27c15d133d36f5f9ac294dee7b811/master/inventory.py
 function default_app_cpu_target()
-    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                        :
-    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"  :
-    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                          :
-    Sys.ARCH === :aarch64     ?  "generic"   #= is this really the best here? =#                   :
-    Sys.ARCH === :powerpc64le ?  "pwr8"                                                            :
+    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                                          :
+    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"                    :
+    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                                            :
+    Sys.ARCH === :aarch64     ?  "generic;cortex-a57;thunderx2t99;armv8.2-a,crypto,fullfp16,lse,rdm"                 :
+    Sys.ARCH === :powerpc64le ?  "pwr8"                                                                              :
         "generic"
 end
 
@@ -412,7 +412,8 @@ function create_sysimg_object_file(object_file::String,
                             extra_precompiles::String,
                             release_banner::Union{Nothing, String},
                             incremental::Bool,
-                            import_into_main::Bool)
+                            import_into_main::Bool,
+                            compress::Bool=false)
     julia_code_buffer = IOBuffer()
     # include all packages into the sysimg
     print(julia_code_buffer, """
@@ -555,9 +556,10 @@ function create_sysimg_object_file(object_file::String,
     # or provided via JULIA_NUM_THREADS.
     # This is needed until the underlying bug is fixed (see https://github.com/JuliaLang/PackageCompiler.jl/issues/963 and especially
     # https://github.com/JuliaLang/PackageCompiler.jl/issues/990 containing a `git bisect` to the commit introducing the problem)
+    compress_flag = compress ? `--compress-sysimage=yes` : ``
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
         --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
-        --threads=1 $outputo_file`
+        --threads=1 $compress_flag $outputo_file`
     @debug "running $cmd"
 
     non = incremental ? "" : "non"
@@ -616,6 +618,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `compress::Bool`: If `true`, compress the system image heap, reducing the size of the resulting sysimage at the expense of
+  increased load time. Requires Julia 1.13+. Defaults to `false`.
 """
 function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -628,6 +633,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
                          include_transitive_dependencies::Bool=true,
+                         compress::Bool=false,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
@@ -684,23 +690,25 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     packages_sysimg = Set{Base.PkgId}()
 
+    # Resolve packages into PkgIds for the sysimage.
+    # If the project is a package, only add the package itself — its deps
+    # will be pulled in either by `using` or by the transitive dependency walk.
+    # If the project is not a package, add the direct project deps.
+    frontier = Set{Base.PkgId}()
+    if ctx.env.pkg !== nothing
+        push!(frontier, Base.PkgId(ctx.env.pkg.uuid, ctx.env.pkg.name))
+    else
+        for pkg in packages
+            uuid = ctx.env.project.deps[pkg]
+            push!(frontier, Base.PkgId(uuid, pkg))
+        end
+    end
+    copy!(packages_sysimg, frontier)
+
     if include_transitive_dependencies
         # We are not sure that packages actually load their dependencies on `using`
         # but we still want them to end up in the sysimage. Therefore, explicitly
         # collect their dependencies, recursively.
-
-        frontier = Set{Base.PkgId}()
-        deps = ctx.env.project.deps
-        for pkg in packages
-            # Add all dependencies of the package
-            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
-                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
-            else
-                uuid = ctx.env.project.deps[pkg]
-                push!(frontier, Base.PkgId(uuid, pkg))
-            end
-        end
-        copy!(packages_sysimg, frontier)
         new_frontier = Set{Base.PkgId}()
         while !(isempty(frontier))
             for pkgid in frontier
@@ -711,7 +719,7 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                 end
                 pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
                 for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
+                    if !(pkgid_dep in packages_sysimg)
                         push!(packages_sysimg, pkgid_dep)
                         push!(new_frontier, pkgid_dep)
                     end
@@ -745,7 +753,8 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
                             extra_precompiles,
                             release_banner,
                             incremental,
-                            import_into_main)
+                            import_into_main,
+                            compress)
     object_files = [object_file]
     if julia_init_c_file !== nothing
         if julia_init_c_file isa String
@@ -924,6 +933,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   for example `-O1 --check-bounds=yes`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
+
+- `compress::Bool`: If `true`, compress the system image heap using zstd. This can
+  significantly reduce the size of the resulting app at the expense of slightly
+  increased load time. Requires Julia 1.13+. Defaults to `false`.
 """
 function create_app(package_dir::String,
                     app_dir::String;
@@ -939,7 +952,8 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    compress::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -992,7 +1006,8 @@ function create_app(package_dir::String,
                     sysimage_build_args,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
-                    script)
+                    script,
+                    compress)
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
@@ -1021,8 +1036,11 @@ runtime behavior.
 - `include_transitive_dependencies::Bool=true`: If `true`, include transitive dependencies in the sysimage.
 - `include_preferences::Bool=true`: Bundle package preferences into `share/julia/LocalPreferences.toml`.
 - `script::Union{Nothing,String}=nothing`: Optional script executed while generating the sysimage.
-- `copy_globs::Vector{String}=String[]`: Glob patterns for copying package files to the stdlib directory.
+- `copy_globs::Vector=String[]`: Glob patterns for copying package files to the stdlib directory.
   Patterns are relative to each package root and apply to all packages in the distribution.
+  Accepts anything that `Glob.glob` accepts as a pattern: strings, `GlobMatch` objects,
+  `Regex`, or any object implementing `occursin`. Use `Glob.FilenameMatch` (e.g. `fn"license*"i`)
+  for case-insensitive matching.
   Example: `["assets/**", "data/**"]` copies assets and data directories for all packages.
 """
 function create_distribution(project_dir::String,
@@ -1037,8 +1055,9 @@ function create_distribution(project_dir::String,
                              include_transitive_dependencies::Bool=true,
                              include_preferences::Bool=true,
                              script::Union{Nothing, String}=nothing,
-                             copy_globs::Vector{String}=String[],
-                             release_banner::Union{Nothing, String}=nothing)
+                             copy_globs::Vector=String[],
+                             release_banner::Union{Nothing, String}=nothing,
+                             compress::Bool=false)
     ctx = create_pkg_context(project_dir)
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
@@ -1057,6 +1076,8 @@ function create_distribution(project_dir::String,
     bundle_julia_base_files(dist_dir)
     bundle_julia_compiler_files(dist_dir)
     bundle_julia_support_files(dist_dir)
+    bundle_julia_include(dist_dir)
+    bundle_julia_etc(dist_dir)
 
     # Get stdlibs that will be in the sysimage (as deps of custom packages)
     stdlib_deps_in_sysimage = gather_dependency_entries(ctx; include_stdlibs=true)
@@ -1081,7 +1102,8 @@ function create_distribution(project_dir::String,
                     include_transitive_dependencies,
                     script,
                     release_banner,
-                    import_into_main=false)
+                    import_into_main=false,
+                    compress)
 
     precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
 
@@ -1214,6 +1236,9 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `compress::Bool`: If `true`, compress the system image heap, reducing the size of the resulting sysimage at the expense of
+  increased load time. Requires Julia 1.13+. Defaults to `false`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
@@ -1234,7 +1259,8 @@ function create_library(package_or_project::String,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing,
-                        base_sysimage::Union{Nothing, String}=nothing
+                        base_sysimage::Union{Nothing, String}=nothing,
+                        compress::Bool=false
                         )
 
     # Add init header files to list of bundled header files if not already present
@@ -1285,7 +1311,7 @@ function create_library(package_or_project::String,
     create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
         precompile_statements_file, incremental, filter_stdlibs, cpu_target;
         sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
-        julia_init_h_file, version, soname, script, base_sysimage)
+        julia_init_h_file, version, soname, script, base_sysimage, compress)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1350,7 +1376,8 @@ function create_sysimage_workaround(
                     version::Union{Nothing,VersionNumber},
                     soname::Union{Nothing,String},
                     script::Union{Nothing,String},
-                    base_sysimage::Union{Nothing, String} = nothing
+                    base_sysimage::Union{Nothing, String} = nothing,
+                    compress::Bool=false
                     )
     project = dirname(ctx.env.project_file)
 
@@ -1381,7 +1408,8 @@ function create_sysimage_workaround(
                     version,
                     soname,
                     sysimage_build_args,
-                    include_transitive_dependencies)
+                    include_transitive_dependencies,
+                    compress)
 
     return
 end
@@ -1444,6 +1472,22 @@ function bundle_julia_compiler_files(dest_dir)
             rm(dest_compiler; recursive=true, force=true)
         end
         cp(src_compiler, dest_compiler; force=true)
+    end
+end
+
+function bundle_julia_include(dest_dir)
+    src_include = abspath(Sys.BINDIR, "..", "include")
+    if isdir(src_include)
+        dest_include = joinpath(dest_dir, "include")
+        cp(src_include, dest_include; force=true)
+    end
+end
+
+function bundle_julia_etc(dest_dir)
+    src_etc = abspath(Sys.BINDIR, "..", "etc")
+    if isdir(src_etc)
+        dest_etc = joinpath(dest_dir, "etc")
+        cp(src_etc, dest_etc; force=true)
     end
 end
 
@@ -1572,7 +1616,7 @@ function bundle_default_stdlibs(dest_dir)
 end
 
 function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.PackageEntry},
-                               copy_globs::Vector{String}=String[])
+                               copy_globs::Vector=String[])
     isempty(packages) && return
     version_dir = joinpath(dest_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
     mkpath(version_dir)
@@ -1593,8 +1637,8 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
         # Copy files matching glob patterns if specified
         if !isempty(copy_globs)
             for pattern in copy_globs
-                # For patterns ending with ** or **/*, copy entire directory tree recursively
-                if endswith(pattern, "**") || endswith(pattern, "**/*")
+                # For string patterns ending with ** or **/*, copy entire directory tree recursively
+                if pattern isa AbstractString && (endswith(pattern, "**") || endswith(pattern, "**/*"))
                     base_dir = replace(replace(pattern, "**/*" => ""), "**" => "")
                     base_dir = rstrip(base_dir, ['/', '\\'])
                     source_dir = joinpath(pkg_source_path, base_dir)
@@ -1614,7 +1658,7 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
                         end
                     end
                 else
-                    # Use glob for specific patterns
+                    # Use glob for specific patterns (supports strings, GlobMatch, Regex, etc.)
                     matched_files = glob(pattern, pkg_source_path)
                     for src_file in matched_files
                         if isfile(src_file)
