@@ -70,7 +70,7 @@ libjulia.dylib
 ...
 ```
 
-(These will have a `.so` extension on Linux, and a `.dll` extension on Windows. There may also
+(These will have a `.so` extension on Linux and BSDs, and a `.dll` extension on Windows. There may also
 be other files in the same directory, depending on your operating system and version of Julia.)
 
 In addition to most of the same keyword arguments as 
