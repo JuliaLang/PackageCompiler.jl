@@ -52,7 +52,7 @@ function ldflags()
             # (see https://github.com/JuliaLang/julia/pull/59736)
             fl = fl * " -Wl,--export-all-symbols"
         end
-    elseif Sys.islinux()
+    elseif !Sys.isapple()
         fl = fl * " -Wl,--export-dynamic"
     end
     return fl
@@ -61,7 +61,7 @@ end
 function ldlibs()
     libnames = isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : 
                                 "-ljulia       -ljulia-internal"
-    if Sys.islinux()
+    if Sys.isunix() && !Sys.isapple()
         return "-Wl,-rpath-link,$(shell_escape(julia_libdir())) -Wl,-rpath-link,$(shell_escape(julia_private_libdir())) $libnames"
     elseif Sys.iswindows()
         return "$libnames -lopenlibm"

@@ -136,11 +136,11 @@ end
 function glob_pattern_lib(lib)
     Sys.iswindows() ? lib * ".dll" :
     Sys.isapple() ? lib * "*.dylib" :
-    Sys.islinux() ? lib* "*.so*" :
+    Sys.isunix() ? lib * "*.so*" :
     error("unknown os")
 end
 
-remaining_libs = Set(strip_prefix_suffix.(copy(all_libraries), Sys.isunix() ? "linux" : Sys.isapple() ? "mac" : "windows"))
+remaining_libs = Set(strip_prefix_suffix.(copy(all_libraries), Sys.isapple() ? "mac" : Sys.isunix() ? "linux" : "windows"))
 for (stdlib, data) in d3
     for (os, libs) in data
         for lib in libs
