@@ -108,7 +108,7 @@ function start!(s::Spinner)
     s.start = time()
 
     if !s.enabled
-        println(s.stream, "- ", s.msg)
+        println(s.stream, "- ", tostring(s.msg))
         return
     end
 

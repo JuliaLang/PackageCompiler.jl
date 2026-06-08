@@ -1413,7 +1413,13 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     # Always create lib/julia/ for the sysimage (even for local builds where libraries go to lib/)
     Sys.isunix() && mkpath(joinpath(app_lib_dir, "julia"))
 
-    # Record bundled destination paths for reporting later
+    # Returns bundled destination paths for reporting later
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: bundling libraries")
+    return TerminalSpinners.@spin spinner _copy_julia_libraries(
+        stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_libjulia_dir)
+end
+
+function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_libjulia_dir)
     base_dests = String[]
     stdlib_dests = Pair{String, Vector{String}}[]
 
@@ -1629,16 +1635,29 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     end
 
     sort!(bundled_artifacts)
+    isempty(bundled_artifacts) && return BundledArtifacts(BundledArtifactGroup[])
 
-    # Copy artifacts, collecting a summary (with destination paths) so the size
-    # table can be rendered later against the final on-disk bundle.
+    n_artifacts = sum(length(a) for (_, a) in bundled_artifacts; init=0)
+    progress = Ref(0)
+    current_pkg = Ref("")
+    spinner = TerminalSpinners.Spinner(msg = () ->
+        "PackageCompiler: bundling artifacts ($(progress[])/$(n_artifacts)): $(current_pkg[])")
+    # Returns summary / destination paths for reporting later
+    return TerminalSpinners.@spin spinner _copy_artifacts(
+        bundled_artifacts, artifact_app_path, progress, current_pkg)
+end
+
+function _copy_artifacts(bundled_artifacts, artifact_app_path,
+                         progress::Ref{Int}, current_pkg::Ref{String})
     groups = BundledArtifactGroup[]
     bundled_shas = Set{String}()
     for (pkg, artifacts) in bundled_artifacts
+        current_pkg[] = pkg
         # jlls often only have a single artifact with the same name as the package itself
         std_jll = endswith(pkg, "_jll") && length(artifacts) == 1
         entries = BundledArtifact[]
         for (artifact, artifact_path) in artifacts
+            progress[] += 1
             git_tree_sha_artifact = basename(artifact_path)
             already_bundled = git_tree_sha_artifact in bundled_shas
             dest = joinpath(artifact_app_path, git_tree_sha_artifact)
