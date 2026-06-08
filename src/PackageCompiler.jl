@@ -928,7 +928,8 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    quiet::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -948,14 +949,14 @@ function create_app(package_dir::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    library_info = bundle_julia_libraries(app_dir, stdlibs)
-    artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
+    library_info = bundle_julia_libraries(app_dir, stdlibs; quiet)
+    artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts, quiet)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
-    print_bundle_info(library_info, artifact_info)
+    quiet || print_bundle_info(library_info, artifact_info)
 
     # Sysimage always goes in lib/julia/ (this is hardcoded in the Julia binary)
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
@@ -1135,7 +1136,8 @@ function create_library(package_or_project::String,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing,
-                        base_sysimage::Union{Nothing, String}=nothing
+                        base_sysimage::Union{Nothing, String}=nothing,
+                        quiet::Bool=false
                         )
 
     # Add init header files to list of bundled header files if not already present
@@ -1167,14 +1169,14 @@ function create_library(package_or_project::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    library_info = bundle_julia_libraries(dest_dir, stdlibs)
-    artifact_info = bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
+    library_info = bundle_julia_libraries(dest_dir, stdlibs; quiet)
+    artifact_info = bundle_artifacts(ctx, dest_dir; include_lazy_artifacts, quiet)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
     include_preferences && bundle_preferences(ctx, dest_dir)
     bundle_cert(dest_dir)
-    print_bundle_info(library_info, artifact_info)
+    quiet || print_bundle_info(library_info, artifact_info)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1395,7 +1397,7 @@ struct BundledArtifacts
     groups::Vector{BundledArtifactGroup}
 end
 
-function bundle_julia_libraries(dest_dir, stdlibs)
+function bundle_julia_libraries(dest_dir, stdlibs; quiet::Bool=false)
     app_lib_dir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
     lib_dir = julia_libdir()
@@ -1414,7 +1416,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     Sys.isunix() && mkpath(joinpath(app_lib_dir, "julia"))
 
     # Returns bundled destination paths for reporting later
-    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: bundling libraries")
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: bundling libraries", silent = quiet, clear_on_finish = true)
     return TerminalSpinners.@spin spinner _copy_julia_libraries(
         stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_libjulia_dir)
 end
@@ -1450,6 +1452,7 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
             isfile(dest) && continue
             cp(match, dest; force=true)
             push!(base_dests, dest)
+            yield() # give the spinner a chance to render
         end
     end
 
@@ -1481,6 +1484,7 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
         isfile(dest) && continue
         cp(match, dest)
         push!(base_dests, dest)
+        yield() # give the spinner a chance to render
     end
 
     for stdlib in stdlibs
@@ -1494,6 +1498,7 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
                 isfile(destpath) && continue
                 cp(match, destpath)
                 push!(dests, destpath)
+                yield() # give the spinner a chance to render
             end
         end
         isempty(dests) || push!(stdlib_dests, stdlib => dests)
@@ -1583,7 +1588,7 @@ function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.Abs
     return artifacts_tomls
 end
 
-function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool, quiet::Bool=false)
     pkgs = load_all_deps(ctx)
 
     # TODO: Allow override platform?
@@ -1641,7 +1646,8 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     progress = Ref(0)
     current_pkg = Ref("")
     spinner = TerminalSpinners.Spinner(msg = () ->
-        "PackageCompiler: bundling artifacts ($(progress[])/$(n_artifacts)): $(current_pkg[])")
+        "PackageCompiler: bundling artifacts ($(progress[])/$(n_artifacts)): $(current_pkg[])",
+        silent = quiet, clear_on_finish = true)
     # Returns summary / destination paths for reporting later
     return TerminalSpinners.@spin spinner _copy_artifacts(
         bundled_artifacts, artifact_app_path, progress, current_pkg)
@@ -1666,6 +1672,7 @@ function _copy_artifacts(bundled_artifacts, artifact_app_path,
                 cp(artifact_path, dest)
                 push!(bundled_shas, git_tree_sha_artifact)
             end
+            yield() # give the progress spinner a chance to render
         end
         push!(groups, BundledArtifactGroup(pkg, std_jll, entries))
     end
