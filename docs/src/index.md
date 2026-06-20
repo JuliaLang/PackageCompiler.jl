@@ -78,7 +78,7 @@ If you include many packages in your image, a large amount of RAM is needed. For
 for multithreaded compilation often 32 GB are required. But this is RAM + swap file size, so if you have only 8 GB RAM using
 a 8 GB swap file will make it work.
 
-If you are low of RAM, ensure to use only one thread for building the package. This can be achieved with the command:
+If you are low on RAM, use only one thread to build the package. This can be achieved with the command:
 ```
 export JULIA_IMAGE_THREADS=1
 ```
