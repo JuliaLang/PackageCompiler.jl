@@ -53,6 +53,7 @@ Base.@kwdef mutable struct Spinner{IO_t <: IO}
     color::Symbol = Base.info_color()
     nlines::Int=0
     first::Bool=false
+    clear_on_finish::Bool=false # on success, erase the spinner output instead of leaving a final line
 end
 
 getframe(s::Spinner) = s.frames[s.frame_idx]
@@ -108,7 +109,7 @@ function start!(s::Spinner)
     s.start = time()
 
     if !s.enabled
-        println(s.stream, "- ", s.msg)
+        println(s.stream, "- ", tostring(s.msg))
         return
     end
 
@@ -128,10 +129,15 @@ function start!(s::Spinner)
     return s
 end
 
-function stop!(s::Spinner)
+function close_timer!(s::Spinner)
     if s.timer !== nothing
         close(s.timer)
+        s.timer = nothing
     end
+end
+
+function stop!(s::Spinner)
+    close_timer!(s)
     if !s.enabled || s.silent
         return
     end
@@ -139,13 +145,24 @@ function stop!(s::Spinner)
     println(s.stream)
 end
 
+# Erase the spinner's current output, returning the cursor to where it began.
+function clear!(s::Spinner)
+    s.first || erase_and_reset(s.stream, s.nlines)
+    s.hidecursor && show_cursor!(s.stream)
+end
+
 function success!(s)
+    # Stop the timer before the final render so a pending tick can't
+    # overwrite the ✔ line with a spinner frame.
+    close_timer!(s)
     if s.enabled && !s.silent
+        s.clear_on_finish && return clear!(s)
         render(s, "✔", :light_green)
     end
     stop!(s)
 end
 function fail!(s)
+    close_timer!(s)
     if s.enabled && !s.silent
         render(s, "✖", :light_red)
     end

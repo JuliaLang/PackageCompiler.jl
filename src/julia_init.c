@@ -8,17 +8,24 @@ JL_DLLEXPORT char *dirname(char *);
 #include <libgen.h>
 #endif
 
+#ifdef _OS_WINDOWS_
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT
+#endif
+
+
 // Julia headers (for initialization and gc commands)
 #include "julia.h"
 #include "julia_init.h"
 #include "uv.h"
 
-void setup_args(int argc, char **argv) {
+static void setup_args(int argc, char **argv) {
     uv_setup_args(argc, argv);
     jl_parse_opts(&argc, &argv);
 }
 
-const char *get_sysimage_path(const char *libname) {
+static const char *get_sysimage_path(const char *libname) {
     if (libname == NULL) {
         jl_error("julia: Specify `libname` when requesting the sysimage path");
         exit(1);
@@ -40,7 +47,7 @@ const char *get_sysimage_path(const char *libname) {
     return libpath;
 }
 
-void set_depot_load_path(const char *root_dir) {
+static void set_depot_load_path(const char *root_dir) {
 #ifdef _WIN32
     char *path_sep = ";";
     char *julia_share_subdir = "\\share\\julia";
@@ -83,7 +90,7 @@ void set_depot_load_path(const char *root_dir) {
     free(new_depot_path);
 }
 
-void init_julia(int argc, char **argv) {
+DLLEXPORT void init_julia(int argc, char **argv) {
     setup_args(argc, argv);
 
     const char *sysimage_path = get_sysimage_path(JULIAC_PROGRAM_LIBNAME);
@@ -114,4 +121,4 @@ void init_julia(int argc, char **argv) {
     free(_sysimage_path);
 }
 
-void shutdown_julia(int retcode) { jl_atexit_hook(retcode); }
+DLLEXPORT void shutdown_julia(int retcode) { jl_atexit_hook(retcode); }

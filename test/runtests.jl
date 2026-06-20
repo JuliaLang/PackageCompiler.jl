@@ -5,8 +5,6 @@ using Pkg
 
 import TOML
 
-ENV["JULIA_DEBUG"] = "PackageCompiler"
-
 # Make a new depot
 const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
@@ -33,6 +31,27 @@ end
 
 if is_slow_ci
     @warn "This is \"slow CI\" (defined as any non-macOS CI running on aarch64). Some tests will be skipped or modified." Sys.ARCH
+end
+
+# Sometimes directories seem to fail to clean up on CI (for undiagnosed
+# reasons), so retry them.
+function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
+                       attempts::Int=20, max_delay::Real=5.0)
+    if isdir(path)
+        Base.Filesystem.prepare_for_deletion(path)
+    end
+    # exponentially increase delay for the first ~half of attempts
+    delay = Float64(max_delay) / 2.0^(attempts ÷ 2)
+    for i in 1:attempts
+        try
+            rm(path; recursive=recursive, force=force)
+            return
+        catch e
+            (e isa Base.IOError && i < attempts) || rethrow()
+            sleep(delay)
+            delay = min(delay * 2, max_delay)
+        end
+    end
 end
 
 @testset "PackageCompiler.jl" begin
@@ -104,11 +123,11 @@ end
                                     "Undefined" => "undefined",
                                     ])
             finally
-            rm(tmp_app_source_dir; recursive=true)
+            rm_with_retry(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
-            rm(joinpath(new_depot, "packages"); recursive=true, force=true)
-            rm(joinpath(new_depot, "compiled"); recursive=true, force=true)
-            rm(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
+            rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
             test_load_path = mktempdir()
             test_depot_path = mktempdir()
@@ -201,7 +220,7 @@ end
                     precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
                     precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
                     lib_name=lib_name, version=v"1.0.0")
-        rm(tmp_lib_src_dir; recursive=true)
+        rm_with_retry(tmp_lib_src_dir; recursive=true)
     end
 
     # Test creating an empty sysimage
@@ -216,5 +235,14 @@ end
         create_sysimage(String[]; sysimage_path=sysimage_path, incremental=incremental, filter_stdlibs=true, project=tmp)
         hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
         @test hello == "hello, world"
+    end
+
+    @testset "Workspace bundling" begin
+        ctx = PackageCompiler.create_pkg_context(joinpath(@__DIR__, "subproject"))
+        pkgs = PackageCompiler.load_all_deps(ctx)
+        # on >=1.12; don't load the full workspace
+        # on <1.12; it doesn't know it is in a workspace
+        @test length(pkgs) == 1
+        @test only(pkgs).name == "Example"
     end
 end

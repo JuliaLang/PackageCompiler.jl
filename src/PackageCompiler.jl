@@ -79,11 +79,11 @@ end
 
 function load_all_deps(ctx)
     env = ctx.env
-    if isdefined(Pkg.Operations, :load_all_deps!)
-        pkgs = Pkg.Types.PackageSpec[]
-        Pkg.Operations.load_all_deps!(env, pkgs)
+    pkgs = if isdefined(Pkg.Operations, :load_all_deps_loadable)
+        # 1.12+, avoids loading full workspace
+        Pkg.Operations.load_all_deps_loadable(env)
     else
-        pkgs = Pkg.Operations.load_all_deps(env)
+        Pkg.Operations.load_all_deps(env)
     end
     return pkgs
 end
@@ -806,7 +806,7 @@ function get_extra_linker_flags(version, compat_level, soname)
     soname_arg = soname === nothing ? `` : `-Wl,-soname,$soname`
     rpath_args = rpath_sysimage()
 
-    extra = Sys.iswindows() ? `-Wl,--export-all-symbols` :
+    extra = Sys.iswindows() ? (VERSION >= v"1.11" ? `-Wl,--export-all-symbols` : ``) :
             Sys.isapple() ? `-fPIC $compat_ver_arg $current_ver_arg $rpath_args` :
             Sys.isunix() ? `-fPIC $soname_arg $rpath_args` :
                 error("unknown machine type, not windows, macOS not UNIX")
@@ -928,7 +928,8 @@ function create_app(package_dir::String,
                     sysimage_build_args::Cmd=``,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
-                    script::Union{Nothing, String}=nothing)
+                    script::Union{Nothing, String}=nothing,
+                    quiet::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -948,13 +949,14 @@ function create_app(package_dir::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    bundle_julia_libraries(app_dir, stdlibs)
+    library_info = bundle_julia_libraries(app_dir, stdlibs; quiet)
+    artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts, quiet)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
-    bundle_artifacts(ctx, app_dir; include_lazy_artifacts)
     bundle_project(ctx, app_dir)
     include_preferences && bundle_preferences(ctx, app_dir)
     bundle_cert(app_dir)
+    quiet || print_bundle_info(library_info, artifact_info)
 
     # Sysimage always goes in lib/julia/ (this is hardcoded in the Julia binary)
     sysimage_path = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
@@ -1134,7 +1136,8 @@ function create_library(package_or_project::String,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing,
-                        base_sysimage::Union{Nothing, String}=nothing
+                        base_sysimage::Union{Nothing, String}=nothing,
+                        quiet::Bool=false
                         )
 
     # Add init header files to list of bundled header files if not already present
@@ -1166,13 +1169,14 @@ function create_library(package_or_project::String,
     if !filter_stdlibs
         stdlibs = unique(vcat(stdlibs, map(pkg -> pkg.name, stdlibs_in_default_sysimage())))
     end
-    bundle_julia_libraries(dest_dir, stdlibs)
+    library_info = bundle_julia_libraries(dest_dir, stdlibs; quiet)
+    artifact_info = bundle_artifacts(ctx, dest_dir; include_lazy_artifacts, quiet)
     bundle_julia_libexec(ctx, dest_dir)
-    bundle_artifacts(ctx, dest_dir; include_lazy_artifacts)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
     include_preferences && bundle_preferences(ctx, dest_dir)
     bundle_cert(dest_dir)
+    quiet || print_bundle_info(library_info, artifact_info)
 
     lib_dir = Sys.iswindows() ? joinpath(dest_dir, "bin") : joinpath(dest_dir, "lib")
 
@@ -1318,7 +1322,7 @@ end
 function glob_pattern_lib(lib)
     Sys.iswindows() ? lib * "*.dll" :
     Sys.isapple() ? lib * "*.dylib" :
-    Sys.islinux() ? lib * "*.so*" :
+    Sys.isunix() ? lib * "*.so*" :
     error("unknown os")
 end
 
@@ -1370,8 +1374,30 @@ function get_libstdcxx_aliases(path)
     return unique(aliases)
 end
 
-# TODO: Detangle printing from business logic
-function bundle_julia_libraries(dest_dir, stdlibs)
+# Summary structs, for reporting libraries / artifacts after bundling
+
+struct BundledLibraries
+    base::Vector{String}                          # destination paths of Base/runtime libraries
+    stdlibs::Vector{Pair{String, Vector{String}}} # stdlib name => destination paths
+end
+
+struct BundledArtifact
+    name::String
+    path::String   # destination path in the bundle
+    shared::Bool   # included by some other package; not re-counted in the total
+end
+
+struct BundledArtifactGroup
+    package::String
+    single_jll::Bool   # a *_jll with exactly one artifact (printed inline)
+    artifacts::Vector{BundledArtifact}
+end
+
+struct BundledArtifacts
+    groups::Vector{BundledArtifactGroup}
+end
+
+function bundle_julia_libraries(dest_dir, stdlibs; quiet::Bool=false)
     app_lib_dir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
     app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
     lib_dir = julia_libdir()
@@ -1389,8 +1415,15 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     # Always create lib/julia/ for the sysimage (even for local builds where libraries go to lib/)
     Sys.isunix() && mkpath(joinpath(app_lib_dir, "julia"))
 
-    tot_libsize = 0
-    printstyled("PackageCompiler: bundled libraries:\n")
+    # Returns bundled destination paths for reporting later
+    spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: bundling libraries", silent = quiet, clear_on_finish = true)
+    return TerminalSpinners.@spin spinner _copy_julia_libraries(
+        stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_libjulia_dir)
+end
+
+function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_libjulia_dir)
+    base_dests = String[]
+    stdlib_dests = Pair{String, Vector{String}}[]
 
     # Bundle the libstdc++ that is actually loaded by Julia
     # xref: https://discourse.julialang.org/t/precedence-of-local-and-julia-shipped-shared-libraries/104258?u=sloede
@@ -1407,8 +1440,7 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     end
 
     # Required libraries
-    println("  ├── Base:")
-    os = Sys.islinux() ? "linux" : Sys.isapple() ? "mac" : "windows"
+    os = Sys.isapple() ? "mac" : Sys.iswindows() ? "windows" : "linux"
     for lib in required_libraries[os]
         if Sys.islinux() && lib == "libstdc++"
             matches = libstdcxx
@@ -1418,13 +1450,9 @@ function bundle_julia_libraries(dest_dir, stdlibs)
         for match in matches
             dest = joinpath(app_libjulia_dir, basename(match))
             isfile(dest) && continue
-            mark = "├──"
             cp(match, dest; force=true)
-            libsize = lstat(match).size
-            tot_libsize += libsize
-            if libsize > 1024
-                println("  │    $mark ", basename(match), " - ", pretty_byte_str(libsize))
-            end
+            push!(base_dests, dest)
+            yield() # give the spinner a chance to render
         end
     end
 
@@ -1443,10 +1471,10 @@ function bundle_julia_libraries(dest_dir, stdlibs)
     major, minor, patch = VERSION.major, VERSION.minor, VERSION.patch
     r = if  Sys.isapple()
         Regex("^libjulia(\\.$major(\\.$minor(\\.$patch)?)?)?\\.dylib\$")
-    elseif Sys.islinux()
-        Regex("^libjulia\\.so(\\.$major(\\.$minor(\\.$patch)?)?)?\$")
     elseif Sys.iswindows()
         Regex("^libjulia\\.dll\$")
+    else
+        Regex("^libjulia\\.so(\\.$major(\\.$minor(\\.$patch)?)?)?\$")
     end
 
     matches = filter(!isnothing, match.(r, readdir(lib_dir)))
@@ -1454,47 +1482,29 @@ function bundle_julia_libraries(dest_dir, stdlibs)
         match = joinpath(lib_dir, match.match)
         dest = joinpath(app_lib_dir, basename(match))
         isfile(dest) && continue
-        mark = "├──"
         cp(match, dest)
-        libsize = lstat(match).size
-        tot_libsize += libsize
-        if libsize > 1024
-            println("  │    $mark ", basename(match), " - ", pretty_byte_str(libsize))
-        end
+        push!(base_dests, dest)
+        yield() # give the spinner a chance to render
     end
 
-    println("  ├── Stdlibs:")
     for stdlib in stdlibs
-        printed_stdlib = false
+        dests = String[]
         libs = get(Vector{String}, jll_mapping, stdlib)
-        first_lib = true
         for lib in libs
             lib = glob_pattern_lib(lib)
             matches = glob(lib, libjulia_dir)
             for match in matches
                 destpath = joinpath(app_libjulia_dir, basename(match))
                 isfile(destpath) && continue
-                if !printed_stdlib && !isempty(match)
-                    mark = "├──"
-                    printed_stdlib = true
-                    println("  │   $mark ", stdlib)
-                end
-
-                libsize = lstat(match).size
-                mark = "├──"
-                if libsize > 1024
-                    println("  │   │   $mark ", basename(match), " - ", pretty_byte_str(libsize))
-                    first_lib = false
-                end
                 cp(match, destpath)
-                tot_libsize += libsize
+                push!(dests, destpath)
+                yield() # give the spinner a chance to render
             end
         end
+        isempty(dests) || push!(stdlib_dests, stdlib => dests)
     end
 
-    println("  Total library file size: ", pretty_byte_str(tot_libsize))
-
-    return
+    return BundledLibraries(base_dests, stdlib_dests)
 end
 
 function bundle_julia_libexec(ctx, dest_dir)
@@ -1578,7 +1588,7 @@ function _collect_artifacts(pkg_root::String; platform::Base.BinaryPlatforms.Abs
     return artifacts_tomls
 end
 
-function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
+function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool, quiet::Bool=false)
     pkgs = load_all_deps(ctx)
 
     # TODO: Allow override platform?
@@ -1626,45 +1636,127 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool)
     end
 
     if !isempty(bundled_artifacts)
-        printstyled("PackageCompiler: bundled artifacts:\n")
         mkpath(artifact_app_path)
     end
 
-    total_size = 0
     sort!(bundled_artifacts)
+    isempty(bundled_artifacts) && return BundledArtifacts(BundledArtifactGroup[])
 
+    n_artifacts = sum(length(a) for (_, a) in bundled_artifacts; init=0)
+    progress = Ref(0)
+    current_pkg = Ref("")
+    spinner = TerminalSpinners.Spinner(msg = () ->
+        "PackageCompiler: bundling artifacts ($(progress[])/$(n_artifacts)): $(current_pkg[])",
+        silent = quiet, clear_on_finish = true)
+    # Returns summary / destination paths for reporting later
+    return TerminalSpinners.@spin spinner _copy_artifacts(
+        bundled_artifacts, artifact_app_path, progress, current_pkg)
+end
+
+function _copy_artifacts(bundled_artifacts, artifact_app_path,
+                         progress::Ref{Int}, current_pkg::Ref{String})
+    groups = BundledArtifactGroup[]
     bundled_shas = Set{String}()
-    for (i, (pkg, artifacts)) in enumerate(bundled_artifacts)
-        last_pkg = i == length(bundled_artifacts)
-        mark_pkg = last_pkg ? "└──" : "├──"
-        print("  $mark_pkg $pkg")
+    for (pkg, artifacts) in bundled_artifacts
+        current_pkg[] = pkg
         # jlls often only have a single artifact with the same name as the package itself
         std_jll = endswith(pkg, "_jll") && length(artifacts) == 1
-        if !std_jll
-            println()
-        end
-        for (j, (artifact, artifact_path)) in enumerate(artifacts)
+        entries = BundledArtifact[]
+        for (artifact, artifact_path) in artifacts
+            progress[] += 1
             git_tree_sha_artifact = basename(artifact_path)
             already_bundled = git_tree_sha_artifact in bundled_shas
-            size = already_bundled ? 0 : recursive_dir_size(artifact_path)
-            total_size += size
-            size_str = already_bundled ? "[already bundled]" : pretty_byte_str(size)
-            if std_jll
-                println(" - ", size_str, "")
-            else
-                mark_artifact = j == length(artifacts) ? "└──" : "├──"
-                mark_init = last_pkg ? " " : "│"
-                println("  $mark_init   ", mark_artifact, " ", artifact, " - ", size_str, "")
-            end
+            dest = joinpath(artifact_app_path, git_tree_sha_artifact)
+            push!(entries, BundledArtifact(artifact, dest, already_bundled))
             if !already_bundled
-                cp(artifact_path, joinpath(artifact_app_path, git_tree_sha_artifact))
+                cp(artifact_path, dest)
                 push!(bundled_shas, git_tree_sha_artifact)
+            end
+            yield() # give the progress spinner a chance to render
+        end
+        push!(groups, BundledArtifactGroup(pkg, std_jll, entries))
+    end
+    return BundledArtifacts(groups)
+end
+
+print_bundle_info(library_info::BundledLibraries, artifact_info::BundledArtifacts) =
+    print_bundle_info(stdout, library_info, artifact_info)
+function print_bundle_info(io::IO, library_info::BundledLibraries, artifact_info::BundledArtifacts)
+    _print_bundled_libraries(io, library_info)
+    _print_bundled_artifacts(io, artifact_info)
+end
+
+function _print_bundled_artifacts(io::IO, info::BundledArtifacts)
+    # Render only the artifacts that are still present
+    groups = [
+        BundledArtifactGroup(g.package, g.single_jll, filter((a)->ispath(a.path), g.artifacts))
+        for g in info.groups
+    ]
+    filter!(g -> !isempty(g.artifacts), groups)
+    isempty(groups) && return
+    println(io, "PackageCompiler: bundled artifacts:")
+    total_size = 0
+    n = length(groups)
+    for (i, group) in enumerate(groups)
+        last_pkg = i == n
+        mark_pkg = last_pkg ? "└──" : "├──"
+        show_inline = group.single_jll && length(group.artifacts) == 1 && !group.artifacts[1].shared
+        print(io, "  $mark_pkg $(group.package)")
+        if !show_inline
+            println(io)
+        end
+        for (j, a) in enumerate(group.artifacts)
+            if a.shared
+                size_str = "[shared]"
+            else
+                sz = recursive_dir_size(a.path)
+                total_size += sz
+                size_str = pretty_byte_str(sz)
+            end
+            if show_inline
+                println(io, " - ", size_str)
+            else
+                mark_artifact = j == length(group.artifacts) ? "└──" : "├──"
+                mark_init = last_pkg ? " " : "│"
+                println(io, "  $mark_init   ", mark_artifact, " ", a.name, " - ", size_str, "")
             end
         end
     end
     if total_size > 0
-        println("  Total artifact file size: ", pretty_byte_str(total_size))
+        println(io, "  Total artifact file size: ", pretty_byte_str(total_size))
     end
+    return
+end
+
+function _print_bundled_libraries(io::IO, libs::BundledLibraries)
+    println(io, "PackageCompiler: bundled libraries:")
+    tot_libsize = 0
+    println(io, "  ├── Base:")
+    for dest in libs.base
+        isfile(dest) || continue
+        libsize = lstat(dest).size
+        tot_libsize += libsize
+        if libsize > 1024
+            println(io, "  │    ├── ", basename(dest), " - ", pretty_byte_str(libsize))
+        end
+    end
+    println(io, "  ├── Stdlibs:")
+    for (stdlib, dests) in libs.stdlibs
+        printed_stdlib = false
+        for dest in dests
+            isfile(dest) || continue
+            if !printed_stdlib
+                println(io, "  │   ├── ", stdlib)
+                printed_stdlib = true
+            end
+            libsize = lstat(dest).size
+            tot_libsize += libsize
+            if libsize > 1024
+                println(io, "  │   │   ├── ", basename(dest), " - ", pretty_byte_str(libsize))
+            end
+        end
+    end
+    println(io, "  Total library file size: ", pretty_byte_str(tot_libsize))
     return
 end
 
