@@ -1776,7 +1776,7 @@ function bundle_cert(dest_dir)
     cert_path = joinpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
     share_path = joinpath(dest_dir, "share", "julia")
     mkpath(share_path)
-    cp(cert_path, joinpath(share_path, "cert.pem"))
+    cp(cert_path, joinpath(share_path, "cert.pem"), force=true)
 end
 
 # Write preferences for packages in project `project_dir` to `io`
