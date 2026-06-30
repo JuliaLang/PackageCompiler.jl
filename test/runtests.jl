@@ -8,7 +8,7 @@ import TOML
 # Make a new depot
 const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
-ENV["JULIA_DEPOT_PATH"] = new_depot
+ENV["JULIA_DEPOT_PATH"] = new_depot * (Sys.iswindows() ? ";" : ":")
 Base.init_depot_path()
 
 # A generic CI variable, not specific to any single CI provider.
