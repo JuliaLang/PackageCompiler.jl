@@ -1891,7 +1891,8 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
     return BundledLibraries(base_dests, stdlib_dests)
 end
 
-# On Windows, bundle import libraries (.a files) needed for linking during package precompilation
+# On Windows, bundle import libraries (.a files) and CRT objects (.o files) needed for
+# linking during package precompilation
 function bundle_windows_import_libraries(dest_dir)
     Sys.iswindows() || return
 
@@ -1907,17 +1908,21 @@ function bundle_windows_import_libraries(dest_dir)
     mkpath(dest_libjulia_dir)
 
     # Import libraries in lib/ (libjulia.dll.a, libjulia-internal.dll.a, libopenlibm.dll.a, libssp.dll.a)
+    # and any CRT objects (Base.Linking looks for these both in lib/julia and lib/)
     for file in readdir(src_lib_dir)
-        endswith(file, ".dll.a") || continue
+        endswith(file, ".dll.a") || endswith(file, ".o") || continue
         src = joinpath(src_lib_dir, file)
         dest = joinpath(dest_lib_dir, file)
         isfile(dest) && continue
         cp(src, dest; force=true)
     end
 
-    # Import/static libraries in lib/julia/ (libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a)
+    # Import/static libraries in lib/julia/ (libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a) and
+    # the MinGW CRT objects (dllcrt2.o, crtbegin.o, crtend.o, crt2.o, crt2u.o). Since Julia 1.12.7,
+    # `Base.Linking` links the CRT objects by default when linking pkgimages, so a distribution
+    # without them cannot precompile packages at runtime.
     for file in readdir(src_libjulia_dir)
-        endswith(file, ".a") || continue
+        endswith(file, ".a") || endswith(file, ".o") || continue
         src = joinpath(src_libjulia_dir, file)
         dest = joinpath(dest_libjulia_dir, file)
         isfile(dest) && continue
