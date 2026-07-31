@@ -414,7 +414,10 @@ function create_sysimg_object_file(object_file::String,
         Base.reinit_stdio()
         @eval Sys BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
         @eval Sys STDLIB = $(repr(abspath(Sys.BINDIR, "../share/julia/stdlib", string('v', VERSION.major, '.', VERSION.minor))))
-        copy!(LOAD_PATH, [$(repr(project))]) # Only allow loading packages from current project
+        # Only allow loading packages from the current project and stdlibs.
+        # `@stdlib` is required to resolve extensions of stdlib packages
+        # (which exist e.g. in julia distributions with vendored stdlibs).
+        copy!(LOAD_PATH, [$(repr(project)), "@stdlib"])
         Base.init_depot_path()
         """)
 
