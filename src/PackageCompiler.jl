@@ -752,45 +752,48 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
     # work on macOS.
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
-
-    create_sysimg_object_file(object_file, packages, packages_sysimg;
-                            project,
-                            base_sysimage,
-                            precompile_execution_file,
-                            precompile_statements_file,
-                            cpu_target,
-                            script,
-                            sysimage_build_args,
-                            extra_precompiles,
-                            incremental,
-                            import_into_main)
     object_files = [object_file]
-    if julia_init_c_file !== nothing
-        if julia_init_c_file isa String
-            julia_init_c_file = [julia_init_c_file]
+    try
+        create_sysimg_object_file(object_file, packages, packages_sysimg;
+                                project,
+                                base_sysimage,
+                                precompile_execution_file,
+                                precompile_statements_file,
+                                cpu_target,
+                                script,
+                                sysimage_build_args,
+                                extra_precompiles,
+                                incremental,
+                                import_into_main)
+        if julia_init_c_file !== nothing
+            if julia_init_c_file isa String
+                julia_init_c_file = [julia_init_c_file]
+            end
+            mktempdir() do include_dir
+                if julia_init_h_file !== nothing
+                    if julia_init_h_file isa String
+                        julia_init_h_file = [julia_init_h_file]
+                    end
+                    for f in julia_init_h_file
+                        cp(f, joinpath(include_dir, basename(f)))
+                    end
+                end
+                for f in julia_init_c_file
+                    filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
+                    push!(object_files, filename)
+                end
+            end
         end
-        mktempdir() do include_dir
-            if julia_init_h_file !== nothing
-                if julia_init_h_file isa String
-                    julia_init_h_file = [julia_init_h_file]
-                end
-                for f in julia_init_h_file
-                    cp(f, joinpath(include_dir, basename(f)))
-                end
-            end
-            for f in julia_init_c_file
-                filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
-                push!(object_files, filename)
-            end
+        create_sysimg_from_object_file(object_files,
+                                    sysimage_path;
+                                    compat_level,
+                                    version,
+                                    soname)
+    finally
+        foreach(object_files) do file
+            rm(file; force=true)
         end
     end
-    create_sysimg_from_object_file(object_files,
-                                sysimage_path;
-                                compat_level,
-                                version,
-                                soname)
-
-    rm(object_file; force=true)
 
     if Sys.isapple()
         cd(dirname(abspath(sysimage_path))) do
@@ -849,9 +852,14 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, 
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
-    o_init_file = splitext(julia_init_c_file)[1] * ".o"
+    o_init_file = tempname() * ".o"
     cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
-    run_compiler(cmd)
+    try
+        run_compiler(cmd)
+    catch
+        rm(o_init_file; force=true)
+        rethrow()
+    end
     return o_init_file
 end
 
@@ -1182,6 +1190,9 @@ function create_library(package_or_project::String,
                         quiet::Bool=false
                         )
 
+    # Avoid adding the default init header to a vector owned by the caller.
+    header_files = copy(header_files)
+
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
         julia_init_h_file = [julia_init_h_file]
@@ -1236,8 +1247,8 @@ function create_library(package_or_project::String,
         cd(dirname(sysimg_path)) do
             base_file = get_library_filename(lib_name)
             @debug "creating symlinks for $compat_file and $base_file"
-            symlink(sysimg_file, compat_file)
-            symlink(sysimg_file, base_file)
+            compat_file == sysimg_file || symlink(sysimg_file, compat_file)
+            base_file == sysimg_file || symlink(sysimg_file, base_file)
         end
     end
 end
