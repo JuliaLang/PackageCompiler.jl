@@ -1,6 +1,8 @@
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _MSC_VER
 JL_DLLEXPORT char *dirname(char *);
@@ -21,26 +23,28 @@ JL_DLLEXPORT char *dirname(char *);
 #include "uv.h"
 
 static void setup_args(int argc, char **argv) {
-    uv_setup_args(argc, argv);
+    argv = uv_setup_args(argc, argv);
     jl_parse_opts(&argc, &argv);
 }
 
 static const char *get_sysimage_path(const char *libname) {
     if (libname == NULL) {
-        jl_error("julia: Specify `libname` when requesting the sysimage path");
+        fprintf(stderr,
+                "julia: Specify `libname` when requesting the sysimage path\n");
         exit(1);
     }
 
     void *handle = jl_load_dynamic_library(libname, JL_RTLD_DEFAULT, 0);
     if (handle == NULL) {
-        jl_errorf("julia: Failed to load library at %s", libname);
+        fprintf(stderr, "julia: Failed to load library at %s\n", libname);
         exit(1);
     }
 
     const char *libpath = jl_pathname_for_handle(handle);
     if (libpath == NULL) {
-        jl_errorf("julia: Failed to retrieve path name for library at %s",
-                  libname);
+        fprintf(stderr,
+                "julia: Failed to retrieve path name for library at %s\n",
+                libname);
         exit(1);
     }
 
@@ -101,7 +105,18 @@ DLLEXPORT void init_julia(int argc, char **argv) {
 #else
     char *abs_sysimage_path = realpath(sysimage_path, NULL);
 #endif
+    if (abs_sysimage_path == NULL) {
+        fprintf(stderr, "julia: Failed to resolve sysimage path at %s: %s\n",
+                sysimage_path, strerror(errno));
+        exit(1);
+    }
     char *_sysimage_path = strdup(abs_sysimage_path);
+    if (_sysimage_path == NULL) {
+        fprintf(stderr, "julia: Failed to allocate memory: %s\n",
+                strerror(errno));
+        free(abs_sysimage_path);
+        exit(1);
+    }
     char *root_dir = dirname(dirname(_sysimage_path));
     set_depot_load_path(root_dir);
 #if JULIA_VERSION_MAJOR == 1 && JULIA_VERSION_MINOR <= 11
@@ -114,6 +129,13 @@ DLLEXPORT void init_julia(int argc, char **argv) {
     // auto-constructed path would be root/lib/julia/../bin = root/lib/bin (incorrect).
     size_t bindir_len = strlen(root_dir) + 5;
     char *bindir = (char *)malloc(bindir_len);
+    if (bindir == NULL) {
+        fprintf(stderr, "julia: Failed to allocate memory: %s\n",
+                strerror(errno));
+        free(_sysimage_path);
+        free(abs_sysimage_path);
+        exit(1);
+    }
     snprintf(bindir, bindir_len, "%s/bin", root_dir);
     jl_init_with_image_file(bindir, abs_sysimage_path);
     free(bindir);
