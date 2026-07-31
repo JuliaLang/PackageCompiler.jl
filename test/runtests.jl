@@ -55,6 +55,21 @@ function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
 end
 
 @testset "PackageCompiler.jl" begin
+    @testset "julia_libdir / julia_private_libdir" begin
+        lib_dir = PackageCompiler.julia_libdir()
+        private_libdir = PackageCompiler.julia_private_libdir()
+        @test isdir(lib_dir)
+        @test isdir(private_libdir)
+        for lib in ("libjulia-codegen", "libjulia-internal")
+            @test !isempty(PackageCompiler.glob(PackageCompiler.glob_pattern_lib(lib), private_libdir))
+        end
+        # `bundle_julia_libraries` reproduces this layout inside the bundle. Framework
+        # builds are the exception: they keep the private libraries in `Frameworks/`.
+        if !Base.DARWIN_FRAMEWORK
+            @test private_libdir in (lib_dir, joinpath(lib_dir, "julia"))
+        end
+    end
+
     @testset "create_sysimage" begin
     new_project = mktempdir()
     old_project = Base.ACTIVE_PROJECT[]

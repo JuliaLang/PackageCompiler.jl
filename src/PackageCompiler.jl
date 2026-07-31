@@ -1399,17 +1399,12 @@ end
 
 function bundle_julia_libraries(dest_dir, stdlibs; quiet::Bool=false)
     app_lib_dir = joinpath(dest_dir, Sys.isunix() ? "lib" : "bin")
-    app_libjulia_dir = Sys.isunix() ? joinpath(app_lib_dir, "julia") : app_lib_dir
     lib_dir = julia_libdir()
-    libjulia_dir = Sys.isunix() ? joinpath(lib_dir, "julia") : lib_dir
-    # File structure is different on locally built julias:
-    # libraries are in lib/ directly instead of lib/julia/, and the DEP_LIBS
-    # embedded in libjulia.so reflect this. We must copy libraries to the same
-    # relative location to match the binary's expectations.
-    if is_local_julia_build()
-        libjulia_dir = lib_dir
-        app_libjulia_dir = app_lib_dir
-    end
+    libjulia_dir = julia_private_libdir()
+    # The file structure is different on locally built julias: private libraries are in lib/
+    # directly instead of lib/julia/, and the DEP_LIBS embedded in libjulia.so reflect this.
+    # We must copy libraries to the same relative location to match the binary's expectations.
+    app_libjulia_dir = libjulia_dir == lib_dir ? app_lib_dir : joinpath(app_lib_dir, "julia")
 
     mkpath(app_lib_dir)
     # Always create lib/julia/ for the sysimage (even for local builds where libraries go to lib/)
