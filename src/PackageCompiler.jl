@@ -186,6 +186,42 @@ function check_packages_in_project(ctx, packages)
     end
 end
 
+function package_ids_for_sysimage(ctx, packages; include_transitive_dependencies::Bool)
+    frontier = Set{Base.PkgId}()
+    for pkg in packages
+        pkgid = if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
+            Base.PkgId(ctx.env.pkg.uuid, pkg)
+        else
+            Base.PkgId(ctx.env.project.deps[pkg], pkg)
+        end
+        push!(frontier, pkgid)
+    end
+
+    packages_sysimg = copy(frontier)
+    include_transitive_dependencies || return packages_sysimg
+
+    new_frontier = Set{Base.PkgId}()
+    while !isempty(frontier)
+        for pkgid in frontier
+            deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
+                ctx.env.project.deps
+            else
+                ctx.env.manifest[pkgid.uuid].deps
+            end
+            for (name, uuid) in deps
+                pkgid_dep = Base.PkgId(uuid, name)
+                if !(pkgid_dep in packages_sysimg)
+                    push!(packages_sysimg, pkgid_dep)
+                    push!(new_frontier, pkgid_dep)
+                end
+            end
+        end
+        copy!(frontier, new_frontier)
+        empty!(new_frontier)
+    end
+    return packages_sysimg
+end
+
 
 ##############
 # Misc utils #
@@ -608,7 +644,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
+function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -672,45 +708,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     ensurecompiled(project, packages, base_sysimage)
 
-    packages_sysimg = Set{Base.PkgId}()
-
-    if include_transitive_dependencies
-        # We are not sure that packages actually load their dependencies on `using`
-        # but we still want them to end up in the sysimage. Therefore, explicitly
-        # collect their dependencies, recursively.
-
-        frontier = Set{Base.PkgId}()
-        deps = ctx.env.project.deps
-        for pkg in packages
-            # Add all dependencies of the package
-            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
-                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
-            else
-                uuid = ctx.env.project.deps[pkg]
-                push!(frontier, Base.PkgId(uuid, pkg))
-            end
-        end
-        copy!(packages_sysimg, frontier)
-        new_frontier = Set{Base.PkgId}()
-        while !(isempty(frontier))
-            for pkgid in frontier
-                deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
-                    ctx.env.project.deps
-                else
-                    ctx.env.manifest[pkgid.uuid].deps
-                end
-                pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
-                for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
-                        push!(packages_sysimg, pkgid_dep)
-                        push!(new_frontier, pkgid_dep)
-                    end
-                end
-            end
-            copy!(frontier, new_frontier)
-            empty!(new_frontier)
-        end
-    end
+    # Requested packages must always be loaded into the sysimage. The option only
+    # controls whether their dependency graph is loaded explicitly as well.
+    packages_sysimg = package_ids_for_sysimage(ctx, packages; include_transitive_dependencies)
 
     # Add stdlibs to packages_sysimg when building from fresh base sysimage
     if !incremental && !filter_stdlibs
