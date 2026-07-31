@@ -14,9 +14,9 @@ const jll_mapping = Dict(
 
 # Manually fixup of libLLVM
 const required_libraries = Dict(
-    "windows" => ["libLLVM", "libatomic", "libdSFMT", "libgcc_s_seh", "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2", "libpcre2-16", "libpcre2-32", "libpcre2-8", "libpcre2-posix", "libquadmath", "libssp", "libstdc++", "libuv", "libwinpthread", "libz"],
-    "linux" =>   ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libunwind", "libuv", "libz"],
-    "mac" =>     ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libuv", "libz"]
+    "windows" => ["libLLVM", "libatomic", "libdSFMT", "libgcc_s_seh", "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2", "libpcre2-16", "libpcre2-32", "libpcre2-8", "libpcre2-posix", "libquadmath", "libssp", "libstdc++", "libuv", "libwinpthread", "libz", "libzstd"],
+    "linux" =>   ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libunwind", "libuv", "libz", "libzstd"],
+    "mac" =>     ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libuv", "libz", "libzstd"]
 )
 push!(required_libraries["windows"], "libgcc_s_jlj")
 push!(required_libraries["mac"], "libunwind")

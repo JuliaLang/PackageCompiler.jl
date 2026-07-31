@@ -114,19 +114,28 @@ end
             opt_during_sysimage = Base.JLOptions().opt_level
             print_opt() = println("opt: -O\$opt_during_sysimage")
             """)
+            # Exercise sysimage compression on Julia versions that support it
+            compress_sysimage = PackageCompiler.supports_sysimage_compression()
             create_sysimage(; sysimage_path,
                             project=new_project,
                             precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
                             precompile_statements_file=joinpath.(@__DIR__, ["precompile_statements.jl",
                                                                           "precompile_statements2.jl"]),
                             script,
-                            sysimage_build_args=`-O1`)
+                            sysimage_build_args=`-O1`,
+                            compress_sysimage)
 
             # Check we can load sysimage and that Example is available in Main
             str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
             @test occursin("Hello, foo", str)
             @test occursin("I am a script", str)
             @test occursin("opt: -O1", str)
+
+            if !PackageCompiler.supports_sysimage_compression()
+                @test_throws "requires Julia v1.13" create_sysimage(; sysimage_path,
+                                                                    project=new_project,
+                                                                    compress_sysimage=true)
+            end
         end
     end
 
