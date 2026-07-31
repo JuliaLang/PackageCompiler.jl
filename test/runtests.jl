@@ -234,7 +234,8 @@ end
         create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
                     precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
                     precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
-                    lib_name=lib_name, version=v"1.0.0")
+                    lib_name=lib_name, version=v"1.0.0", compat_level="patch")
+        @test !isfile(splitext(PackageCompiler.default_julia_init())[1] * ".o")
         rm_with_retry(tmp_lib_src_dir; recursive=true)
     end
 
@@ -267,4 +268,9 @@ end
     end
 
     @test applicable(create_sysimage, "Example")
+
+    header_files = String[]
+    missing_project = joinpath(mktempdir(), "missing")
+    @test_throws ErrorException create_library(missing_project, tempname(); header_files)
+    @test isempty(header_files)
 end
