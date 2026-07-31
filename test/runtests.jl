@@ -253,5 +253,12 @@ end
         # on <1.12; it doesn't know it is in a workspace
         @test length(pkgs) == 1
         @test only(pkgs).name == "Example"
+
+        # Requested packages are included even when explicit transitive loading is disabled.
+        pkgids = PackageCompiler.package_ids_for_sysimage(ctx, ["Example"];
+                                                          include_transitive_dependencies=false)
+        @test only(pkgids).name == "Example"
     end
+
+    @test applicable(create_sysimage, "Example")
 end
