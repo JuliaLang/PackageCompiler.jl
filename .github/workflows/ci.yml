@@ -60,12 +60,6 @@ jobs:
           #
           # Note: we have a separate workflow (.github/workflows/ci.nightly.yml)
           # for Julia nightly.
-        julia-wordsize:
-          # The value here only affects the version of Julia binary that we download.
-          # It does not affect the architecture of the GitHub Runner (virtual machine) that
-          # we run on.
-          - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
-          - '64' # 64-bit Julia.
         github-runner:
           - ubuntu-latest
           - windows-latest
@@ -73,26 +67,12 @@ jobs:
           - macos-14 # macos-14 = Apple Silicon.
         coverage:
           - 'true'
-        exclude:
-          # We don't have 32-bit builds of Julia for Intel macOS:
-          - github-runner: macos-13 # macos-13 = Intel.
-            julia-wordsize: '32'
-          #
-          # We don't have 32-bit builds of Julia for Apple Silicon macOS:
-          - github-runner: macos-14 # macos-14 = Apple Silicon.
-            julia-wordsize: '32'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
         with:
           version: ${{ matrix.julia-version }}
-          # If `julia-wordsize` is 32, then we set `arch` to `x86`, because we know that
-          # 32-bit builds of Julia are only available for x86.
-          #
-          # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
-          # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
-          # based on the architecture of the underlying GitHub Runner (virtual machine).
-          arch: ${{ matrix.julia-wordsize == '32' && 'x86' || runner.arch }}
+          arch: ${{ runner.arch }}
       - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
       - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
