@@ -186,6 +186,42 @@ function check_packages_in_project(ctx, packages)
     end
 end
 
+function package_ids_for_sysimage(ctx, packages; include_transitive_dependencies::Bool)
+    frontier = Set{Base.PkgId}()
+    for pkg in packages
+        pkgid = if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
+            Base.PkgId(ctx.env.pkg.uuid, pkg)
+        else
+            Base.PkgId(ctx.env.project.deps[pkg], pkg)
+        end
+        push!(frontier, pkgid)
+    end
+
+    packages_sysimg = copy(frontier)
+    include_transitive_dependencies || return packages_sysimg
+
+    new_frontier = Set{Base.PkgId}()
+    while !isempty(frontier)
+        for pkgid in frontier
+            deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
+                ctx.env.project.deps
+            else
+                ctx.env.manifest[pkgid.uuid].deps
+            end
+            for (name, uuid) in deps
+                pkgid_dep = Base.PkgId(uuid, name)
+                if !(pkgid_dep in packages_sysimg)
+                    push!(packages_sysimg, pkgid_dep)
+                    push!(new_frontier, pkgid_dep)
+                end
+            end
+        end
+        copy!(frontier, new_frontier)
+        empty!(new_frontier)
+    end
+    return packages_sysimg
+end
+
 
 ##############
 # Misc utils #
@@ -611,7 +647,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 """
-function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector{Symbol}}=nothing;
+function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
                          project::String=dirname(active_project()),
                          precompile_execution_file::Union{String, Vector{String}}=String[],
@@ -675,45 +711,9 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
 
     ensurecompiled(project, packages, base_sysimage)
 
-    packages_sysimg = Set{Base.PkgId}()
-
-    if include_transitive_dependencies
-        # We are not sure that packages actually load their dependencies on `using`
-        # but we still want them to end up in the sysimage. Therefore, explicitly
-        # collect their dependencies, recursively.
-
-        frontier = Set{Base.PkgId}()
-        deps = ctx.env.project.deps
-        for pkg in packages
-            # Add all dependencies of the package
-            if ctx.env.pkg !== nothing && pkg == ctx.env.pkg.name
-                push!(frontier, Base.PkgId(ctx.env.pkg.uuid, pkg))
-            else
-                uuid = ctx.env.project.deps[pkg]
-                push!(frontier, Base.PkgId(uuid, pkg))
-            end
-        end
-        copy!(packages_sysimg, frontier)
-        new_frontier = Set{Base.PkgId}()
-        while !(isempty(frontier))
-            for pkgid in frontier
-                deps = if ctx.env.pkg !== nothing && pkgid.uuid == ctx.env.pkg.uuid
-                    ctx.env.project.deps
-                else
-                    ctx.env.manifest[pkgid.uuid].deps
-                end
-                pkgid_deps = [Base.PkgId(uuid, name) for (name, uuid) in deps]
-                for pkgid_dep in pkgid_deps
-                    if !(pkgid_dep in packages_sysimg) #
-                        push!(packages_sysimg, pkgid_dep)
-                        push!(new_frontier, pkgid_dep)
-                    end
-                end
-            end
-            copy!(frontier, new_frontier)
-            empty!(new_frontier)
-        end
-    end
+    # Requested packages must always be loaded into the sysimage. The option only
+    # controls whether their dependency graph is loaded explicitly as well.
+    packages_sysimg = package_ids_for_sysimage(ctx, packages; include_transitive_dependencies)
 
     # Add stdlibs to packages_sysimg when building from fresh base sysimage
     if !incremental && !filter_stdlibs
@@ -726,45 +726,48 @@ function create_sysimage(packages::Union{Nothing, Symbol, Vector{String}, Vector
     # work on macOS.
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
-
-    create_sysimg_object_file(object_file, packages, packages_sysimg;
-                            project,
-                            base_sysimage,
-                            precompile_execution_file,
-                            precompile_statements_file,
-                            cpu_target,
-                            script,
-                            sysimage_build_args,
-                            extra_precompiles,
-                            incremental,
-                            import_into_main)
     object_files = [object_file]
-    if julia_init_c_file !== nothing
-        if julia_init_c_file isa String
-            julia_init_c_file = [julia_init_c_file]
+    try
+        create_sysimg_object_file(object_file, packages, packages_sysimg;
+                                project,
+                                base_sysimage,
+                                precompile_execution_file,
+                                precompile_statements_file,
+                                cpu_target,
+                                script,
+                                sysimage_build_args,
+                                extra_precompiles,
+                                incremental,
+                                import_into_main)
+        if julia_init_c_file !== nothing
+            if julia_init_c_file isa String
+                julia_init_c_file = [julia_init_c_file]
+            end
+            mktempdir() do include_dir
+                if julia_init_h_file !== nothing
+                    if julia_init_h_file isa String
+                        julia_init_h_file = [julia_init_h_file]
+                    end
+                    for f in julia_init_h_file
+                        cp(f, joinpath(include_dir, basename(f)))
+                    end
+                end
+                for f in julia_init_c_file
+                    filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
+                    push!(object_files, filename)
+                end
+            end
         end
-        mktempdir() do include_dir
-            if julia_init_h_file !== nothing
-                if julia_init_h_file isa String
-                    julia_init_h_file = [julia_init_h_file]
-                end
-                for f in julia_init_h_file
-                    cp(f, joinpath(include_dir, basename(f)))
-                end
-            end
-            for f in julia_init_c_file
-                filename = compile_c_init_julia(f, basename(sysimage_path), include_dir)
-                push!(object_files, filename)
-            end
+        create_sysimg_from_object_file(object_files,
+                                    sysimage_path;
+                                    compat_level,
+                                    version,
+                                    soname)
+    finally
+        foreach(object_files) do file
+            rm(file; force=true)
         end
     end
-    create_sysimg_from_object_file(object_files,
-                                sysimage_path;
-                                compat_level,
-                                version,
-                                soname)
-
-    rm(object_file; force=true)
 
     if Sys.isapple()
         cd(dirname(abspath(sysimage_path))) do
@@ -821,9 +824,14 @@ function compile_c_init_julia(julia_init_c_file::String, sysimage_name::String, 
     @debug "Compiling $julia_init_c_file"
     flags = Base.shell_split(cflags())
 
-    o_init_file = splitext(julia_init_c_file)[1] * ".o"
+    o_init_file = tempname() * ".o"
     cmd = `-c -I$include_dir -DJULIAC_PROGRAM_LIBNAME=$(repr(sysimage_name)) $TLS_SYNTAX $(bitflag()) $flags $(march()) -o $o_init_file $julia_init_c_file`
-    run_compiler(cmd)
+    try
+        run_compiler(cmd)
+    catch
+        rm(o_init_file; force=true)
+        rethrow()
+    end
     return o_init_file
 end
 
@@ -1143,6 +1151,9 @@ function create_library(package_or_project::String,
                         quiet::Bool=false
                         )
 
+    # Avoid adding the default init header to a vector owned by the caller.
+    header_files = copy(header_files)
+
     # Add init header files to list of bundled header files if not already present
     if julia_init_h_file isa String
         julia_init_h_file = [julia_init_h_file]
@@ -1197,8 +1208,8 @@ function create_library(package_or_project::String,
         cd(dirname(sysimg_path)) do
             base_file = get_library_filename(lib_name)
             @debug "creating symlinks for $compat_file and $base_file"
-            symlink(sysimg_file, compat_file)
-            symlink(sysimg_file, base_file)
+            compat_file == sysimg_file || symlink(sysimg_file, compat_file)
+            base_file == sysimg_file || symlink(sysimg_file, base_file)
         end
     end
 end

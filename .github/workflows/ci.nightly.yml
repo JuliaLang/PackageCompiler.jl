@@ -1,62 +1,30 @@
 name: Nightly CI
 
 on:
-  pull_request:
-  push:
-    branches:
-      - 'master'
-      - 'release-*'
-    tags: '*'
-  merge_group: # GitHub Merge Queue
+  # Nightly is forward-compatibility monitoring, not required PR validation.
+  # Test the default branch daily without adding another long job to every PR.
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 concurrency:
-  # Skip intermediate builds: all builds except for builds on the `master` branch
-  # Cancel intermediate builds: only pull request builds
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref != 'refs/heads/master' || github.run_number }}
-  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-nightly:
-    # We do not run the full test suite on tags, because we already ran it on master before we made the release.
-    # We do build the docs on tags.
-    if: (github.event_name != 'push') || (github.ref_type != 'tag')
     timeout-minutes: 150
-    runs-on: ${{ matrix.github-runner }}
-    strategy:
-      max-parallel: 5 # leave space for other runs in the JuliaLang org, given these tests are long
-      fail-fast: false
-      matrix:
-        include:
-          # 1. We intentionally put nightly CI into a separate YAML
-          #    file (`ci.nightly.yml` versus the main `ci.yml` file).
-          #    This allows us to enable and disable the nightly CI
-          #    workflow from the GitHub web UI, without having any
-          #    impact on the main CI.
-          # 2. We intentionally only run one CI job on Julia nightly,
-          #    in order to conserve CI resources.
-          # 3. This CI only runs on Julia nightly. It doesn't run on
-          #    Julia pre-releases. For CI on Julia pre-releases, see
-          #    the main CI workflow file.
-          - julia-version: 'nightly'
-            julia-wordsize: '64'
-            github-runner: ubuntu-latest
-            coverage: true
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
         with:
-          version: ${{ matrix.julia-version }}
-          # If `julia-wordsize` is 32, then we set `arch` to `x86`, because we know that
-          # 32-bit builds of Julia are only available for x86.
-          #
-          # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
-          # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
-          # based on the architecture of the underlying GitHub Runner (virtual machine).
-          arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
+          version: 'nightly'
+          arch: ${{ runner.arch }}
       - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
       - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
         with:
-          coverage: ${{ matrix.coverage }}
+          coverage: true
       - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
       - uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
         with:

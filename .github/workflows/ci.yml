@@ -43,62 +43,62 @@ jobs:
     # We do build the docs on tags.
     if: (github.event_name != 'push') || (github.ref_type != 'tag')
     timeout-minutes: 150
+    name: test (${{ matrix.julia-version }}, ${{ matrix.github-runner }}, ${{ matrix.app-configuration }})
     runs-on: ${{ matrix.github-runner }}
     strategy:
       max-parallel: 20 # leave space for other runs in the JuliaLang org, given these tests are long
       fail-fast: false
       matrix:
-        julia-version:
-          - '1.10' # current LTS
-          - '1.12' # current stable
-
-          #
-          # 'pre' will install the latest prerelease build (RCs, betas, and alphas).
-          # Uncomment this line when there is an active prerelease available.
-          # Comment this line out when there is no prerelease available (to save CI time).
-          - 'pre'
-          #
-          # Note: we have a separate workflow (.github/workflows/ci.nightly.yml)
-          # for Julia nightly.
-        julia-wordsize:
-          # The value here only affects the version of Julia binary that we download.
-          # It does not affect the architecture of the GitHub Runner (virtual machine) that
-          # we run on.
-          - '32' # 32-bit Julia. Only available on x86_64. Not available on aarch64.
-          - '64' # 64-bit Julia.
-        github-runner:
-          - ubuntu-latest
-          - windows-latest
-          - macos-13 # macos-13 = Intel.
-          - macos-14 # macos-14 = Apple Silicon.
-        coverage:
-          - 'true'
-        exclude:
-          # We don't have 32-bit builds of Julia for Intel macOS:
-          - github-runner: macos-13 # macos-13 = Intel.
-            julia-wordsize: '32'
-          #
-          # We don't have 32-bit builds of Julia for Apple Silicon macOS:
-          - github-runner: macos-14 # macos-14 = Apple Silicon.
-            julia-wordsize: '32'
+        # Avoid a Cartesian product: exercise version compatibility on Linux,
+        # and exercise platform/architecture compatibility on current stable.
+        include:
+          - julia-version: '1.10' # current LTS and minimum supported version
+            github-runner: ubuntu-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: none
+          - julia-version: '1.12' # current stable
+            github-runner: ubuntu-latest
+            coverage: 'true'
+            app-configuration: filtered
+            extended-tests: sysimage
+          - julia-version: '1.12'
+            github-runner: windows-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: library
+          - julia-version: '1.12'
+            github-runner: macos-15 # Apple Silicon
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: library
+          - julia-version: '1.12'
+            github-runner: macos-15-intel
+            coverage: 'false'
+            app-configuration: incremental
+            extended-tests: none
+          - julia-version: 'pre'
+            github-runner: ubuntu-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: none
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
         with:
           version: ${{ matrix.julia-version }}
-          # If `julia-wordsize` is 32, then we set `arch` to `x86`, because we know that
-          # 32-bit builds of Julia are only available for x86.
-          #
-          # If `julia-wordsize` is 64, then we set `arch` to `${{ runner.arch }}`, which
-          # GitHub will automatically expand to the correct value (`x86_64` or `aarch64`)
-          # based on the architecture of the underlying GitHub Runner (virtual machine).
-          arch: ${{ github.ref == '32' && 'x86' || runner.arch }}
+          arch: ${{ runner.arch }}
       - uses: julia-actions/cache@d10a6fd8f31b12404a54613ebad242900567f2b9 # v2.1.0
       - uses: julia-actions/julia-runtest@678da69444cd5f13d7e674a90cb4f534639a14f9 # v1.11.2
+        env:
+          PACKAGECOMPILER_TEST_APP_CONFIGURATION: ${{ matrix.app-configuration }}
+          PACKAGECOMPILER_TEST_EXTENDED: ${{ matrix.extended-tests }}
         with:
           coverage: ${{ matrix.coverage }}
-      - uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
-      - uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+      - if: matrix.coverage == 'true'
+        uses: julia-actions/julia-processcoverage@03114f09f119417c3242a9fb6e0b722676aedf38 # v1.2.2
+      - if: matrix.coverage == 'true'
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
         with:
           files: lcov.info
         env:
