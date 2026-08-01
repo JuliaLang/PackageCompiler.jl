@@ -332,14 +332,6 @@ function warn_if_sysimage_too_big(sysimage_path::String)
 end
 
 
-function rewrite_sysimg_jl_only_needed_stdlibs()
-    sysimg_source_path = Base.find_source_file("sysimg.jl")
-    sysimg_content = read(sysimg_source_path, String)
-    # replaces the hardcoded list of stdlibs in sysimg.jl with an empty list
-    # TODO: Use the mechanism in https://github.com/JuliaLang/PackageCompiler.jl/pull/997
-    return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
-end
-
 function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
     tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
@@ -392,7 +384,17 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
             # Use the compiler sysimage to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs()
+            sysimg_content = read(sysimg_source_path, String)
+            @static if VERSION >= v"1.12.0-DEV.1617"
+                # `INCLUDE_STDLIBS = ""` is parsed as a package with an empty name.
+                # Base is already loaded, so requiring it is a no-op.
+                new_sysimage_content =
+                    "Core.eval(Base.BuildSettings, :(INCLUDE_STDLIBS = \"Base\"))\n" * sysimg_content
+            else
+                # Julia 1.11 and earlier do not support BuildSettings.
+                new_sysimage_content = replace(
+                    sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
+            end
             new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
             new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
             write(new_sysimage_source_path, new_sysimage_content)
