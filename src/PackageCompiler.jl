@@ -314,6 +314,23 @@ function get_julia_cmd()
     end
 end
 
+supports_sysimage_compression() = hasfield(typeof(Base.JLOptions()), :compress_sysimage)
+
+# Windows fails to load DLLs of 2 GiB or more with the cryptic error
+# "%1 is not a valid Win32 application".
+const WINDOWS_DLL_SIZE_LIMIT = 2^31
+function warn_if_sysimage_too_big(sysimage_path::String)
+    Sys.iswindows() || return
+    sysimage_size = filesize(sysimage_path)
+    sysimage_size < WINDOWS_DLL_SIZE_LIMIT && return
+    size_gib = round(sysimage_size / 2^30; digits=2)
+    compress_hint = supports_sysimage_compression() ? " passing `compress_sysimage=true`," : ""
+    @warn "The generated sysimage is $size_gib GiB, which is over the 2 GiB limit for " *
+          "loading DLLs on Windows, so it will likely fail to load. Consider$compress_hint " *
+          "including fewer packages in the sysimage, or using `filter_stdlibs=true`."
+    return
+end
+
 
 function rewrite_sysimg_jl_only_needed_stdlibs()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
@@ -647,6 +664,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `compress_sysimage::Bool`: If `true`, compress the sysimage data at the expense
+  of slightly increased load time. This is particularly useful on Windows where sysimages of
+  2 GiB or more fail to load. Requires Julia v1.13 or later. Defaults to `false`.
 """
 function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -658,6 +679,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
+                         compress_sysimage::Bool=false,
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
@@ -679,6 +701,13 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
+    end
+
+    if compress_sysimage
+        if !supports_sysimage_compression()
+            error("`compress_sysimage=true` requires Julia v1.13 or later")
+        end
+        sysimage_build_args = `$sysimage_build_args --compress-sysimage=yes`
     end
 
     ctx = create_pkg_context(project)
@@ -778,6 +807,8 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
             run(cmd)
         end
     end
+
+    warn_if_sysimage_too_big(sysimage_path)
 
     return nothing
 end
@@ -924,6 +955,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 
+- `compress_sysimage::Bool`: If `true`, compress the sysimage data at the expense
+  of slightly increased load time. This is particularly useful on Windows where sysimages of
+  2 GiB or more fail to load. Requires Julia v1.13 or later. Defaults to `false`.
+
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 """
 function create_app(package_dir::String,
@@ -938,6 +973,7 @@ function create_app(package_dir::String,
                     cpu_target::String=default_app_cpu_target(),
                     include_lazy_artifacts::Bool=false,
                     sysimage_build_args::Cmd=``,
+                    compress_sysimage::Bool=false,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing,
@@ -993,6 +1029,7 @@ function create_app(package_dir::String,
                     precompile_statements_file,
                     cpu_target,
                     sysimage_build_args,
+                    compress_sysimage,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
                     script)
@@ -1128,6 +1165,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
+
+- `compress_sysimage::Bool`: If `true`, compress the sysimage data at the expense
+  of slightly increased load time. This is particularly useful on Windows where sysimages of
+  2 GiB or more fail to load. Requires Julia v1.13 or later. Defaults to `false`.
 """
 function create_library(package_or_project::String,
                         dest_dir::String;
@@ -1145,6 +1186,7 @@ function create_library(package_or_project::String,
                         cpu_target::String=default_app_cpu_target(),
                         include_lazy_artifacts::Bool=false,
                         sysimage_build_args::Cmd=``,
+                        compress_sysimage::Bool=false,
                         include_transitive_dependencies::Bool=true,
                         include_preferences::Bool=true,
                         script::Union{Nothing,String}=nothing,
@@ -1200,10 +1242,31 @@ function create_library(package_or_project::String,
     compat_file = get_library_filename(lib_name; version, compat_level)
     soname = (Sys.isunix() && !Sys.isapple()) ? compat_file : nothing
 
-    create_sysimage_workaround(ctx, sysimg_path, precompile_execution_file,
-        precompile_statements_file, incremental, filter_stdlibs, cpu_target;
-        sysimage_build_args, include_transitive_dependencies, julia_init_c_file,
-        julia_init_h_file, version, soname, script, base_sysimage)
+    if ctx.env.pkg === nothing
+        # If environment is not a package, create sysimage with all packages in project
+        packages = nothing
+    else
+        # Otherwise, only include package in sysimage
+        packages = [ctx.env.pkg.name]
+    end
+
+    create_sysimage(packages;
+                    sysimage_path=sysimg_path,
+                    project=dirname(ctx.env.project_file),
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    incremental,
+                    filter_stdlibs,
+                    cpu_target,
+                    script,
+                    sysimage_build_args,
+                    compress_sysimage,
+                    include_transitive_dependencies,
+                    base_sysimage,
+                    julia_init_c_file,
+                    julia_init_h_file,
+                    version,
+                    soname)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1249,60 +1312,6 @@ function get_library_filename(name::String;
     return sysimg_file
 end
 
-# Use workaround at https://github.com/JuliaLang/julia/issues/34064#issuecomment-563950633
-# by first creating a normal "empty" sysimage and then use that to finally create the one
-# with the @ccallable function.
-# This function can be removed when https://github.com/JuliaLang/julia/pull/37530 is merged
-function create_sysimage_workaround(
-                    ctx,
-                    sysimage_path::String,
-                    precompile_execution_file::Union{String, Vector{String}},
-                    precompile_statements_file::Union{String, Vector{String}},
-                    incremental::Bool,
-                    filter_stdlibs::Bool,
-                    cpu_target::String;
-                    sysimage_build_args::Cmd,
-                    include_transitive_dependencies::Bool,
-                    julia_init_c_file::Union{Nothing,String,Vector{String}},
-                    julia_init_h_file::Union{Nothing,String,Vector{String}},
-                    version::Union{Nothing,VersionNumber},
-                    soname::Union{Nothing,String},
-                    script::Union{Nothing,String},
-                    base_sysimage::Union{Nothing, String} = nothing
-                    )
-    project = dirname(ctx.env.project_file)
-
-    if !incremental
-        tmp = mktempdir()
-        base_sysimage = joinpath(tmp, "tmp_sys." * Libdl.dlext)
-        create_sysimage(String[]; sysimage_path=base_sysimage, project,
-                        incremental=false, filter_stdlibs, cpu_target)
-    end
-
-    if ctx.env.pkg === nothing
-        # If environment is not a package, create sysimage with all packages in project
-        packages = nothing
-    else
-        # Otherwise, only include package in sysimage
-        packages = [ctx.env.pkg.name]
-    end
-
-    create_sysimage(packages; sysimage_path, project,
-                    incremental=true,
-                    script=script,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    cpu_target,
-                    base_sysimage,
-                    julia_init_c_file,
-                    julia_init_h_file,
-                    version,
-                    soname,
-                    sysimage_build_args,
-                    include_transitive_dependencies)
-
-    return
-end
 ############
 # Bundling #
 ############
