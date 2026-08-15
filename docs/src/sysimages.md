@@ -200,3 +200,17 @@ in your current project.
 - When creating a sysimage incrementally, you can use a different sysimage as the "base sysimage" by passing the `base_sysimage` keyword argument.
 - The "cpu target" can be specified with the `cpu_target` keyword. For more information about the syntax of this option, see the [Julia manual](https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets).
 - If you need to run some code in the process creating the sysimage, the `script` argument that points to a file can be passed.
+
+### [Split sysimages](@id split-sysimages)
+
+On Julia 1.14 and later, `split_sysimage=true` writes the sysimage data to a
+separate `.ji` file next to the shared library, which must be kept alongside it.
+This keeps the shared library under the 2 GiB DLL limit on Windows and reduces
+memory use while building:
+
+```julia-repl
+julia> create_sysimage(["Example"]; sysimage_path="ExampleSysimage.so", split_sysimage=true)
+
+shell> ls
+ExampleSysimage.ji  ExampleSysimage.so
+```

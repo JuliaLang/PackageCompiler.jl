@@ -164,6 +164,12 @@ end
         end
     end
 
+    @testset "sysimage_ji_path" begin
+        @test PackageCompiler.sysimage_ji_path(joinpath("dir", "sys.dylib")) == joinpath("dir", "sys.ji")
+        @test PackageCompiler.sysimage_ji_path(joinpath("dir", "sys.so.1.2.3")) == joinpath("dir", "sys.ji")
+        @test PackageCompiler.sysimage_ji_path(joinpath("dir", "sys")) == joinpath("dir", "sys.ji")
+    end
+
     tmp = mktempdir()
 
     if extended_tests in ("all", "sysimage")
@@ -204,6 +210,22 @@ end
                 @test_throws "requires Julia v1.13" create_sysimage(; sysimage_path,
                                                                     project=new_project,
                                                                     compress_sysimage=true)
+            end
+
+            if PackageCompiler.supports_split_sysimage()
+                split_sysimage_path = joinpath(tmp, "sys_split." * Libdl.dlext)
+                create_sysimage(; sysimage_path=split_sysimage_path,
+                                project=new_project,
+                                split_sysimage=true)
+                ji_path = PackageCompiler.sysimage_ji_path(split_sysimage_path)
+                @test isfile(ji_path)
+                @test filesize(split_sysimage_path) < filesize(sysimage_path)
+                str = read(`$(Base.julia_cmd()) -J $(split_sysimage_path) -e 'println(Example.hello("split"))'`, String)
+                @test occursin("Hello, split", str)
+            else
+                @test_throws "requires Julia v1.14" create_sysimage(; sysimage_path,
+                                                                    project=new_project,
+                                                                    split_sysimage=true)
             end
         end
     end

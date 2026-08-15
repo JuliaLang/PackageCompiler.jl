@@ -338,6 +338,15 @@ end
 
 supports_sysimage_compression() = hasfield(typeof(Base.JLOptions()), :compress_sysimage)
 
+supports_split_sysimage() = isdefined(Base, :JI_FLAG_SPLIT)
+
+function sysimage_ji_path(sysimage_path::String)
+    dir, file = splitdir(sysimage_path)
+    dot = findfirst('.', file)
+    stem = dot === nothing ? file : file[1:prevind(file, dot)]
+    return joinpath(dir, stem * ".ji")
+end
+
 # Windows fails to load DLLs of 2 GiB or more with the cryptic error
 # "%1 is not a valid Win32 application".
 const WINDOWS_DLL_SIZE_LIMIT = 2^31
@@ -346,9 +355,12 @@ function warn_if_sysimage_too_big(sysimage_path::String)
     sysimage_size = filesize(sysimage_path)
     sysimage_size < WINDOWS_DLL_SIZE_LIMIT && return
     size_gib = round(sysimage_size / 2^30; digits=2)
-    compress_hint = supports_sysimage_compression() ? " passing `compress_sysimage=true`," : ""
+    hints = String[]
+    supports_split_sysimage() && push!(hints, "`split_sysimage=true`")
+    supports_sysimage_compression() && push!(hints, "`compress_sysimage=true`")
+    hint = isempty(hints) ? "" : " passing $(join(hints, " or ")),"
     @warn "The generated sysimage is $size_gib GiB, which is over the 2 GiB limit for " *
-          "loading DLLs on Windows, so it will likely fail to load. Consider$compress_hint " *
+          "loading DLLs on Windows, so it will likely fail to load. Consider$hint " *
           "including fewer packages in the sysimage, or using `filter_stdlibs=true`."
     return
 end
@@ -572,6 +584,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
 end
 
 function create_sysimg_object_file(object_file::String,
+                            ji_file::Union{Nothing, String},
                             packages::Vector{String},
                             packages_sysimg::Set{Base.PkgId};
                             project::String,
@@ -720,6 +733,8 @@ function create_sysimg_object_file(object_file::String,
     write(outputo_file, julia_code)
     # Read the input via stdin to avoid hitting the maximum command line limit
 
+    output_ji_arg = ji_file === nothing ? `` : `--output-ji=$(ji_file)`
+
     # Make sure, that the final system image is built single-threaded and
     # override any values set by "-t", "--threads" in `sysimage_build_args`
     # or provided via JULIA_NUM_THREADS.
@@ -727,7 +742,7 @@ function create_sysimg_object_file(object_file::String,
     # https://github.com/JuliaLang/PackageCompiler.jl/issues/990 containing a `git bisect` to the commit introducing the problem)
     cmd = `$(get_julia_cmd()) --cpu-target=$cpu_target $sysimage_build_args
         --sysimage=$base_sysimage --project=$project --output-o=$(object_file)
-        --threads=1 $outputo_file`
+        --threads=1 $output_ji_arg $outputo_file`
     @debug "running $cmd"
 
     non = incremental ? "" : "non"
@@ -790,6 +805,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `compress_sysimage::Bool`: If `true`, compress the sysimage data at the expense
   of slightly increased load time. This is particularly useful on Windows where sysimages of
   2 GiB or more fail to load. Requires Julia v1.13 or later. Defaults to `false`.
+
+- `split_sysimage::Bool`: If `true`, write the sysimage data to a separate `.ji` file next
+  to `sysimage_path`, which must be kept alongside it. Requires Julia v1.14 or later.
+  Defaults to `false`.
 """
 function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}, Vector{Symbol}}=nothing;
                          sysimage_path::String,
@@ -802,6 +821,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
                          compress_sysimage::Bool=false,
+                         split_sysimage::Bool=false,
                          include_transitive_dependencies::Bool=true,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
@@ -830,6 +850,10 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
             error("`compress_sysimage=true` requires Julia v1.13 or later")
         end
         sysimage_build_args = `$sysimage_build_args --compress-sysimage=yes`
+    end
+
+    if split_sysimage && !supports_split_sysimage()
+        error("`split_sysimage=true` requires Julia v1.14 or later")
     end
 
     ctx = create_pkg_context(project)
@@ -882,8 +906,13 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
     object_files = [object_file]
+    ji_file = nothing
+    if split_sysimage
+        ji_file = sysimage_ji_path(abspath(sysimage_path))
+        mkpath(dirname(ji_file))
+    end
     try
-        create_sysimg_object_file(object_file, packages, packages_sysimg;
+        create_sysimg_object_file(object_file, ji_file, packages, packages_sysimg;
                                 project,
                                 base_sysimage,
                                 precompile_execution_file,
@@ -918,6 +947,9 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                                     compat_level,
                                     version,
                                     soname)
+    catch
+        ji_file !== nothing && rm(ji_file; force=true)
+        rethrow()
     finally
         foreach(object_files) do file
             rm(file; force=true)
