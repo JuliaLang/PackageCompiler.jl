@@ -19,5 +19,5 @@ For installation and usage instructions, see the [documentation][docs-stable-url
 
 ## Upgrading from PackageCompiler 1.0
 
-PackageCompiler 2.0 comes with a few breaking changes. Read the upgrade guide [here](https://julialang.github.io/PackageCompiler.jl/dev/#Upgrading-from-PackageCompiler-1.0.)
+PackageCompiler 2.0 comes with a few breaking changes. Read the [upgrade guide](https://julialang.github.io/PackageCompiler.jl/dev/#Upgrading-from-PackageCompiler-1.0.)
 for instructions on how to upgrade to version 2.0.
