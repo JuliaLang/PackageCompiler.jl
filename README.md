@@ -4,7 +4,7 @@
 [![Codecov](https://codecov.io/gh/JuliaLang/PackageCompiler.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/PackageCompiler.jl)
 [![][docs-stable-img]][docs-stable-url]
 
-PackageCompiler is a Julia package with three main purposes:
+PackageCompiler is a Julia package with four main purposes:
 
   1. Creating custom sysimages for reduced latency when working locally with packages that have high startup times.
 

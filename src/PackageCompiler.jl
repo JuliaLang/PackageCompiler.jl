@@ -476,7 +476,6 @@ function create_sysimg_object_file(object_file::String,
                             script::Union{Nothing, String},
                             sysimage_build_args::Cmd,
                             extra_precompiles::String,
-                            release_banner::Union{Nothing, String},
                             incremental::Bool,
                             import_into_main::Bool)
     julia_code_buffer = IOBuffer()
@@ -507,12 +506,8 @@ function create_sysimg_object_file(object_file::String,
         push!(precompile_files, tracefile)
     end
     append!(precompile_files, abspath.(precompile_statements_file))
-    banner_code = release_banner === nothing ? "" : """
-        @eval Base const TAGGED_RELEASE_BANNER = $(repr(release_banner))
-        """
     precompile_code = """
         # This @eval prevents symbols from being put into Main
-        $banner_code
         @eval Module() begin
             using Base.Meta
             PrecompileStagingArea = Module()
@@ -710,7 +705,6 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          soname=nothing,
                          compat_level::String="major",
                          extra_precompiles::String = "",
-                         release_banner::Union{Nothing, String}=nothing,
                          import_into_main::Bool=true,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
@@ -789,7 +783,6 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                                 script,
                                 sysimage_build_args,
                                 extra_precompiles,
-                                release_banner,
                                 incremental,
                                 import_into_main)
         if julia_init_c_file !== nothing
@@ -1082,6 +1075,7 @@ runtime behavior.
 - `cpu_target::String=default_app_cpu_target()`: CPU target used when compiling the sysimage.
 - `include_lazy_artifacts::Bool=false`: If `true`, lazy artifacts referenced by dependencies are bundled.
 - `sysimage_build_args::Cmd=```: Additional flags for the Julia process building the sysimage.
+- `compress_sysimage::Bool=false`: Compress the sysimage data. Requires Julia v1.13 or later.
 - `include_transitive_dependencies::Bool=true`: If `true`, include transitive dependencies in the sysimage.
 - `include_preferences::Bool=true`: Bundle package preferences into `share/julia/LocalPreferences.toml`.
 - `script::Union{Nothing,String}=nothing`: Optional script executed while generating the sysimage.
@@ -1101,11 +1095,11 @@ function create_distribution(project_dir::String,
                              cpu_target::String=default_app_cpu_target(),
                              include_lazy_artifacts::Bool=false,
                              sysimage_build_args::Cmd=``,
+                             compress_sysimage::Bool=false,
                              include_transitive_dependencies::Bool=true,
                              include_preferences::Bool=true,
                              script::Union{Nothing, String}=nothing,
-                             copy_globs::Vector=String[],
-                             release_banner::Union{Nothing, String}=nothing)
+                             copy_globs::Vector=String[])
     ctx = create_pkg_context(project_dir)
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
 
@@ -1117,7 +1111,18 @@ function create_distribution(project_dir::String,
     bundle_julia_libraries(dist_dir, all_stdlibs)
     bundle_windows_import_libraries(dist_dir)
 
-    manifest_pkg_entries = gather_dependency_entries(ctx)
+    requested_packages = collect(keys(ctx.env.project.deps))
+    ctx.env.pkg === nothing || push!(requested_packages, ctx.env.pkg.name)
+    distribution_pkgids = package_ids_for_sysimage(
+        ctx, requested_packages; include_transitive_dependencies)
+
+    # Only advertise packages that are deliberately included in the sysimage.
+    # In particular, a manifest can contain inactive weak dependencies whose source
+    # is not usable after it has been replaced by a distribution stub.
+    manifest_pkg_entries = filter(gather_dependency_entries(ctx)) do entry
+        entry.name !== nothing && entry.uuid !== nothing &&
+            Base.PkgId(entry.uuid, entry.name) in distribution_pkgids
+    end
     bundle_default_stdlibs(dist_dir)
     bundle_custom_stdlibs(ctx, dist_dir, manifest_pkg_entries, copy_globs)
     bundle_julia_test_files(dist_dir)
@@ -1128,8 +1133,7 @@ function create_distribution(project_dir::String,
     bundle_julia_etc(dist_dir)
 
     # Get stdlibs that will be in the sysimage (as deps of custom packages)
-    stdlib_deps_in_sysimage = gather_dependency_entries(ctx; include_stdlibs=true)
-    stdlib_deps_names = [pkg.name for pkg in stdlib_deps_in_sysimage]
+    stdlib_deps_names = [pkg.name for pkg in distribution_pkgids if pkg.name in _STDLIBS]
     bundle_stdlib_project(dist_dir, stdlib_deps_names)
 
     bundle_julia_libexec(ctx, dist_dir)
@@ -1147,9 +1151,9 @@ function create_distribution(project_dir::String,
                     precompile_statements_file,
                     cpu_target,
                     sysimage_build_args,
+                    compress_sysimage,
                     include_transitive_dependencies,
                     script,
-                    release_banner,
                     import_into_main=false)
 
     precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
@@ -1460,8 +1464,12 @@ function ensure_default_depot_paths(dest_dir)
     mkpath(joinpath(dest_dir, "local", "share", "julia"))
 end
 
+function julia_sharedir()
+    return joinpath(abspath(Sys.BINDIR, Base.DATAROOTDIR), "julia")
+end
+
 function bundle_julia_test_files(dest_dir)
-    src_test = abspath(Sys.BINDIR, "..", "share", "julia", "test")
+    src_test = joinpath(julia_sharedir(), "test")
     if isdir(src_test)
         dest_test = joinpath(dest_dir, "share", "julia", "test")
         if isdir(dest_test)
@@ -1472,7 +1480,7 @@ function bundle_julia_test_files(dest_dir)
 end
 
 function bundle_julia_base_files(dest_dir)
-    src_base = abspath(Sys.BINDIR, "..", "share", "julia", "base")
+    src_base = joinpath(julia_sharedir(), "base")
     if isdir(src_base)
         dest_base = joinpath(dest_dir, "share", "julia", "base")
         if isdir(dest_base)
@@ -1483,7 +1491,7 @@ function bundle_julia_base_files(dest_dir)
 end
 
 function bundle_julia_compiler_files(dest_dir)
-    src_compiler = abspath(Sys.BINDIR, "..", "share", "julia", "Compiler")
+    src_compiler = joinpath(julia_sharedir(), "Compiler")
     if isdir(src_compiler)
         dest_compiler = joinpath(dest_dir, "share", "julia", "Compiler")
         if isdir(dest_compiler)
@@ -1494,7 +1502,7 @@ function bundle_julia_compiler_files(dest_dir)
 end
 
 function bundle_julia_include(dest_dir)
-    src_include = abspath(Sys.BINDIR, "..", "include")
+    src_include = abspath(Sys.BINDIR, Base.INCLUDEDIR)
     if isdir(src_include)
         dest_include = joinpath(dest_dir, "include")
         cp(src_include, dest_include; force=true)
@@ -1502,7 +1510,7 @@ function bundle_julia_include(dest_dir)
 end
 
 function bundle_julia_etc(dest_dir)
-    src_etc = abspath(Sys.BINDIR, "..", "etc")
+    src_etc = abspath(Sys.BINDIR, Base.SYSCONFDIR)
     if isdir(src_etc)
         dest_etc = joinpath(dest_dir, "etc")
         cp(src_etc, dest_etc; force=true)
@@ -1510,7 +1518,7 @@ function bundle_julia_etc(dest_dir)
 end
 
 function bundle_julia_support_files(dest_dir)
-    src_share = abspath(Sys.BINDIR, "..", "share", "julia")
+    src_share = julia_sharedir()
     dest_share = joinpath(dest_dir, "share", "julia")
 
     # Bundle individual files and directories
@@ -1592,12 +1600,10 @@ function bundle_stdlib_project(dest_dir, packages_in_sysimage::Vector{String})
     end
 end
 
-function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
-    julia_exe = joinpath(dist_dir, "bin", "julia")
+function precompile_stdlibs_cmd(dist_dir, sysimage_path, cpu_target)
+    julia_exe = joinpath(dist_dir, "bin", Base.julia_exename())
     depot_path = joinpath(dist_dir, "share", "julia")
     stdlib_dir = joinpath(depot_path, "stdlib")
-    compiled_dir = joinpath(depot_path, "compiled")
-    mkpath(compiled_dir)
 
     # Precompile all packages in the stdlib that aren't in the sysimage
     precompile_code = """
@@ -1611,26 +1617,76 @@ function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
     # - JULIA_LOAD_PATH has @stdlib AND the stdlib dir (which contains Project.toml/Manifest.toml)
     # - JULIA_PROJECT is NOT set (important for correct extension handling)
     pathsep = Sys.iswindows() ? ";" : ":"
-    env = Dict(
+    env = Dict{String, Union{String, Nothing}}(
         "JULIA_DEPOT_PATH" => depot_path,
         "JULIA_LOAD_PATH" => "@stdlib$(pathsep)$(stdlib_dir)",
-        "JULIA_CPU_TARGET" => cpu_target
+        "JULIA_CPU_TARGET" => cpu_target,
+        "JULIA_PROJECT" => nothing,
     )
 
-    cmd = setenv(`$julia_exe --sysimage=$sysimage_path --startup-file=no -e $precompile_code`, env)
+    cmd = `$julia_exe --sysimage=$sysimage_path --startup-file=no -e $precompile_code`
+    return addenv(cmd, env)
+end
+
+function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
+    mkpath(joinpath(dist_dir, "share", "julia", "compiled"))
+    cmd = precompile_stdlibs_cmd(dist_dir, sysimage_path, cpu_target)
 
     @info "Precompiling stdlibs for the distribution..."
     run(cmd)
 end
 
 function bundle_default_stdlibs(dest_dir)
-    src_stdlib = abspath(Sys.BINDIR, "..", "share", "julia", "stdlib")
+    src_stdlib = dirname(Sys.STDLIB)
     dest_stdlib = joinpath(dest_dir, "share", "julia", "stdlib")
     mkpath(dirname(dest_stdlib))
     if isdir(dest_stdlib)
         rm(dest_stdlib; recursive=true, force=true)
     end
     cp(src_stdlib, dest_stdlib; force=true)
+end
+
+function package_relative_path(path, package_root)
+    relative_path = relpath(normpath(path), normpath(package_root))
+    if isabspath(relative_path) || first(splitpath(relative_path)) == ".."
+        throw(ArgumentError("copy_globs matched a path outside the package root: $(repr(path))"))
+    end
+    return relative_path
+end
+
+function copy_package_files(package_root, destination, copy_globs)
+    for pattern in copy_globs
+        # For string patterns ending with ** or **/*, copy entire directory tree recursively
+        if pattern isa AbstractString && (endswith(pattern, "**") || endswith(pattern, "**/*"))
+            base_dir = replace(replace(pattern, "**/*" => ""), "**" => "")
+            base_dir = rstrip(base_dir, ['/', '\\'])
+            source_dir = joinpath(package_root, base_dir)
+            package_relative_path(source_dir, package_root)
+            isdir(source_dir) || continue
+
+            for (root, _, files) in walkdir(source_dir)
+                for file in files
+                    src_file = joinpath(root, file)
+                    relative_path = package_relative_path(src_file, package_root)
+                    dest_file = joinpath(destination, relative_path)
+                    mkpath(dirname(dest_file))
+                    cp(src_file, dest_file; force=true)
+                end
+            end
+        else
+            # Glob accepts strings or vectors of path-component matchers. Make a
+            # scalar Regex/FilenameMatch into a one-component pattern.
+            glob_pattern = pattern isa Union{AbstractString, AbstractVector} ? pattern : [pattern]
+            for src_file in glob(glob_pattern, package_root)
+                isfile(src_file) || continue
+                relative_path = package_relative_path(src_file, package_root)
+                dest_file = joinpath(destination, relative_path)
+                mkpath(dirname(dest_file))
+                cp(src_file, dest_file; force=true)
+            end
+        end
+    end
+    return nothing
 end
 
 function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.PackageEntry},
@@ -1652,47 +1708,12 @@ function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.Package
         mkpath(pkg_stdlib_dir)
         cp(project_toml, joinpath(pkg_stdlib_dir, "Project.toml"); force=true)
 
-        # Copy files matching glob patterns if specified
-        if !isempty(copy_globs)
-            for pattern in copy_globs
-                # For string patterns ending with ** or **/*, copy entire directory tree recursively
-                if pattern isa AbstractString && (endswith(pattern, "**") || endswith(pattern, "**/*"))
-                    base_dir = replace(replace(pattern, "**/*" => ""), "**" => "")
-                    base_dir = rstrip(base_dir, ['/', '\\'])
-                    source_dir = joinpath(pkg_source_path, base_dir)
+        copy_package_files(pkg_source_path, pkg_stdlib_dir, copy_globs)
 
-                    if !isdir(source_dir)
-                        continue
-                    end
-
-                    # Recursively copy all files in the directory
-                    for (root, dirs, files) in walkdir(source_dir)
-                        for file in files
-                            src_file = joinpath(root, file)
-                            rel_path = relpath(src_file, pkg_source_path)
-                            dest_file = joinpath(pkg_stdlib_dir, rel_path)
-                            mkpath(dirname(dest_file))
-                            cp(src_file, dest_file; force=true)
-                        end
-                    end
-                else
-                    # Use glob for specific patterns (supports strings, GlobMatch, Regex, etc.)
-                    matched_files = glob(pattern, pkg_source_path)
-                    for src_file in matched_files
-                        if isfile(src_file)
-                            rel_path = relpath(src_file, pkg_source_path)
-                            dest_file = joinpath(pkg_stdlib_dir, rel_path)
-                            mkpath(dirname(dest_file))
-                            cp(src_file, dest_file; force=true)
-                        end
-                    end
-                end
-            end
-        else
-            # Create stub if no globs specified
-            stub_dir = joinpath(pkg_stdlib_dir, "src")
-            mkpath(stub_dir)
-            stub_path = joinpath(stub_dir, string(pkg_name, ".jl"))
+        # Keep the package discoverable even when only data files were selected.
+        stub_path = joinpath(pkg_stdlib_dir, "src", string(pkg_name, ".jl"))
+        if !isfile(stub_path)
+            mkpath(dirname(stub_path))
             open(stub_path, "w") do io
                 println(io, "# Autogenerated placeholder for $(pkg_name).")
                 println(io, "# The module implementation currently ships inside the sysimage.")

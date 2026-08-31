@@ -63,6 +63,11 @@ jobs:
             app-configuration: filtered
             extended-tests: sysimage
           - julia-version: '1.12'
+            github-runner: ubuntu-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: distribution
+          - julia-version: '1.12'
             github-runner: windows-latest
             coverage: 'false'
             app-configuration: default

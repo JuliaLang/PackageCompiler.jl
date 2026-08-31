@@ -98,6 +98,39 @@ end
         end
     end
 
+    @testset "distribution helpers" begin
+        mktempdir() do source_dir
+            destination = mktempdir()
+            write(joinpath(source_dir, "LICENSE"), "license text")
+            mkpath(joinpath(source_dir, "assets"))
+            write(joinpath(source_dir, "assets", "data.txt"), "data")
+
+            # Scalar regex matchers need to be wrapped as path components for Glob.glob.
+            PackageCompiler.copy_package_files(
+                source_dir, destination, Any[r"LICENSE", "assets/**"])
+            @test read(joinpath(destination, "LICENSE"), String) == "license text"
+            @test read(joinpath(destination, "assets", "data.txt"), String) == "data"
+            @test_throws ArgumentError PackageCompiler.copy_package_files(
+                source_dir, destination, ["../**"])
+        end
+
+        withenv("PACKAGECOMPILER_INHERITED_TEST" => "inherited",
+                "JULIA_PROJECT" => "must-not-leak") do
+            mktempdir() do dist_dir
+                sysimage_path = joinpath(dist_dir, "lib", "julia", "sys." * Libdl.dlext)
+                cmd = PackageCompiler.precompile_stdlibs_cmd(dist_dir, sysimage_path, "test-cpu")
+                cmd_env = Dict(begin
+                    key, value = split(entry, '='; limit=2)
+                    key => value
+                end for entry in cmd.env)
+                @test cmd.exec[1] == joinpath(dist_dir, "bin", Base.julia_exename())
+                @test cmd_env["PACKAGECOMPILER_INHERITED_TEST"] == "inherited"
+                @test cmd_env["JULIA_CPU_TARGET"] == "test-cpu"
+                @test !haskey(cmd_env, "JULIA_PROJECT")
+            end
+        end
+    end
+
     tmp = mktempdir()
 
     if extended_tests in ("all", "sysimage")
@@ -249,11 +282,12 @@ end
             tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
             cp(dist_source_dir, tmp_dist_source_dir)
             ctx = PackageCompiler.create_pkg_context(tmp_dist_source_dir)
-            expected_entries = PackageCompiler.gather_dependency_entries(ctx)
-            expected_names = [something(entry.name, string(entry.uuid)) for entry in expected_entries]
+            expected_names = setdiff(collect(keys(ctx.env.project.deps)), PackageCompiler._STDLIBS)
             dist_target_dir = joinpath(tmp, "CustomJulia")
             try
-                create_distribution(tmp_dist_source_dir, dist_target_dir; force=true, include_lazy_artifacts=true)
+                create_distribution(tmp_dist_source_dir, dist_target_dir;
+                                    force=true,
+                                    include_lazy_artifacts=true)
             finally
                 rm_with_retry(tmp_dist_source_dir; recursive=true)
                 rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
@@ -261,7 +295,7 @@ end
                 rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end
             julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
-            output = read(`$(julia_bin) -e 'using Example; print(Example.hello("distribution"))'`, String)
+            output = read(`$(julia_bin) -e 'using MyApp, Example; print(Example.hello("distribution"))'`, String)
             @test occursin("Hello, distribution", output)
             stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
             for name in expected_names
