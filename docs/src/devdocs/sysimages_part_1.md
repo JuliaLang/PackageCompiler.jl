@@ -293,10 +293,10 @@ julia> stat(unsafe_string(Base.JLOptions().image_file)).size / (1024*1024)
 ##### macOS
 
 On `macOS` the linker flag `-Wl,--whole-archive` is instead written as
-`-Wl,-all_load` so the command would be
+`-Wl,-force_load` for each object file, so the command would be
 
 ```
-gcc -shared -o sys.dylib -Wl,-all_load sys.o -L"/home/kc/Applications/julia-1.3.0-rc4/lib" -ljulia
+gcc -shared -o sys.dylib -Wl,-force_load,sys.o -L"/home/kc/Applications/julia-1.3.0-rc4/lib" -ljulia
 ```
 
 Note that the extension has been changed from `so` to `dylib` which is the
