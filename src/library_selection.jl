@@ -18,5 +18,5 @@ const required_libraries = Dict(
     "linux" =>   ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libunwind", "libuv", "libz", "libzstd"],
     "mac" =>     ["libLLVM", "libatomic", "libdSFMT", "libgcc_s",     "libgfortran", "libgmp", "libgmpxx", "libgomp", "libjulia-codegen", "libjulia-internal", "libmpfr", "libopenlibm", "libpcre2-8",                                                             "libquadmath", "libssp", "libstdc++", "libuv", "libz", "libzstd"]
 )
-push!(required_libraries["windows"], "libgcc_s_jlj")
+push!(required_libraries["windows"], "libgcc_s_sjlj")
 push!(required_libraries["mac"], "libunwind")
