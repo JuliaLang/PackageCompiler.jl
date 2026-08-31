@@ -1,4 +1,4 @@
-using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_library
+using PackageCompiler: PackageCompiler, create_sysimage, create_app, create_distribution, create_library
 using Test
 using Libdl
 using Pkg
@@ -47,7 +47,7 @@ function app_configurations()
     return configurations
 end
 
-extended_tests in ("all", "none", "sysimage", "library") ||
+extended_tests in ("all", "none", "sysimage", "distribution", "library") ||
     error("unknown PACKAGECOMPILER_TEST_EXTENDED=$(repr(extended_tests))")
 
 if is_ci
@@ -95,6 +95,39 @@ end
         # builds are the exception: they keep the private libraries in `Frameworks/`.
         if !Base.DARWIN_FRAMEWORK
             @test private_libdir in (lib_dir, joinpath(lib_dir, "julia"))
+        end
+    end
+
+    @testset "distribution helpers" begin
+        mktempdir() do source_dir
+            destination = mktempdir()
+            write(joinpath(source_dir, "LICENSE"), "license text")
+            mkpath(joinpath(source_dir, "assets"))
+            write(joinpath(source_dir, "assets", "data.txt"), "data")
+
+            # Scalar regex matchers need to be wrapped as path components for Glob.glob.
+            PackageCompiler.copy_package_files(
+                source_dir, destination, Any[r"LICENSE", "assets/**"])
+            @test read(joinpath(destination, "LICENSE"), String) == "license text"
+            @test read(joinpath(destination, "assets", "data.txt"), String) == "data"
+            @test_throws ArgumentError PackageCompiler.copy_package_files(
+                source_dir, destination, ["../**"])
+        end
+
+        withenv("PACKAGECOMPILER_INHERITED_TEST" => "inherited",
+                "JULIA_PROJECT" => "must-not-leak") do
+            mktempdir() do dist_dir
+                sysimage_path = joinpath(dist_dir, "lib", "julia", "sys." * Libdl.dlext)
+                cmd = PackageCompiler.precompile_stdlibs_cmd(dist_dir, sysimage_path, "test-cpu")
+                cmd_env = Dict(begin
+                    key, value = split(entry, '='; limit=2)
+                    key => value
+                end for entry in cmd.env)
+                @test cmd.exec[1] == joinpath(dist_dir, "bin", Base.julia_exename())
+                @test cmd_env["PACKAGECOMPILER_INHERITED_TEST"] == "inherited"
+                @test cmd_env["JULIA_CPU_TARGET"] == "test-cpu"
+                @test !haskey(cmd_env, "JULIA_PROJECT")
+            end
         end
     end
 
@@ -242,6 +275,41 @@ end
             @info "done: create_app testset" incremental filter
         end
     end # testset
+
+    if !is_slow_ci && extended_tests in ("all", "distribution")
+        @testset "create_distribution" begin
+            dist_source_dir = joinpath(@__DIR__, "..", "examples/MyApp/")
+            tmp_dist_source_dir = joinpath(tmp, "MyAppDistSource")
+            cp(dist_source_dir, tmp_dist_source_dir)
+            ctx = PackageCompiler.create_pkg_context(tmp_dist_source_dir)
+            expected_names = setdiff(collect(keys(ctx.env.project.deps)), PackageCompiler._STDLIBS)
+            dist_target_dir = joinpath(tmp, "CustomJulia")
+            try
+                create_distribution(tmp_dist_source_dir, dist_target_dir;
+                                    force=true,
+                                    include_lazy_artifacts=true)
+            finally
+                rm_with_retry(tmp_dist_source_dir; recursive=true)
+                rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+            julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
+            output = withenv("JULIA_DEPOT_PATH" => nothing,
+                             "JULIA_LOAD_PATH" => nothing,
+                             "JULIA_PROJECT" => nothing) do
+                read(`$(julia_bin) --startup-file=no -e 'using MyApp, Example; print(Example.hello("distribution"))'`, String)
+            end
+            @test occursin("Hello, distribution", output)
+            stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
+            for name in expected_names
+                project_path = joinpath(stdlib_version_dir, name, "Project.toml")
+                stub_path = joinpath(stdlib_version_dir, name, "src", string(name, ".jl"))
+                @test isfile(project_path)
+                @test isfile(stub_path)
+            end
+        end
+    end
 
     if !is_slow_ci && extended_tests in ("all", "library")
         @testset "create_library" begin

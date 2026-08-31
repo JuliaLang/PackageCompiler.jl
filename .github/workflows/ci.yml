@@ -63,6 +63,11 @@ jobs:
             app-configuration: filtered
             extended-tests: sysimage
           - julia-version: '1.12'
+            github-runner: ubuntu-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: distribution
+          - julia-version: '1.12'
             github-runner: windows-latest
             coverage: 'false'
             app-configuration: default
@@ -116,7 +121,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
-        run: julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(); include("docs/make.jl")'
   build-mylib:
     runs-on: ubuntu-latest
     timeout-minutes: 60

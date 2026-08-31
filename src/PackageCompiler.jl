@@ -12,7 +12,7 @@ using TOML
 using Glob
 using p7zip_jll: p7zip_path
 
-export create_sysimage, create_app, create_library
+export create_sysimage, create_app, create_distribution, create_library
 
 include("juliaconfig.jl")
 include("../ext/TerminalSpinners.jl")
@@ -36,13 +36,13 @@ const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
 default_julia_init() = String(DEFAULT_JULIA_INIT)
 default_julia_init_header() = String(DEFAULT_JULIA_INIT_HEADER)
 
-# See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
+# See https://github.com/JuliaCI/julia-buildbot/blob/16890ab559a27c15d133d36f5f9ac294dee7b811/master/inventory.py
 function default_app_cpu_target()
-    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                        :
-    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"  :
-    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                          :
-    Sys.ARCH === :aarch64     ?  "generic"   #= is this really the best here? =#                   :
-    Sys.ARCH === :powerpc64le ?  "pwr8"                                                            :
+    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                                          :
+    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"                    :
+    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                                            :
+    Sys.ARCH === :aarch64     ?  "generic;cortex-a57;thunderx2t99;armv8.2-a,crypto,fullfp16,lse,rdm"                 :
+    Sys.ARCH === :powerpc64le ?  "pwr8"                                                                              :
         "generic"
 end
 
@@ -177,6 +177,18 @@ function gather_stdlibs_project(ctx)
     stdlib_names = String[pkg.name for (_, pkg) in ctx.env.manifest]
     filter!(pkg -> pkg in _STDLIBS, stdlib_names)
     return stdlib_names
+end
+
+function gather_dependency_entries(ctx; include_stdlibs::Bool=false)
+    manifest = ctx.env.manifest
+    manifest === nothing && return Pkg.Types.PackageEntry[]
+    entries = Pkg.Types.PackageEntry[]
+    for entry in values(manifest)
+        include_stdlibs || entry.name in _STDLIBS && continue
+        push!(entries, entry)
+    end
+    sort!(entries, by = entry -> something(entry.name, entry.uuid === nothing ? "" : string(entry.uuid)))
+    return entries
 end
 
 function check_packages_in_project(ctx, packages)
@@ -1003,6 +1015,7 @@ function create_app(package_dir::String,
     end
     library_info = bundle_julia_libraries(app_dir, stdlibs; quiet)
     artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts, quiet)
+    bundle_windows_import_libraries(app_dir)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
@@ -1041,6 +1054,111 @@ function create_app(package_dir::String,
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
     end
+end
+
+"""
+    create_distribution(project_dir::String, dist_dir::String; kwargs...)
+
+Create a relocatable Julia tree rooted at `dist_dir` that behaves like the official
+Julia downloads but with the dependencies of `project_dir` baked into the sysimage.
+The baked packages are also exposed as stdlibs so that Pkg treats them as part of
+the distribution. Packages are not imported into `Main`, keeping the default Julia
+runtime behavior.
+
+# Keyword arguments
+
+- `precompile_execution_file`: Same as [`create_app`](@ref), these scripts are executed when generating
+  the sysimage.
+- `precompile_statements_file`: Extra precompile statements appended to the sysimage build.
+- `incremental::Bool=true`: Whether to extend the current Julia sysimage instead of creating a fresh one.
+- `force::Bool=false`: Overwrite `dist_dir` if it exists.
+- `cpu_target::String=default_app_cpu_target()`: CPU target used when compiling the sysimage.
+- `include_lazy_artifacts::Bool=false`: If `true`, lazy artifacts referenced by dependencies are bundled.
+- `sysimage_build_args::Cmd=```: Additional flags for the Julia process building the sysimage.
+- `compress_sysimage::Bool=false`: Compress the sysimage data. Requires Julia v1.13 or later.
+- `include_transitive_dependencies::Bool=true`: If `true`, include transitive dependencies in the sysimage.
+- `include_preferences::Bool=true`: Bundle package preferences into `share/julia/LocalPreferences.toml`.
+- `script::Union{Nothing,String}=nothing`: Optional script executed while generating the sysimage.
+- `copy_globs::Vector=String[]`: Glob patterns for copying package files to the stdlib directory.
+  Patterns are relative to each package root and apply to all packages in the distribution.
+  Accepts anything that `Glob.glob` accepts as a pattern: strings, `GlobMatch` objects,
+  `Regex`, or any object implementing `occursin`. Use `Glob.FilenameMatch` (e.g. `fn"license*"i`)
+  for case-insensitive matching.
+  Example: `["assets/**", "data/**"]` copies assets and data directories for all packages.
+"""
+function create_distribution(project_dir::String,
+                             dist_dir::String;
+                             precompile_execution_file::Union{String, Vector{String}}=String[],
+                             precompile_statements_file::Union{String, Vector{String}}=String[],
+                             incremental::Bool=true,
+                             force::Bool=false,
+                             cpu_target::String=default_app_cpu_target(),
+                             include_lazy_artifacts::Bool=false,
+                             sysimage_build_args::Cmd=``,
+                             compress_sysimage::Bool=false,
+                             include_transitive_dependencies::Bool=true,
+                             include_preferences::Bool=true,
+                             script::Union{Nothing, String}=nothing,
+                             copy_globs::Vector=String[])
+    ctx = create_pkg_context(project_dir)
+    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp=false)
+
+    try_rm_dir(dist_dir; force)
+    ensure_default_depot_paths(dist_dir)
+
+    # For distributions, we need to bundle libraries for ALL stdlibs from the running Julia
+    all_stdlibs = readdir(Sys.STDLIB)
+    bundle_julia_libraries(dist_dir, all_stdlibs)
+    bundle_windows_import_libraries(dist_dir)
+
+    requested_packages = collect(keys(ctx.env.project.deps))
+    ctx.env.pkg === nothing || push!(requested_packages, ctx.env.pkg.name)
+    distribution_pkgids = package_ids_for_sysimage(
+        ctx, requested_packages; include_transitive_dependencies)
+
+    # Only advertise packages that are deliberately included in the sysimage.
+    # In particular, a manifest can contain inactive weak dependencies whose source
+    # is not usable after it has been replaced by a distribution stub.
+    manifest_pkg_entries = filter(gather_dependency_entries(ctx)) do entry
+        entry.name !== nothing && entry.uuid !== nothing &&
+            Base.PkgId(entry.uuid, entry.name) in distribution_pkgids
+    end
+    bundle_default_stdlibs(dist_dir)
+    bundle_custom_stdlibs(ctx, dist_dir, manifest_pkg_entries, copy_globs)
+    bundle_julia_test_files(dist_dir)
+    bundle_julia_base_files(dist_dir)
+    bundle_julia_compiler_files(dist_dir)
+    bundle_julia_support_files(dist_dir)
+    bundle_julia_include(dist_dir)
+    bundle_julia_etc(dist_dir)
+
+    # Get stdlibs that will be in the sysimage (as deps of custom packages)
+    stdlib_deps_names = [pkg.name for pkg in distribution_pkgids if pkg.name in _STDLIBS]
+    bundle_stdlib_project(dist_dir, stdlib_deps_names)
+
+    bundle_julia_libexec(ctx, dist_dir)
+    bundle_julia_executable(dist_dir)
+    bundle_artifacts(ctx, dist_dir; include_lazy_artifacts)
+    include_preferences && bundle_preferences(ctx, dist_dir)
+    bundle_cert(dist_dir)
+
+    sysimage_path = joinpath(dist_dir, "lib", "julia", "sys." * Libdl.dlext)
+    project = dirname(ctx.env.project_file)
+    create_sysimage(; sysimage_path, project,
+                    incremental,
+                    filter_stdlibs=false,
+                    precompile_execution_file,
+                    precompile_statements_file,
+                    cpu_target,
+                    sysimage_build_args,
+                    compress_sysimage,
+                    include_transitive_dependencies,
+                    script,
+                    import_into_main=false)
+
+    precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
+
+    return nothing
 end
 
 
@@ -1232,6 +1350,7 @@ function create_library(package_or_project::String,
     end
     library_info = bundle_julia_libraries(dest_dir, stdlibs; quiet)
     artifact_info = bundle_artifacts(ctx, dest_dir; include_lazy_artifacts, quiet)
+    bundle_windows_import_libraries(dest_dir)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
@@ -1338,6 +1457,269 @@ function bundle_project(ctx, dir)
     d["deps"] = ctx.env.project.deps
 
     Pkg.Types.write_project(d, joinpath(julia_share, "Project.toml"))
+end
+
+function ensure_default_depot_paths(dest_dir)
+    mkpath(joinpath(dest_dir, "share", "julia"))
+    mkpath(joinpath(dest_dir, "local", "share", "julia"))
+end
+
+function julia_sharedir()
+    return joinpath(abspath(Sys.BINDIR, Base.DATAROOTDIR), "julia")
+end
+
+function bundle_julia_test_files(dest_dir)
+    src_test = joinpath(julia_sharedir(), "test")
+    if isdir(src_test)
+        dest_test = joinpath(dest_dir, "share", "julia", "test")
+        if isdir(dest_test)
+            rm(dest_test; recursive=true, force=true)
+        end
+        cp(src_test, dest_test; force=true)
+    end
+end
+
+function bundle_julia_base_files(dest_dir)
+    src_base = joinpath(julia_sharedir(), "base")
+    if isdir(src_base)
+        dest_base = joinpath(dest_dir, "share", "julia", "base")
+        if isdir(dest_base)
+            rm(dest_base; recursive=true, force=true)
+        end
+        cp(src_base, dest_base; force=true)
+    end
+end
+
+function bundle_julia_compiler_files(dest_dir)
+    src_compiler = joinpath(julia_sharedir(), "Compiler")
+    if isdir(src_compiler)
+        dest_compiler = joinpath(dest_dir, "share", "julia", "Compiler")
+        if isdir(dest_compiler)
+            rm(dest_compiler; recursive=true, force=true)
+        end
+        cp(src_compiler, dest_compiler; force=true)
+    end
+end
+
+function bundle_julia_include(dest_dir)
+    src_include = abspath(Sys.BINDIR, Base.INCLUDEDIR)
+    if isdir(src_include)
+        dest_include = joinpath(dest_dir, "include")
+        cp(src_include, dest_include; force=true)
+    end
+end
+
+function bundle_julia_etc(dest_dir)
+    src_etc = abspath(Sys.BINDIR, Base.SYSCONFDIR)
+    if isdir(src_etc)
+        dest_etc = joinpath(dest_dir, "etc")
+        cp(src_etc, dest_etc; force=true)
+    end
+end
+
+function bundle_julia_support_files(dest_dir)
+    src_share = julia_sharedir()
+    dest_share = joinpath(dest_dir, "share", "julia")
+
+    # Bundle individual files and directories
+    for item in ["julia-config.jl", "juliac", "terminfo"]
+        src_item = joinpath(src_share, item)
+        dest_item = joinpath(dest_share, item)
+        if isfile(src_item)
+            cp(src_item, dest_item; force=true)
+        elseif isdir(src_item)
+            if isdir(dest_item)
+                rm(dest_item; recursive=true, force=true)
+            end
+            cp(src_item, dest_item; force=true)
+        end
+    end
+end
+
+function bundle_stdlib_project(dest_dir, packages_in_sysimage::Vector{String})
+    # Dynamically generate stdlib Project.toml and Manifest.toml from running Julia's stdlibs
+    # Include all stdlibs in manifest for dependency resolution, but only list non-sysimage ones in Project.toml
+    dest_stdlib = joinpath(dest_dir, "share", "julia", "stdlib")
+    mkpath(dest_stdlib)
+
+    # Get list of packages in the sysimage
+    sysimage_pkgs = Set(map(pkg -> pkg.name, stdlibs_in_default_sysimage()))
+    union!(sysimage_pkgs, packages_in_sysimage)
+
+    # Collect stdlib packages for Project.toml (only non-sysimage)
+    stdlib_deps = Dict{String, String}()
+    # Collect ALL stdlib packages for Manifest.toml (needed for dependency resolution)
+    all_stdlib_deps = Dict{String, String}()
+    for pkg_name in readdir(Sys.STDLIB)
+        pkg_project = joinpath(Sys.STDLIB, pkg_name, "Project.toml")
+        if isfile(pkg_project)
+            proj = TOML.parsefile(pkg_project)
+            if haskey(proj, "uuid")
+                all_stdlib_deps[pkg_name] = proj["uuid"]
+                # Only add to Project.toml if not in sysimage
+                if !(pkg_name in sysimage_pkgs)
+                    stdlib_deps[pkg_name] = proj["uuid"]
+                end
+            end
+        end
+    end
+
+    # Generate Project.toml
+    project = Dict("deps" => stdlib_deps)
+    open(joinpath(dest_stdlib, "Project.toml"), "w") do io
+        TOML.print(io, project)
+    end
+
+    # Generate Manifest.toml
+    manifest = Dict{String, Any}()
+    manifest["julia_version"] = string(VERSION)
+    manifest["manifest_format"] = "2.0"
+    manifest["deps"] = Dict{String, Any}()
+
+    # Add each stdlib as a manifest entry (use all_stdlib_deps for complete dependency resolution)
+    for (name, uuid) in all_stdlib_deps
+        pkg_proj = TOML.parsefile(joinpath(Sys.STDLIB, name, "Project.toml"))
+        entry = Dict{String, Any}("uuid" => uuid)
+        if haskey(pkg_proj, "version")
+            entry["version"] = pkg_proj["version"]
+        end
+        if haskey(pkg_proj, "deps")
+            entry["deps"] = collect(keys(pkg_proj["deps"]))
+        end
+        if haskey(pkg_proj, "weakdeps")
+            entry["weakdeps"] = collect(keys(pkg_proj["weakdeps"]))
+        end
+        if haskey(pkg_proj, "extensions")
+            entry["extensions"] = pkg_proj["extensions"]
+        end
+        manifest["deps"][name] = [entry]
+    end
+
+    open(joinpath(dest_stdlib, "Manifest.toml"), "w") do io
+        TOML.print(io, manifest)
+    end
+end
+
+function precompile_stdlibs_cmd(dist_dir, sysimage_path, cpu_target)
+    julia_exe = joinpath(dist_dir, "bin", Base.julia_exename())
+    depot_path = joinpath(dist_dir, "share", "julia")
+    stdlib_dir = joinpath(depot_path, "stdlib")
+
+    # Precompile all packages in the stdlib that aren't in the sysimage
+    precompile_code = """
+        Base.Precompilation.precompilepkgs(configs=[
+            `` => Base.CacheFlags(debug_level=2, opt_level=3),
+            `` => Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)
+        ]; io=stdout)
+        """
+
+    # Match Julia's pkgimage.mk approach:
+    # - JULIA_LOAD_PATH has @stdlib AND the stdlib dir (which contains Project.toml/Manifest.toml)
+    # - JULIA_PROJECT is NOT set (important for correct extension handling)
+    pathsep = Sys.iswindows() ? ";" : ":"
+    env = Dict{String, Union{String, Nothing}}(
+        "JULIA_DEPOT_PATH" => depot_path,
+        "JULIA_LOAD_PATH" => "@stdlib$(pathsep)$(stdlib_dir)",
+        "JULIA_CPU_TARGET" => cpu_target,
+        "JULIA_PROJECT" => nothing,
+    )
+
+    cmd = `$julia_exe --sysimage=$sysimage_path --startup-file=no -e $precompile_code`
+    return addenv(cmd, env)
+end
+
+function precompile_stdlibs(dist_dir, sysimage_path, cpu_target)
+    mkpath(joinpath(dist_dir, "share", "julia", "compiled"))
+    cmd = precompile_stdlibs_cmd(dist_dir, sysimage_path, cpu_target)
+
+    @info "Precompiling stdlibs for the distribution..."
+    run(cmd)
+end
+
+function bundle_default_stdlibs(dest_dir)
+    src_stdlib = dirname(Sys.STDLIB)
+    dest_stdlib = joinpath(dest_dir, "share", "julia", "stdlib")
+    mkpath(dirname(dest_stdlib))
+    if isdir(dest_stdlib)
+        rm(dest_stdlib; recursive=true, force=true)
+    end
+    cp(src_stdlib, dest_stdlib; force=true)
+end
+
+function package_relative_path(path, package_root)
+    relative_path = relpath(normpath(path), normpath(package_root))
+    if isabspath(relative_path) || first(splitpath(relative_path)) == ".."
+        throw(ArgumentError("copy_globs matched a path outside the package root: $(repr(path))"))
+    end
+    return relative_path
+end
+
+function copy_package_files(package_root, destination, copy_globs)
+    for pattern in copy_globs
+        # For string patterns ending with ** or **/*, copy entire directory tree recursively
+        if pattern isa AbstractString && (endswith(pattern, "**") || endswith(pattern, "**/*"))
+            base_dir = replace(replace(pattern, "**/*" => ""), "**" => "")
+            base_dir = rstrip(base_dir, ['/', '\\'])
+            source_dir = joinpath(package_root, base_dir)
+            package_relative_path(source_dir, package_root)
+            isdir(source_dir) || continue
+
+            for (root, _, files) in walkdir(source_dir)
+                for file in files
+                    src_file = joinpath(root, file)
+                    relative_path = package_relative_path(src_file, package_root)
+                    dest_file = joinpath(destination, relative_path)
+                    mkpath(dirname(dest_file))
+                    cp(src_file, dest_file; force=true)
+                end
+            end
+        else
+            # Glob accepts strings or vectors of path-component matchers. Make a
+            # scalar Regex/FilenameMatch into a one-component pattern.
+            glob_pattern = pattern isa Union{AbstractString, AbstractVector} ? pattern : [pattern]
+            for src_file in glob(glob_pattern, package_root)
+                isfile(src_file) || continue
+                relative_path = package_relative_path(src_file, package_root)
+                dest_file = joinpath(destination, relative_path)
+                mkpath(dirname(dest_file))
+                cp(src_file, dest_file; force=true)
+            end
+        end
+    end
+    return nothing
+end
+
+function bundle_custom_stdlibs(ctx, dest_dir, packages::Vector{Pkg.Types.PackageEntry},
+                               copy_globs::Vector=String[])
+    isempty(packages) && return
+    version_dir = joinpath(dest_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
+    mkpath(version_dir)
+    for pkg in packages
+        pkg_source_path = source_path(ctx, pkg)
+        pkg_source_path === nothing && error("Unable to locate source for $(pkg.name) [$(pkg.uuid)]; ensure the package exists in the current project.")
+        project_toml = joinpath(pkg_source_path, "Project.toml")
+        isfile(project_toml) || error("Project.toml for package $(pkg.name) not found at $(project_toml)")
+        pkg_name = something(pkg.name, string(pkg.uuid))
+        pkg_stdlib_dir = joinpath(version_dir, pkg_name)
+        if isdir(pkg_stdlib_dir)
+            @debug "Stdlib directory $(pkg_stdlib_dir) already exists; not overwriting"
+            continue
+        end
+        mkpath(pkg_stdlib_dir)
+        cp(project_toml, joinpath(pkg_stdlib_dir, "Project.toml"); force=true)
+
+        copy_package_files(pkg_source_path, pkg_stdlib_dir, copy_globs)
+
+        # Keep the package discoverable even when only data files were selected.
+        stub_path = joinpath(pkg_stdlib_dir, "src", string(pkg_name, ".jl"))
+        if !isfile(stub_path)
+            mkpath(dirname(stub_path))
+            open(stub_path, "w") do io
+                println(io, "# Autogenerated placeholder for $(pkg_name).")
+                println(io, "# The module implementation currently ships inside the sysimage.")
+            end
+        end
+    end
 end
 
 function bundle_julia_executable(dir::String)
@@ -1530,25 +1912,69 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
     return BundledLibraries(base_dests, stdlib_dests)
 end
 
-function bundle_julia_libexec(ctx, dest_dir)
-    # We only bundle the `7z` executable at the moment
-    @assert ctx.env.manifest !== nothing
-    if !any(x -> x.name == "p7zip_jll", values(ctx.env.manifest))
-        return
+# On Windows, bundle import libraries (.a files) and CRT objects (.o files) needed for
+# linking during package precompilation
+function bundle_windows_import_libraries(dest_dir)
+    Sys.iswindows() || return
+
+    # Import libraries are in lib/ and lib/julia/
+    # Note: julia_libdir() returns bin/ on Windows (where DLLs are), but import libraries are in lib/
+    src_lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
+    src_libjulia_dir = joinpath(src_lib_dir, "julia")
+
+    # Destination mirrors the source structure
+    dest_lib_dir = joinpath(dest_dir, "lib")
+    dest_libjulia_dir = joinpath(dest_lib_dir, "julia")
+    mkpath(dest_lib_dir)
+    mkpath(dest_libjulia_dir)
+
+    # Import libraries in lib/ (libjulia.dll.a, libjulia-internal.dll.a, libopenlibm.dll.a, libssp.dll.a)
+    # and any CRT objects (Base.Linking looks for these both in lib/julia and lib/)
+    for file in readdir(src_lib_dir)
+        endswith(file, ".dll.a") || endswith(file, ".o") || continue
+        src = joinpath(src_lib_dir, file)
+        dest = joinpath(dest_lib_dir, file)
+        isfile(dest) && continue
+        cp(src, dest; force=true)
     end
 
-    # Use Julia-private `libexec` folder if it exsts
+    # Import/static libraries in lib/julia/ (libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a) and
+    # the MinGW CRT objects (dllcrt2.o, crtbegin.o, crtend.o, crt2.o, crt2u.o). Since Julia 1.12.7,
+    # `Base.Linking` links the CRT objects by default when linking pkgimages, so a distribution
+    # without them cannot precompile packages at runtime.
+    for file in readdir(src_libjulia_dir)
+        endswith(file, ".a") || endswith(file, ".o") || continue
+        src = joinpath(src_libjulia_dir, file)
+        dest = joinpath(dest_libjulia_dir, file)
+        isfile(dest) && continue
+        cp(src, dest; force=true)
+    end
+end
+
+function bundle_julia_libexec(ctx, dest_dir)
+    # Use Julia-private `libexec` folder if it exists
     # (normpath is required in case `bin` does not exist in `dest_dir`)
     libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
         Base.PRIVATE_LIBEXECDIR
     else
         Base.LIBEXECDIR
     end
+
+    source_libexec_dir = joinpath(Sys.BINDIR, libexecdir_rel)
+    if !isdir(source_libexec_dir)
+        return
+    end
+
     bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
     mkpath(bundle_libexec_dir)
 
-    p7zip_exe = basename(p7zip_path)
-    cp(p7zip_path, joinpath(bundle_libexec_dir, p7zip_exe))
+    # Copy all files from the libexec directory (7z, dsymutil, lld, etc.)
+    for file in readdir(source_libexec_dir)
+        src_path = joinpath(source_libexec_dir, file)
+        if isfile(src_path)
+            cp(src_path, joinpath(bundle_libexec_dir, file); force=true)
+        end
+    end
 
     return
 end
