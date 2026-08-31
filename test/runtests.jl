@@ -295,7 +295,11 @@ end
                 rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end
             julia_bin = joinpath(dist_target_dir, "bin", Base.julia_exename())
-            output = read(`$(julia_bin) -e 'using MyApp, Example; print(Example.hello("distribution"))'`, String)
+            output = withenv("JULIA_DEPOT_PATH" => nothing,
+                             "JULIA_LOAD_PATH" => nothing,
+                             "JULIA_PROJECT" => nothing) do
+                read(`$(julia_bin) --startup-file=no -e 'using MyApp, Example; print(Example.hello("distribution"))'`, String)
+            end
             @test occursin("Hello, distribution", output)
             stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
             for name in expected_names
