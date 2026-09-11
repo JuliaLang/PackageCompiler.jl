@@ -144,6 +144,7 @@ end
             """)
             # Exercise sysimage compression on Julia versions that support it
             compress_sysimage = PackageCompiler.supports_sysimage_compression()
+            object_archive = joinpath(tmp, "sys-o.a")
             create_sysimage(; sysimage_path,
                             project=new_project,
                             precompile_execution_file=joinpath(@__DIR__, "precompile_execution.jl"),
@@ -151,7 +152,13 @@ end
                                                                           "precompile_statements2.jl"]),
                             script,
                             sysimage_build_args=`-O1`,
+                            keep_object_archive=object_archive,
                             compress_sysimage)
+
+            # The archive the sysimage was linked from stays, for a caller that
+            # links its own executable.
+            @test isfile(object_archive)
+            @test filesize(object_archive) > 0
 
             # Check we can load sysimage and that Example is available in Main
             str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
