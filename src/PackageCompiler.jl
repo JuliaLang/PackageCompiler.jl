@@ -499,6 +499,7 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir", "--strip-metadata"), sysimage_build_args_strs)
     sysimage_build_args = Cmd(sysimage_build_args_strs)
 
+    try
     cd(base_dir) do
         spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
         TerminalSpinners.@spin spinner begin
@@ -547,6 +548,13 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
                 rm(tmp_sys_o; force=true)
             end
         end
+    end
+
+    catch
+        # The private directory sits inside the cache. Drop it, so that a build
+        # that fails does not leave rubbish in the cache for ever.
+        cached === nothing || rm(tmp; recursive=true, force=true)
+        rethrow()
     end
 
     cached === nothing && return tmp_sys_sl
