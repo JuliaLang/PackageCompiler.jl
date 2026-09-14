@@ -497,8 +497,10 @@ end
 
 function ensurecompiled(project, packages, sysimage)
     length(packages) == 0 && return
-    # TODO: Only precompile `packages` (should be available in Pkg 1.8)
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    # `import` writes the source-only cache that the --pkgimages=no sysimage
+    # build needs. Pkg.precompile() would JIT-compile Pkg itself to do the same.
+    imports = join(("import " * String(package) for package in packages), "\n")
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $imports`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
