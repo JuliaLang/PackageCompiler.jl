@@ -98,6 +98,31 @@ end
         end
     end
 
+    @testset "base_sysimage_cache_path" begin
+        cache_path(; kwargs...) = PackageCompiler.base_sysimage_cache_path(;
+            cpu_target="native", sysimage_build_args=`-O1`, sysimage_source="src", kwargs...)
+        path = cache_path()
+        @test path == cache_path()
+        @test path != cache_path(cpu_target="generic")
+        @test path != cache_path(sysimage_build_args=`-O2`)
+        @test path != cache_path(sysimage_source="different")
+        @test endswith(path, "." * Libdl.dlext)
+        # the cache lives in a scratch space of the (here temporary) depot
+        @test startswith(path, new_depot)
+        withenv("PACKAGECOMPILER_CACHE_BASE_SYSIMAGE" => "0") do
+            @test cache_path() === nothing
+        end
+
+        cache_dir = mktempdir()
+        keep, old = joinpath(cache_dir, "keep.so"), joinpath(cache_dir, "old.so")
+        foreach(touch, (keep, old))
+        stale_build_dir = mkdir(joinpath(cache_dir, "jl_stale"))
+        PackageCompiler.prune_base_sysimage_cache(cache_dir, keep)
+        @test isfile(keep) && isfile(old) && isdir(stale_build_dir)  # everything recent
+        PackageCompiler.prune_base_sysimage_cache(cache_dir, keep; max_age=-1)
+        @test readdir(cache_dir) == ["keep.so"]  # everything but the kept entry pruned
+    end
+
     tmp = mktempdir()
 
     if extended_tests in ("all", "sysimage")
@@ -170,6 +195,12 @@ end
             rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
             rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
             end # try
+            if !incremental
+                # the build should have left a base sysimage in the cache
+                cache_dir = dirname(PackageCompiler.base_sysimage_cache_path(
+                    cpu_target="native", sysimage_build_args=``, sysimage_source=""))
+                @test any(endswith("." * Libdl.dlext), readdir(cache_dir))
+            end
             test_load_path = mktempdir()
             test_depot_path = mktempdir()
             app_path(app_name) = abspath(app_compiled_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
