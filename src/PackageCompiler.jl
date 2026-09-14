@@ -71,15 +71,22 @@ end
 
 How many independent build steps run at the same time.
 
-`PACKAGECOMPILER_JOBS` sets the number. Without it the number is the count of
-CPUs, capped by `JULIA_CPU_THREADS` the same way Julia caps its own thread
-counts. The count is never less than 1.
+`PACKAGECOMPILER_JOBS` sets the number. Without it the number is the count that
+Julia itself uses, `jl_effective_threads`. That count follows the CPU affinity of
+the process, so a build under `taskset` asks for the CPUs it may use and not for
+every CPU of the machine. `JULIA_CPU_THREADS` caps it, as it caps the thread
+counts of Julia. The count is never less than 1.
 """
 function build_jobs()
     n = tryparse(Int, get(ENV, "PACKAGECOMPILER_JOBS", ""))
     if n === nothing
+        available = try
+            Int(ccall(:jl_effective_threads, Cint, ()))
+        catch
+            Sys.CPU_THREADS
+        end
         cap = tryparse(Int, get(ENV, "JULIA_CPU_THREADS", ""))
-        n = cap === nothing ? Sys.CPU_THREADS : min(Sys.CPU_THREADS, cap)
+        n = cap === nothing ? available : min(available, cap)
     end
     return max(n, 1)
 end
