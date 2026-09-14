@@ -73,6 +73,17 @@ manager to get a compiler should work fine.
 
 A suitable compiler will be automatically installed the first time it is needed.
 
+## Hardware requirements
+If you include many packages in your image, a large amount of RAM is needed. For single threaded operation 16 GB are common,
+for multithreaded compilation often 32 GB are required. But this is RAM + swap file size, so if you have only 8 GB RAM using
+a 8 GB swap file will make it work.
+
+If you are low on RAM, use only one thread to build the package. This can be achieved with the command:
+```
+export JULIA_IMAGE_THREADS=1
+```
+before running Julia and the package compiler.
+
 ## Upgrading from PackageCompiler 1.0.
 
 PackageCompiler 2.0 comes with a few breaking changes.
