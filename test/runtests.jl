@@ -98,6 +98,21 @@ end
         end
     end
 
+    @testset "the cache of the fresh base sysimage" begin
+        key(target, args) = basename(PackageCompiler.fresh_base_sysimage_cache(;
+                                         cpu_target = target, sysimage_build_args = args))
+        # The key holds what the file depends on: the Julia, the processor
+        # target and the flags that reach the compiler.
+        @test key("native", ``) == key("native", ``)
+        @test key("native", ``) != key("generic", ``)
+        @test key("native", ``) != key("native", `-O1`)
+        cache = mktempdir()
+        withenv("PACKAGECOMPILER_BASE_CACHE" => cache) do
+            @test startswith(PackageCompiler.fresh_base_sysimage_cache(;
+                                 cpu_target = "native", sysimage_build_args = ``), cache)
+        end
+    end
+
     tmp = mktempdir()
 
     if extended_tests in ("all", "sysimage")
