@@ -344,8 +344,48 @@ function rewrite_sysimg_jl_only_needed_stdlibs()
     return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
 end
 
-function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
-    tmp = mktempdir()
+"""
+    fresh_base_sysimage_cache(; cpu_target, sysimage_build_args) -> String
+
+Where a fresh base sysimage is kept between builds.
+
+A fresh base is built from Julia's own sources and holds nothing of the program
+being compiled, so it is the same file for every non-incremental build with the
+same Julia, processor target and build flags. It was made into `mktempdir()` and
+thrown away, which meant every build paid for it again — two of the three
+system-image phases, and most of the wall clock of a small app.
+
+The key is what the file depends on: the Julia commit, the processor target, and
+the flags that reach the compiler. A Julia upgrade or a different `-O` gets a
+different file rather than a stale one.
+"""
+function fresh_base_sysimage_cache(; cpu_target::String, sysimage_build_args::Cmd)
+    args = join(map(p -> "$(p...)", values(sysimage_build_args)), " ")
+    key = string(hash(string(Base.GIT_VERSION_INFO.commit, "\0", VERSION, "\0",
+                             cpu_target, "\0", args)), base = 16, pad = 16)
+    joinpath(get(ENV, "PACKAGECOMPILER_BASE_CACHE",
+                 joinpath(DEPOT_PATH[1], "packagecompiler", "base")), key)
+end
+
+"""
+    create_fresh_base_sysimage(; cpu_target, sysimage_build_args, cache = true)
+
+Build the fresh base sysimage, or answer the cached one.
+
+`cache = false` builds into a temporary directory, which is what this always did.
+"""
+function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd,
+                                      cache::Bool = get(ENV, "PACKAGECOMPILER_CACHE_BASE", "1") != "0")
+    if cache
+        cached = joinpath(fresh_base_sysimage_cache(; cpu_target, sysimage_build_args),
+                          "sys." * Libdl.dlext)
+        if isfile(cached)
+            @debug "PackageCompiler: reusing the cached fresh base sysimage" cached
+            return cached
+        end
+    end
+    tmp = cache ? mkpath(fresh_base_sysimage_cache(; cpu_target, sysimage_build_args)) :
+          mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
     tmp_corecompiler_o = joinpath(tmp, "corecompiler-o.a")
