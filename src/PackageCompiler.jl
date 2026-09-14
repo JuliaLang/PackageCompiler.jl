@@ -4,6 +4,8 @@ using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using Printf
+using SHA: sha256
+using Scratch: get_scratch!, delete_scratch!
 using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
@@ -344,10 +346,73 @@ function rewrite_sysimg_jl_only_needed_stdlibs()
     return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
 end
 
+fresh_base_sysimage_source() =
+    rewrite_sysimg_jl_only_needed_stdlibs() * "\nempty!(Base.atexit_hooks)\n"
+
+# bump when the base sysimage build changes in ways the cache key does not capture
+const BASE_SYSIMAGE_CACHE_VERSION = 1
+
+# edits to the Julia sources in a checkout are not reflected in the default sysimage
+# until the next `make`, so its hash alone would let them reuse a stale cache entry
+function julia_base_sources_mtime()
+    base_dir = dirname(Base.find_source_file("sysimg.jl"))
+    newest = 0.0
+    for (root, _, files) in walkdir(base_dir), file in files
+        newest = max(newest, mtime(joinpath(root, file)))
+    end
+    return newest
+end
+
+function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd,
+                                  sysimage_source::String)
+    get(ENV, "PACKAGECOMPILER_CACHE_BASE_SYSIMAGE", "") in ("0", "false") && return nothing
+    # hash the content of the default sysimage (rather than e.g. the Julia version and
+    # commit, which cannot distinguish different builds of the same Julia)
+    default_sysimage = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
+    isfile(default_sysimage) || (default_sysimage = unsafe_string(Base.JLOptions().image_file))
+    sysimage_hash = open(io -> sha256(io), default_sysimage)
+    key = bytes2hex(sha256(join([string(BASE_SYSIMAGE_CACHE_VERSION),
+                                 bytes2hex(sysimage_hash),
+                                 bytes2hex(sha256(sysimage_source)),
+                                 string(julia_base_sources_mtime()),
+                                 cpu_target, sysimage_build_args.exec...], '\0')))[1:16]
+    return joinpath(get_scratch!(@__MODULE__, "base_sysimages"), key * "." * Libdl.dlext)
+end
+
+function prune_base_sysimage_cache(cache_dir::String, keep::String; max_age::Real=7*24*60*60 #= 1 week =#)
+    cutoff = time() - max_age
+    for name in readdir(cache_dir)
+        path = joinpath(cache_dir, name)
+        try
+            path != keep && mtime(path) < cutoff && rm(path; recursive=true, force=true)
+        catch e
+            e isa Base.IOError || rethrow()
+        end
+    end
+end
+
 function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
-    tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
+
+    # we can't strip the IR from the base sysimg, so we filter out this flag
+    # also presumably `--compile=all` and maybe a few others we missed here...
+    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir", "--strip-metadata"), sysimage_build_args_strs)
+    sysimage_build_args = Cmd(sysimage_build_args_strs)
+
+    new_sysimage_content = fresh_base_sysimage_source()
+    cache_path = base_sysimage_cache_path(; cpu_target, sysimage_build_args,
+                                          sysimage_source=new_sysimage_content)
+
+    if cache_path !== nothing && filesize(cache_path) > 0
+        touch(cache_path)  # mark as recently used for pruning
+        @debug "reusing cached base sysimage at $cache_path"
+        return cache_path
+    end
+
+    # when caching, build in a directory next to the cached file so publishing it is a rename
+    tmp = cache_path === nothing ? mktempdir() : mktempdir(dirname(cache_path))
     tmp_corecompiler_o = joinpath(tmp, "corecompiler-o.a")
     tmp_corecompiler_sl = joinpath(tmp, "corecompiler." * Libdl.dlext)
     tmp_sys_o = joinpath(tmp, "sys-o.a")
@@ -356,7 +421,6 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
     tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
-
 
     @static if VERSION >= v"1.12.0-DEV.1617"
         compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
@@ -368,63 +432,67 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
         compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
         compiler_args = ``
     end
-    # we can't strip the IR from the base sysimg, so we filter out this flag
-    # also presumably `--compile=all` and maybe a few others we missed here...
-    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
-    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir", "--strip-metadata"), sysimage_build_args_strs)
-    sysimage_build_args = Cmd(sysimage_build_args_strs)
 
-    cd(base_dir) do
-        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
-        TerminalSpinners.@spin spinner begin
-            # Create corecompiler object file
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                --output-o $tmp_corecompiler_o $sysimage_build_args
-                $compiler_source_path $compiler_args`
-            @debug "running $cmd"
-
-            read(cmd)
-
-            # Create shared library from object file
-            create_sysimg_from_object_file(String[tmp_corecompiler_o],
-                                    tmp_corecompiler_sl;
-                                    version=nothing,
-                                    soname=nothing,
-                                    compat_level="major")
-        end
-
-        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
-        TerminalSpinners.@spin spinner begin
-            # Use the compiler sysimage to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs()
-            new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
-            new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
-            write(new_sysimage_source_path, new_sysimage_content)
-            try
-                cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                    --sysimage=$tmp_corecompiler_sl --threads=1
-                    $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path $compiler_args`)
+    try
+        cd(base_dir) do
+            spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
+            TerminalSpinners.@spin spinner begin
+                # Create corecompiler object file
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                    --output-o $tmp_corecompiler_o $sysimage_build_args
+                    $compiler_source_path $compiler_args`
                 @debug "running $cmd"
 
                 read(cmd)
 
-                create_sysimg_from_object_file(String[tmp_sys_o],
-                                        tmp_sys_sl;
+                # Create shared library from object file
+                create_sysimg_from_object_file(String[tmp_corecompiler_o],
+                                        tmp_corecompiler_sl;
                                         version=nothing,
                                         soname=nothing,
                                         compat_level="major")
+            end
 
-            finally
-                rm(new_sysimage_source_path; force=true)
-                rm(tmp_corecompiler_o; force=true)
-                rm(tmp_corecompiler_sl; force=true)
-                rm(tmp_sys_o; force=true)
+            spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
+            TerminalSpinners.@spin spinner begin
+                # Use the compiler sysimage to create sys.ji
+                new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
+                write(new_sysimage_source_path, new_sysimage_content)
+                try
+                    cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
+                        --sysimage=$tmp_corecompiler_sl --threads=1
+                        $sysimage_build_args --output-o=$tmp_sys_o
+                        $new_sysimage_source_path $compiler_args`)
+                    @debug "running $cmd"
+
+                    read(cmd)
+
+                    create_sysimg_from_object_file(String[tmp_sys_o],
+                                            tmp_sys_sl;
+                                            version=nothing,
+                                            soname=nothing,
+                                            compat_level="major")
+
+                finally
+                    rm(new_sysimage_source_path; force=true)
+                    rm(tmp_corecompiler_o; force=true)
+                    rm(tmp_corecompiler_sl; force=true)
+                    rm(tmp_sys_o; force=true)
+                end
             end
         end
+    catch
+        # Don't leave a failed build behind in the cache.
+        cache_path === nothing || rm(tmp; recursive=true, force=true)
+        rethrow()
     end
 
-    return tmp_sys_sl
+    cache_path === nothing && return tmp_sys_sl
+
+    mv(tmp_sys_sl, cache_path; force=true)
+    rm(tmp; recursive=true, force=true)
+    prune_base_sysimage_cache(dirname(cache_path), cache_path)
+    return cache_path
 end
 
 function ensurecompiled(project, packages, sysimage)
