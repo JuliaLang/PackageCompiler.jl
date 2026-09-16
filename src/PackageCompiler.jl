@@ -512,8 +512,12 @@ end
 
 function ensurecompiled(project, packages, sysimage)
     length(packages) == 0 && return
-    # TODO: Only precompile `packages` (should be available in Pkg 1.8)
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    # Since Julia 1.11 Pkg is not in the sysimage, so under `--pkgimages=no`
+    # `Pkg.precompile()` has to JIT-compile all of Pkg (tens of seconds).
+    # Base.Precompilation is in the sysimage and does the actual work anyway.
+    code = isdefined(Base, :Precompilation) ?
+        "Base.Precompilation.precompilepkgs()" : "using Pkg; Pkg.precompile()"
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $code`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
