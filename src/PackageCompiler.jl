@@ -32,6 +32,21 @@ else
 end
 const TLS_SYNTAX = `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 
+# Resolve the `sysimage` cpu target keyword (Julia 1.13+) to the concrete target of
+# `sysimage`. Child processes started without a sysimage (non-incremental builds) would
+# otherwise expand it to `native`, and Julia 1.13.0 stores the keyword itself in the image
+# it builds, which breaks loading that image with `--cpu-target=sysimage`
+# (JuliaLang/julia#63220). The target is queried in a fresh process because
+# `Sys.sysimage_target()` reports the most recently loaded image, so its value is
+# overwritten as soon as any package image is loaded.
+function expand_sysimage_cpu_target(cpu_target::String,
+                                    sysimage::String=unsafe_string(Base.JLOptions().image_file))
+    (cpu_target == "sysimage" || startswith(cpu_target, "sysimage;")) || return cpu_target
+    isdefined(Sys, :sysimage_target) || return cpu_target
+    target = read(`$(get_julia_cmd()) --sysimage=$sysimage -e 'print(Sys.sysimage_target())'`, String)
+    return target * cpu_target[9:end]
+end
+
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
 const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
 const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
@@ -801,6 +816,9 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+
+    cpu_target = expand_sysimage_cpu_target(cpu_target,
+        something(base_sysimage, unsafe_string(Base.JLOptions().image_file)))
 
     if !incremental
         if base_sysimage !== nothing

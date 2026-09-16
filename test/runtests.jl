@@ -82,6 +82,16 @@ end
 @testset "PackageCompiler.jl" begin
     expected_sysimage_cpu_target = VERSION >= v"1.13-" ? "sysimage" : "native"
     @test PackageCompiler.DEFAULT_SYSIMAGE_CPU_TARGET == expected_sysimage_cpu_target
+    @test PackageCompiler.expand_sysimage_cpu_target("native") == "native"
+    if VERSION >= v"1.13-"
+        # Query in a fresh process: package images loaded here overwrite `Sys.sysimage_target()`
+        sysimage_target = read(`$(Base.julia_cmd()) --startup-file=no -e 'print(Sys.sysimage_target())'`, String)
+        @test sysimage_target != "sysimage"
+        @test PackageCompiler.expand_sysimage_cpu_target("sysimage") == sysimage_target
+        @test PackageCompiler.expand_sysimage_cpu_target("sysimage;native") == sysimage_target * ";native"
+    else
+        @test PackageCompiler.expand_sysimage_cpu_target("sysimage") == "sysimage"
+    end
 
     @testset "julia_libdir / julia_private_libdir" begin
         lib_dir = PackageCompiler.julia_libdir()
