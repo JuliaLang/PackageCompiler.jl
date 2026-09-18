@@ -421,7 +421,12 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
                                           sysimage_source=new_sysimage_content)
 
     if cache_path !== nothing && filesize(cache_path) > 0
-        try touch(cache_path) catch e; e isa Base.IOError || rethrow() end # mark as recently used for pruning
+        # mark as recently used for pruning
+        try
+            touch(cache_path)
+        catch e
+            (e isa Base.IOError && e.code == Base.UV_EBUSY) || rethrow()
+        end
         @debug "reusing cached base sysimage at $cache_path"
         return cache_path
     end
@@ -507,7 +512,7 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     try
         mv(tmp_sys_sl, cache_path; force=true)
     catch e
-        e isa Base.IOError || rethrow()
+        (e isa Base.IOError && e.code == Base.UV_EBUSY) || rethrow()
         return tmp_sys_sl
     end
     rm(tmp; recursive=true, force=true)
