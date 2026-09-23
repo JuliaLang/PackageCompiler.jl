@@ -4,6 +4,8 @@ using Base: active_project
 using Libdl: Libdl
 using Pkg: Pkg
 using Printf
+using SHA: sha256
+using Scratch: get_scratch!, delete_scratch!
 using Artifacts
 using LazyArtifacts
 using UUIDs: UUID, uuid1
@@ -29,6 +31,21 @@ else
     "native"
 end
 const TLS_SYNTAX = `-DNEW_DEFINE_FAST_TLS_SYNTAX`
+
+# Resolve the `sysimage` cpu target keyword (Julia 1.13+) to the concrete target of
+# `sysimage`. Child processes started without a sysimage (non-incremental builds) would
+# otherwise expand it to `native`, and Julia 1.13.0 stores the keyword itself in the image
+# it builds, which breaks loading that image with `--cpu-target=sysimage`
+# (JuliaLang/julia#63220). The target is queried in a fresh process because
+# `Sys.sysimage_target()` reports the most recently loaded image, so its value is
+# overwritten as soon as any package image is loaded.
+function expand_sysimage_cpu_target(cpu_target::String,
+                                    sysimage::String=unsafe_string(Base.JLOptions().image_file))
+    (cpu_target == "sysimage" || startswith(cpu_target, "sysimage;")) || return cpu_target
+    isdefined(Sys, :sysimage_target) || return cpu_target
+    target = read(`$(get_julia_cmd()) --sysimage=$sysimage -e 'print(Sys.sysimage_target())'`, String)
+    return target * cpu_target[9:end]
+end
 
 const DEFAULT_EMBEDDING_WRAPPER = @path joinpath(@__DIR__, "embedding_wrapper.c")
 const DEFAULT_JULIA_INIT        = @path joinpath(@__DIR__, "julia_init.c")
@@ -344,10 +361,78 @@ function rewrite_sysimg_jl_only_needed_stdlibs()
     return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
 end
 
+fresh_base_sysimage_source() =
+    rewrite_sysimg_jl_only_needed_stdlibs() * "\nempty!(Base.atexit_hooks)\n"
+
+# bump when the base sysimage build changes in ways the cache key does not capture
+const BASE_SYSIMAGE_CACHE_VERSION = 1
+
+# edits to the Julia sources in a checkout are not reflected in the default sysimage
+# until the next `make`, so its hash alone would let them reuse a stale cache entry
+function julia_base_sources_mtime()
+    base_dir = dirname(Base.find_source_file("sysimg.jl"))
+    newest = 0.0
+    for (root, _, files) in walkdir(base_dir), file in files
+        newest = max(newest, mtime(joinpath(root, file)))
+    end
+    return newest
+end
+
+function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd,
+                                  sysimage_source::String)
+    get(ENV, "PACKAGECOMPILER_CACHE_BASE_SYSIMAGE", "") in ("0", "false") && return nothing
+    # hash the content of the default sysimage (rather than e.g. the Julia version and
+    # commit, which cannot distinguish different builds of the same Julia)
+    default_sysimage = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
+    isfile(default_sysimage) || (default_sysimage = unsafe_string(Base.JLOptions().image_file))
+    sysimage_hash = open(io -> sha256(io), default_sysimage)
+    key = bytes2hex(sha256(join([string(BASE_SYSIMAGE_CACHE_VERSION),
+                                 bytes2hex(sysimage_hash),
+                                 bytes2hex(sha256(sysimage_source)),
+                                 string(julia_base_sources_mtime()),
+                                 cpu_target, sysimage_build_args.exec...], '\0')))[1:16]
+    return joinpath(get_scratch!(@__MODULE__, "base_sysimages"), key * "." * Libdl.dlext)
+end
+
+function prune_base_sysimage_cache(cache_dir::String, keep::String; max_age::Real=7*24*60*60 #= 1 week =#)
+    cutoff = time() - max_age
+    for name in readdir(cache_dir)
+        path = joinpath(cache_dir, name)
+        try
+            path != keep && mtime(path) < cutoff && rm(path; recursive=true, force=true)
+        catch e
+            e isa Base.IOError || rethrow()
+        end
+    end
+end
+
 function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::Cmd)
-    tmp = mktempdir()
     sysimg_source_path = Base.find_source_file("sysimg.jl")
     base_dir = dirname(sysimg_source_path)
+
+    # we can't strip the IR from the base sysimg, so we filter out this flag
+    # also presumably `--compile=all` and maybe a few others we missed here...
+    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
+    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir", "--strip-metadata"), sysimage_build_args_strs)
+    sysimage_build_args = Cmd(sysimage_build_args_strs)
+
+    new_sysimage_content = fresh_base_sysimage_source()
+    cache_path = base_sysimage_cache_path(; cpu_target, sysimage_build_args,
+                                          sysimage_source=new_sysimage_content)
+
+    if cache_path !== nothing && filesize(cache_path) > 0
+        # mark as recently used for pruning
+        try
+            touch(cache_path)
+        catch e
+            (e isa Base.IOError && e.code == Base.UV_EBUSY) || rethrow()
+        end
+        @debug "reusing cached base sysimage at $cache_path"
+        return cache_path
+    end
+
+    # when caching, build in a directory next to the cached file so publishing it is a rename
+    tmp = cache_path === nothing ? mktempdir() : mktempdir(dirname(cache_path))
     tmp_corecompiler_o = joinpath(tmp, "corecompiler-o.a")
     tmp_corecompiler_sl = joinpath(tmp, "corecompiler." * Libdl.dlext)
     tmp_sys_o = joinpath(tmp, "sys-o.a")
@@ -356,7 +441,6 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
     tmp_sys_sl = joinpath(tmp, "sys." * Libdl.dlext)
-
 
     @static if VERSION >= v"1.12.0-DEV.1617"
         compiler_source_path = joinpath(base_dir, "Base_compiler.jl")
@@ -368,69 +452,82 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
         compiler_source_path = joinpath(base_dir, "compiler", "compiler.jl")
         compiler_args = ``
     end
-    # we can't strip the IR from the base sysimg, so we filter out this flag
-    # also presumably `--compile=all` and maybe a few others we missed here...
-    sysimage_build_args_strs = map(p -> "$(p...)", values(sysimage_build_args))
-    filter!(p -> !contains(p, "--compile") && p ∉ ("--strip-ir",), sysimage_build_args_strs)
-    sysimage_build_args = Cmd(sysimage_build_args_strs)
 
-    cd(base_dir) do
-        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
-        TerminalSpinners.@spin spinner begin
-            # Create corecompiler object file
-            cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                --output-o $tmp_corecompiler_o $sysimage_build_args
-                $compiler_source_path $compiler_args`
-            @debug "running $cmd"
-
-            read(cmd)
-
-            # Create shared library from object file
-            create_sysimg_from_object_file(String[tmp_corecompiler_o],
-                                    tmp_corecompiler_sl;
-                                    version=nothing,
-                                    soname=nothing,
-                                    compat_level="major")
-        end
-
-        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
-        TerminalSpinners.@spin spinner begin
-            # Use the compiler sysimage to create sys.ji
-            new_sysimage_content = rewrite_sysimg_jl_only_needed_stdlibs()
-            new_sysimage_content *= "\nempty!(Base.atexit_hooks)\n"
-            new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
-            write(new_sysimage_source_path, new_sysimage_content)
-            try
-                cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                    --sysimage=$tmp_corecompiler_sl --threads=1
-                    $sysimage_build_args --output-o=$tmp_sys_o
-                    $new_sysimage_source_path $compiler_args`)
+    try
+        cd(base_dir) do
+            spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: creating compiler sysimage (incremental=false)")
+            TerminalSpinners.@spin spinner begin
+                # Create corecompiler object file
+                cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                    --output-o $tmp_corecompiler_o $sysimage_build_args
+                    $compiler_source_path $compiler_args`
                 @debug "running $cmd"
 
                 read(cmd)
 
-                create_sysimg_from_object_file(String[tmp_sys_o],
-                                        tmp_sys_sl;
+                # Create shared library from object file
+                create_sysimg_from_object_file(String[tmp_corecompiler_o],
+                                        tmp_corecompiler_sl;
                                         version=nothing,
                                         soname=nothing,
                                         compat_level="major")
+            end
 
-            finally
-                rm(new_sysimage_source_path; force=true)
-                rm(tmp_corecompiler_o; force=true)
-                rm(tmp_corecompiler_sl; force=true)
-                rm(tmp_sys_o; force=true)
+            spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling fresh sysimage (incremental=false)")
+            TerminalSpinners.@spin spinner begin
+                # Use the compiler sysimage to create sys.ji
+                new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
+                write(new_sysimage_source_path, new_sysimage_content)
+                try
+                    cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
+                        --sysimage=$tmp_corecompiler_sl --threads=1
+                        $sysimage_build_args --output-o=$tmp_sys_o
+                        $new_sysimage_source_path $compiler_args`)
+                    @debug "running $cmd"
+
+                    read(cmd)
+
+                    create_sysimg_from_object_file(String[tmp_sys_o],
+                                            tmp_sys_sl;
+                                            version=nothing,
+                                            soname=nothing,
+                                            compat_level="major")
+
+                finally
+                    rm(new_sysimage_source_path; force=true)
+                    rm(tmp_corecompiler_o; force=true)
+                    rm(tmp_corecompiler_sl; force=true)
+                    rm(tmp_sys_o; force=true)
+                end
             end
         end
+    catch
+        # Don't leave a failed build behind in the cache.
+        cache_path === nothing || rm(tmp; recursive=true, force=true)
+        rethrow()
     end
 
-    return tmp_sys_sl
+    cache_path === nothing && return tmp_sys_sl
+
+    try
+        mv(tmp_sys_sl, cache_path; force=true)
+    catch e
+        (e isa Base.IOError && e.code == Base.UV_EBUSY) || rethrow()
+        return tmp_sys_sl
+    end
+    rm(tmp; recursive=true, force=true)
+    prune_base_sysimage_cache(dirname(cache_path), cache_path)
+    return cache_path
 end
 
 function ensurecompiled(project, packages, sysimage)
     length(packages) == 0 && return
-    # TODO: Only precompile `packages` (should be available in Pkg 1.8)
-    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e 'using Pkg; Pkg.precompile()'`
+    # Since Julia 1.11 Pkg is not in the sysimage, so under `--pkgimages=no`
+    # `Pkg.precompile()` has to JIT-compile all of Pkg (tens of seconds).
+    # Base.Precompilation is in the sysimage and does the actual work anyway.
+    code = isdefined(Base, :Precompilation) ?
+        "Base.Precompilation.precompilepkgs()" : "using Pkg; Pkg.precompile()"
+    cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $code`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
@@ -733,6 +830,9 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     @debug "instantiating project at $(repr(project))"
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+
+    cpu_target = expand_sysimage_cpu_target(cpu_target,
+        something(base_sysimage, unsafe_string(Base.JLOptions().image_file)))
 
     if !incremental
         if base_sysimage !== nothing
