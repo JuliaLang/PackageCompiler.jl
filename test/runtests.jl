@@ -322,21 +322,31 @@ end
             @test hello == "hello, world"
         end
 
-        # Without a precompile execution file, the packages are only precompiled
-        # by `ensurecompiled` under the fresh base sysimage (#1134).
+        # On Julia 1.11 `precompilepkgs` silently compiled nothing under the
+        # base sysimage, which does not contain FileWatching (#1134)
         @testset "ensurecompiled under fresh base sysimage" begin
             downloads_tmp = mktempdir()
             write(joinpath(downloads_tmp, "Project.toml"), """
                 [deps]
                 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
                 """)
-            sysimage_path = joinpath(downloads_tmp, "downloads." * Libdl.dlext)
-            create_sysimage(["Downloads"]; sysimage_path, incremental=false, filter_stdlibs=true,
-                            project=downloads_tmp)
-            source = joinpath(downloads_tmp, "source.txt")
-            write(source, "downloaded")
-            str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print(read(Downloads.download("file://" * ARGS[1]), String))' $source`, String)
-            @test str == "downloaded"
+            old_project = Base.ACTIVE_PROJECT[]
+            Base.ACTIVE_PROJECT[] = downloads_tmp
+            try
+                Pkg.instantiate()
+            finally
+                Base.ACTIVE_PROJECT[] = old_project
+            end
+            # reuses the base sysimage cached by the nonincremental builds above
+            base_sysimage = PackageCompiler.create_fresh_base_sysimage(; cpu_target="native", sysimage_build_args=``)
+            PackageCompiler.ensurecompiled(downloads_tmp, ["Downloads"], base_sysimage)
+            code = """
+                pkg = Base.PkgId(Base.UUID("f43a241f-c20a-4ad4-852c-f6b1247861c6"), "Downloads")
+                print(Base.isprecompiled(pkg))
+                """
+            cmd = `$(PackageCompiler.get_julia_cmd()) --sysimage=$base_sysimage -e $code`
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$downloads_tmp$(Sys.iswindows() ? ';' : ':')@stdlib")
+            @test read(cmd, String) == "true"
         end
     end
 
