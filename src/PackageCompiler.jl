@@ -763,6 +763,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
+- `keep_object_archive::Union{Nothing, String}`: If a `String`, the object archive that the
+  sysimage is linked from is written there and kept, so a caller can link it into something
+  else. The name must end in `-o.a` on macOS. Defaults to `nothing`.
+
 - `sysimage_build_args::Cmd`: A set of command line options that is used in the Julia process building the sysimage,
   for example `-O1 --check-bounds=yes`.
 
@@ -782,6 +786,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          sysimage_build_args::Cmd=``,
                          compress_sysimage::Bool=false,
                          include_transitive_dependencies::Bool=true,
+                         keep_object_archive::Union{Nothing, String}=nothing,
                          # Internal args
                          base_sysimage::Union{Nothing, String}=nothing,
                          julia_init_c_file=nothing,
@@ -855,11 +860,16 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
     end
 
     # Create the sysimage
-    object_file = tempname() * "-o.a"
     # This naming convention (`-o.a`) is necessary to make the sysimage
     # work on macOS.
     # Bug report: https://github.com/JuliaLang/PackageCompiler.jl/issues/738
     # PR: https://github.com/JuliaLang/PackageCompiler.jl/pull/930
+    if keep_object_archive === nothing
+        object_file = tempname() * "-o.a"
+    else
+        object_file = abspath(keep_object_archive)
+        mkpath(dirname(object_file))
+    end
     object_files = [object_file]
     try
         create_sysimg_object_file(object_file, packages, packages_sysimg;
@@ -899,7 +909,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                                     soname)
     finally
         foreach(object_files) do file
-            rm(file; force=true)
+            (keep_object_archive !== nothing && file == object_file) || rm(file; force=true)
         end
     end
 
@@ -1081,6 +1091,7 @@ function create_app(package_dir::String,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
                     script::Union{Nothing, String}=nothing,
+                    keep_object_archive::Union{Nothing, String}=nothing,
                     quiet::Bool=false)
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
@@ -1136,7 +1147,8 @@ function create_app(package_dir::String,
                     compress_sysimage,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
-                    script)
+                    script,
+                    keep_object_archive)
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
