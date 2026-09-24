@@ -322,10 +322,8 @@ end
             @test hello == "hello, world"
         end
 
-        # Downloads registers an atexit hook in its top-level code, which errors in the
-        # sysimage build process unless the package is loaded from a cache file there.
-        # Without a precompile execution file, those cache files can only come from
-        # `ensurecompiled` running under the fresh base sysimage (#1134).
+        # Without a precompile execution file, the packages are only precompiled
+        # by `ensurecompiled` under the fresh base sysimage (#1134).
         @testset "ensurecompiled under fresh base sysimage" begin
             downloads_tmp = mktempdir()
             write(joinpath(downloads_tmp, "Project.toml"), """
