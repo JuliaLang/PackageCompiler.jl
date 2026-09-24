@@ -525,8 +525,10 @@ function ensurecompiled(project, packages, sysimage)
     # Since Julia 1.11 Pkg is not in the sysimage, so under `--pkgimages=no`
     # `Pkg.precompile()` has to JIT-compile all of Pkg (tens of seconds).
     # Base.Precompilation is in the sysimage and does the actual work anyway.
+    # On Julia 1.11 `precompilepkgs` requires FileWatching to be loaded (for the
+    # pidlock), otherwise it silently compiles nothing (#1134).
     code = isdefined(Base, :Precompilation) ?
-        "Base.Precompilation.precompilepkgs()" : "using Pkg; Pkg.precompile()"
+        "using FileWatching; Base.Precompilation.precompilepkgs()" : "using Pkg; Pkg.precompile()"
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $code`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"

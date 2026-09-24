@@ -321,6 +321,33 @@ end
             hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
             @test hello == "hello, world"
         end
+
+        # On Julia 1.11 `precompilepkgs` silently compiled nothing under the
+        # base sysimage, which does not contain FileWatching (#1134)
+        @testset "ensurecompiled under fresh base sysimage" begin
+            downloads_tmp = mktempdir()
+            write(joinpath(downloads_tmp, "Project.toml"), """
+                [deps]
+                Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+                """)
+            old_project = Base.ACTIVE_PROJECT[]
+            Base.ACTIVE_PROJECT[] = downloads_tmp
+            try
+                Pkg.instantiate()
+            finally
+                Base.ACTIVE_PROJECT[] = old_project
+            end
+            # reuses the base sysimage cached by the nonincremental builds above
+            base_sysimage = PackageCompiler.create_fresh_base_sysimage(; cpu_target="native", sysimage_build_args=``)
+            PackageCompiler.ensurecompiled(downloads_tmp, ["Downloads"], base_sysimage)
+            code = """
+                pkg = Base.PkgId(Base.UUID("f43a241f-c20a-4ad4-852c-f6b1247861c6"), "Downloads")
+                print(Base.isprecompiled(pkg))
+                """
+            cmd = `$(PackageCompiler.get_julia_cmd()) --sysimage=$base_sysimage -e $code`
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$downloads_tmp$(Sys.iswindows() ? ';' : ':')@stdlib")
+            @test read(cmd, String) == "true"
+        end
     end
 
     @testset "Workspace bundling" begin
