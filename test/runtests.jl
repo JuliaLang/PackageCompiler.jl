@@ -321,6 +321,25 @@ end
             hello = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print("hello, world")'`, String)
             @test hello == "hello, world"
         end
+
+        # Downloads registers an atexit hook in its top-level code, which errors in the
+        # sysimage build process unless the package is loaded from a cache file there.
+        # Without a precompile execution file, those cache files can only come from
+        # `ensurecompiled` running under the fresh base sysimage (#1134).
+        @testset "ensurecompiled under fresh base sysimage" begin
+            downloads_tmp = mktempdir()
+            write(joinpath(downloads_tmp, "Project.toml"), """
+                [deps]
+                Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+                """)
+            sysimage_path = joinpath(downloads_tmp, "downloads." * Libdl.dlext)
+            create_sysimage(["Downloads"]; sysimage_path, incremental=false, filter_stdlibs=true,
+                            project=downloads_tmp)
+            source = joinpath(downloads_tmp, "source.txt")
+            write(source, "downloaded")
+            str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'print(read(Downloads.download("file://" * ARGS[1]), String))' $source`, String)
+            @test str == "downloaded"
+        end
     end
 
     @testset "Workspace bundling" begin
