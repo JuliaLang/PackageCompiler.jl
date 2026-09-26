@@ -200,7 +200,7 @@ things so that they can be found during runtime on other machines.
 The example app uses the artifact system to depend on a very simple toy binary
 that does some simple arithmetic. It is instructive to see how the [artifact
 file](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/MyApp/Artifacts.toml)
-is [used in the source](https://github.com/JuliaLang/PackageCompiler.jl/blob/d722a3d91abe328ebd239e2f45660be35263ebe1/examples/MyApp/src/MyApp.jl#L7-L8).
+is [used in the source](https://github.com/JuliaLang/PackageCompiler.jl/blob/master/examples/MyApp/src/MyApp.jl#L7-L8).
 
 ### [Preferences](@id app-preferences)
 
