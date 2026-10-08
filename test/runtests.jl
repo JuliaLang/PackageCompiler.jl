@@ -483,6 +483,22 @@ end
                 read(`$(julia_bin) --startup-file=no -e 'using MyApp, Example; print(Example.hello("distribution"))'`, String)
             end
             @test occursin("Hello, distribution", output)
+            # Precompiling a package outside the sysimage must be able to link a pkgimage
+            pkg_dir = joinpath(tmp, "DistPkg")
+            mkpath(joinpath(pkg_dir, "DistLinkTest", "src"))
+            write(joinpath(pkg_dir, "DistLinkTest", "Project.toml"),
+                  "name = \"DistLinkTest\"\nuuid = \"7f5a3a1e-1111-4b8b-9f0a-0123456789ab\"\n")
+            write(joinpath(pkg_dir, "DistLinkTest", "src", "DistLinkTest.jl"), "module DistLinkTest; f() = 42; end\n")
+            dist_depot = mktempdir()
+            code = "push!(LOAD_PATH, $(repr(pkg_dir))); using DistLinkTest; print(DistLinkTest.f())"
+            output = withenv("JULIA_DEPOT_PATH" => dist_depot,
+                             "JULIA_LOAD_PATH" => nothing,
+                             "JULIA_PROJECT" => nothing) do
+                read(`$(julia_bin) --startup-file=no -e $code`, String)
+            end
+            @test output == "42"
+            compiled_dir = joinpath(dist_depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "DistLinkTest")
+            @test any(endswith("." * Libdl.dlext), readdir(compiled_dir))
             stdlib_version_dir = joinpath(dist_target_dir, "share", "julia", "stdlib", string('v', VERSION.major, '.', VERSION.minor))
             for name in expected_names
                 project_path = joinpath(stdlib_version_dir, name, "Project.toml")
