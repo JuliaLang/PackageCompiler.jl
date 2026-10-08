@@ -1015,7 +1015,7 @@ function create_app(package_dir::String,
     end
     library_info = bundle_julia_libraries(app_dir, stdlibs; quiet)
     artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts, quiet)
-    bundle_windows_import_libraries(app_dir)
+    bundle_link_libraries(app_dir)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
     bundle_project(ctx, app_dir)
@@ -1109,7 +1109,7 @@ function create_distribution(project_dir::String,
     # For distributions, we need to bundle libraries for ALL stdlibs from the running Julia
     all_stdlibs = readdir(Sys.STDLIB)
     bundle_julia_libraries(dist_dir, all_stdlibs)
-    bundle_windows_import_libraries(dist_dir)
+    bundle_link_libraries(dist_dir)
 
     requested_packages = collect(keys(ctx.env.project.deps))
     ctx.env.pkg === nothing || push!(requested_packages, ctx.env.pkg.name)
@@ -1350,7 +1350,7 @@ function create_library(package_or_project::String,
     end
     library_info = bundle_julia_libraries(dest_dir, stdlibs; quiet)
     artifact_info = bundle_artifacts(ctx, dest_dir; include_lazy_artifacts, quiet)
-    bundle_windows_import_libraries(dest_dir)
+    bundle_link_libraries(dest_dir)
     bundle_julia_libexec(ctx, dest_dir)
     bundle_headers(dest_dir, header_files)
     bundle_project(ctx, dest_dir)
@@ -1912,12 +1912,9 @@ function _copy_julia_libraries(stdlibs, lib_dir, libjulia_dir, app_lib_dir, app_
     return BundledLibraries(base_dests, stdlib_dests)
 end
 
-# On Windows, bundle import libraries (.a files) and CRT objects (.o files) needed for
-# linking during package precompilation
-function bundle_windows_import_libraries(dest_dir)
-    Sys.iswindows() || return
-
-    # Import libraries are in lib/ and lib/julia/
+# Bundle the static/import libraries (.a files) and CRT objects (.o files) that
+# `Base.Linking` needs to link pkgimages during package precompilation
+function bundle_link_libraries(dest_dir)
     # Note: julia_libdir() returns bin/ on Windows (where DLLs are), but import libraries are in lib/
     src_lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
     src_libjulia_dir = joinpath(src_lib_dir, "julia")
@@ -1928,7 +1925,7 @@ function bundle_windows_import_libraries(dest_dir)
     mkpath(dest_lib_dir)
     mkpath(dest_libjulia_dir)
 
-    # Import libraries in lib/ (libjulia.dll.a, libjulia-internal.dll.a, libopenlibm.dll.a, libssp.dll.a)
+    # Windows import libraries in lib/ (libjulia.dll.a, libjulia-internal.dll.a, libopenlibm.dll.a, libssp.dll.a)
     # and any CRT objects (Base.Linking looks for these both in lib/julia and lib/)
     for file in readdir(src_lib_dir)
         endswith(file, ".dll.a") || endswith(file, ".o") || continue
@@ -1938,10 +1935,11 @@ function bundle_windows_import_libraries(dest_dir)
         cp(src, dest; force=true)
     end
 
-    # Import/static libraries in lib/julia/ (libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a) and
-    # the MinGW CRT objects (dllcrt2.o, crtbegin.o, crtend.o, crt2.o, crt2u.o). Since Julia 1.12.7,
-    # `Base.Linking` links the CRT objects by default when linking pkgimages, so a distribution
-    # without them cannot precompile packages at runtime.
+    # Static/import libraries and CRT objects in lib/julia/. `Base.Linking` links the CRT
+    # by default when linking pkgimages (Windows since Julia 1.12.7, Linux since 1.13), so a
+    # distribution without them cannot precompile packages at runtime.
+    # - Windows: libgcc_s.a, libgcc.a, libmsvcrt.a, libssp.dll.a, dllcrt2.o, crtbegin.o, crtend.o, ...
+    # - Linux: libgcc.a, libc_nonshared.a, crti.o, crtbeginS.o, crtendS.o, crtn.o
     for file in readdir(src_libjulia_dir)
         endswith(file, ".a") || endswith(file, ".o") || continue
         src = joinpath(src_libjulia_dir, file)
