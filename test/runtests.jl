@@ -133,6 +133,37 @@ end
         @test readdir(cache_dir) == ["keep.so"]  # everything but the kept entry pruned
     end
 
+    @testset "concurrent builds reuse the published base sysimage" begin
+        withenv("PACKAGECOMPILER_CACHE_BASE_SYSIMAGE" => nothing) do
+            cpu_target = "native"
+            cache_path = PackageCompiler.base_sysimage_cache_path(; cpu_target, sysimage_build_args=``,
+                sysimage_source=PackageCompiler.fresh_base_sysimage_source())
+            # Hold the lock as a concurrent build would. Once the call reports that it waits,
+            # publish an entry: the call must reuse it rather than build and replace it.
+            lock = PackageCompiler.mkpidlock(cache_path * ".pidfile")
+            logger = Test.TestLogger()
+            task = @async Base.CoreLogging.with_logger(logger) do
+                PackageCompiler.create_fresh_base_sysimage(; cpu_target, sysimage_build_args=``)
+            end
+            waiting() = any(l -> l.message isa AbstractString &&
+                                 occursin("waiting for another process", l.message), logger.logs)
+            try
+                # A call that never waits builds its own sysimage, so give up eventually.
+                timedwait(() -> waiting() || istaskdone(task), 300)
+                @test waiting()
+                write(cache_path, "published by another process")
+            finally
+                close(lock)
+            end
+            try
+                @test fetch(task) == cache_path
+                @test read(cache_path, String) == "published by another process"
+            finally
+                rm(cache_path; force=true)
+            end
+        end
+    end
+
     tmp = mktempdir()
 
     if extended_tests in ("all", "sysimage")

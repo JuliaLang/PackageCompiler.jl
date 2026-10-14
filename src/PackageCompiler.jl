@@ -1,6 +1,7 @@
 module PackageCompiler
 
 using Base: active_project
+using FileWatching: mkpidlock, trymkpidlock
 using Libdl: Libdl
 using Pkg: Pkg
 using Printf
@@ -420,6 +421,24 @@ function create_fresh_base_sysimage(; cpu_target::String, sysimage_build_args::C
     cache_path = base_sysimage_cache_path(; cpu_target, sysimage_build_args,
                                           sysimage_source=new_sysimage_content)
 
+    cache_path === nothing && return build_or_reuse_base_sysimage(nothing, base_dir,
+        new_sysimage_content; cpu_target, sysimage_build_args)
+    # A published cache entry must never change: other processes keep starting children
+    # with `--sysimage=cache_path`, and a child that loads a different build rejects the
+    # package caches compiled against the first one. So one process builds the entry and
+    # concurrent callers wait for it.
+    build() = build_or_reuse_base_sysimage(cache_path, base_dir, new_sysimage_content;
+                                           cpu_target, sysimage_build_args)
+    pidfile = cache_path * ".pidfile"
+    result = trymkpidlock(build, pidfile; stale_age=60)
+    result === false || return result
+    @info "PackageCompiler: waiting for another process to build the base sysimage at $cache_path"
+    return mkpidlock(build, pidfile; stale_age=60)
+end
+
+function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_dir::String,
+                                      new_sysimage_content::String;
+                                      cpu_target::String, sysimage_build_args::Cmd)
     if cache_path !== nothing && filesize(cache_path) > 0
         # mark as recently used for pruning
         try
