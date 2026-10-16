@@ -362,7 +362,18 @@ function rewrite_sysimg_jl_only_needed_stdlibs()
     return replace(sysimg_content, r"stdlibs = \[(.*?)\]"s => "stdlibs = []")
 end
 
-fresh_base_sysimage_source() =
+# Julia normally drops the inferred code of compiled methods from a sysimage. The final
+# sysimage build then has to infer all of Base again, so keep that code in the base sysimage.
+function keep_inferred_code_source()
+    try
+        cglobal(:jl_set_type_infer_preserve_ir)
+    catch
+        return ""
+    end
+    return "ccall(:jl_set_type_infer_preserve_ir, Cvoid, (Int8,), 1)\n"
+end
+
+fresh_base_sysimage_source() = keep_inferred_code_source() *
     rewrite_sysimg_jl_only_needed_stdlibs() * "\nempty!(Base.atexit_hooks)\n"
 
 # bump when the base sysimage build changes in ways the cache key does not capture
