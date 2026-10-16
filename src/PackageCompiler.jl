@@ -610,6 +610,30 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     return tracefile
 end
 
+# Julia 1.13 writes a sysimage by inferring code for every method in it, but then throws
+# that code away and infers it all again to emit it. Doing that inference in the build
+# script instead, while the compiler keeps inferred code, means it happens once.
+# Julia 1.14 keeps the code itself.
+function infer_once_code()
+    VERSION.major == 1 && VERSION.minor == 13 || return "", ""
+    try
+        cglobal(:jl_set_type_infer_preserve_ir)
+    catch
+        return "", ""
+    end
+    isdefined(Base.Compiler, :infer_all_method_defs!) &&
+        isdefined(Base.Compiler, :collect_all_method_defs) || return "", ""
+    start = "ccall(:jl_set_type_infer_preserve_ir, Cvoid, (Int8,), 1)\n"
+    stop = """
+        let C = Base.Compiler
+            C.infer_all_method_defs!(false, C.collect_all_method_defs(nothing, nothing),
+                                     Base.get_world_counter(), Any[])
+        end
+        ccall(:jl_set_type_infer_preserve_ir, Cvoid, (Int8,), 0)
+        """
+    return start, stop
+end
+
 function create_sysimg_object_file(object_file::String,
                             packages::Vector{String},
                             packages_sysimg::Set{Base.PkgId};
@@ -624,6 +648,8 @@ function create_sysimg_object_file(object_file::String,
                             incremental::Bool,
                             import_into_main::Bool)
     julia_code_buffer = IOBuffer()
+    infer_once_start, infer_once_stop = infer_once_code()
+    print(julia_code_buffer, infer_once_start)
     # include all packages into the sysimg
     print(julia_code_buffer, """
         Base.reinit_stdio()
@@ -752,6 +778,7 @@ function create_sysimg_object_file(object_file::String,
             empty!(Base.Docs.keywords)
             """)
     end
+    print(julia_code_buffer, infer_once_stop)
 
     julia_code = String(take!(julia_code_buffer))
     outputo_file = tempname()
