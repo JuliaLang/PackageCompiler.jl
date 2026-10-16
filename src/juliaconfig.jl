@@ -3,7 +3,7 @@
 isdebugbuild() = ccall(:jl_is_debugbuild, Cint, ()) != 0 
 
 function shell_escape(str)
-    str = replace(str, "'" => "'\''")
+    str = replace(str, "'" => "'\\''")
     return "'$str'"
 end
 
