@@ -890,7 +890,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     if !incremental
         if base_sysimage !== nothing
-            error("cannot specify `base_sysimage`  when `incremental=false`")
+            error("cannot specify `base_sysimage` when `incremental=false`")
         end
         base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
@@ -1205,8 +1205,7 @@ function create_executable_from_sysimg(exe_path::String,
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
-    m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $(march()) -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
@@ -1285,15 +1284,15 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `force::Bool`: Remove the folder `compiled_lib` if it exists before creating the library.
+- `force::Bool`: Remove the folder `dest_dir` if it exists before creating the library.
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
 
-- `julia_init_c_file::::Union{String, Vector{String}}`: A file or list of files to include
+- `julia_init_c_file::Union{String, Vector{String}}`: A file or list of files to include
   in the system image with functions for initializing Julia from external code
   (default: `PackageCompiler.default_julia_init()`).
 
-- `julia_init_h_file::::Union{String, Vector{String}}`: A file or list of files to include
+- `julia_init_h_file::Union{String, Vector{String}}`: A file or list of files to include
   in the library bundle, with declarations for the functions defined in the file(s) provided
   via `julia_init_c_file` (default: `PackageCompiler.default_julia_init_header()`).
 
@@ -1314,7 +1313,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 - `include_preferences::Bool`: If `true`, store all preferences visible by the project in
-  `project_or_package` in the library bundle. Defaults to `true`.
+  `package_or_project` in the library bundle. Defaults to `true`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -1708,11 +1707,11 @@ function recursive_dir_size(path)
     try
         for (root, dirs, files) in walkdir(path)
             for file in files
-                path = joinpath(root, file)
+                file_path = joinpath(root, file)
                 try
-                    size += lstat(path).size
+                    size += lstat(file_path).size
                 catch ex
-                    @error("Failed to calculate size of $path", exception=ex)
+                    @error("Failed to calculate size of $file_path", exception=ex)
                 end
             end
         end
@@ -1955,8 +1954,6 @@ end
 
 # Write preferences for packages in project `project_dir` to `io`
 function dump_preferences(io::IO, project_dir)
-    # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
-    #       only introduced in Julia v1.8
     command = """
     # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
     pushfirst!(LOAD_PATH, "@stdlib")
