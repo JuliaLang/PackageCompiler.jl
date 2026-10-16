@@ -379,6 +379,32 @@ function julia_base_sources_mtime()
     return newest
 end
 
+# hashing the default sysimage takes over a second, so remember the hash for a given
+# path, size and modification time
+function file_sha256(path::String)
+    st = stat(path)
+    key = bytes2hex(sha256(join([path, string(st.size), string(st.mtime)], '\0')))[1:16]
+    hash_file = joinpath(get_scratch!(@__MODULE__, "file_hashes"), key)
+    # another process may be replacing the file, and a cache miss is only slower
+    hash = try
+        isfile(hash_file) ? read(hash_file, String) : ""
+    catch e
+        e isa Base.IOError || rethrow()
+        ""
+    end
+    occursin(r"^[0-9a-f]{64}$", hash) && return hash
+    hash = bytes2hex(open(sha256, path))
+    tmp = tempname(dirname(hash_file))
+    write(tmp, hash)
+    try
+        mv(tmp, hash_file; force=true)
+    catch e
+        e isa Base.IOError || rethrow()
+        rm(tmp; force=true)
+    end
+    return hash
+end
+
 function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd,
                                   sysimage_source::String)
     get(ENV, "PACKAGECOMPILER_CACHE_BASE_SYSIMAGE", "") in ("0", "false") && return nothing
@@ -386,9 +412,8 @@ function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd
     # commit, which cannot distinguish different builds of the same Julia)
     default_sysimage = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
     isfile(default_sysimage) || (default_sysimage = unsafe_string(Base.JLOptions().image_file))
-    sysimage_hash = open(io -> sha256(io), default_sysimage)
     key = bytes2hex(sha256(join([string(BASE_SYSIMAGE_CACHE_VERSION),
-                                 bytes2hex(sysimage_hash),
+                                 file_sha256(default_sysimage),
                                  bytes2hex(sha256(sysimage_source)),
                                  string(julia_base_sources_mtime()),
                                  cpu_target, sysimage_build_args.exec...], '\0')))[1:16]
