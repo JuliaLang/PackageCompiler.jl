@@ -329,11 +329,7 @@ end
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
-    if isdefined(Base, :Linking) # pkgimage support feature flag
-        `$julia_path --color=$color --startup-file=no --pkgimages=no`
-    else
-        `$julia_path --color=$color --startup-file=no`
-    end
+    `$julia_path --color=$color --startup-file=no --pkgimages=no`
 end
 
 supports_sysimage_compression() = hasfield(typeof(Base.JLOptions()), :compress_sysimage)
@@ -1697,14 +1693,8 @@ function bundle_julia_libexec(ctx, dest_dir)
         return
     end
 
-    # Use Julia-private `libexec` folder if it exsts
     # (normpath is required in case `bin` does not exist in `dest_dir`)
-    libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
-        Base.PRIVATE_LIBEXECDIR
-    else
-        Base.LIBEXECDIR
-    end
-    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
+    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
     mkpath(bundle_libexec_dir)
 
     p7zip_exe = basename(p7zip_path)
