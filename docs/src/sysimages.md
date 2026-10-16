@@ -121,7 +121,7 @@ we can see that it needs to be compiled (it shows the function
 
 ```
 ~/NewSysImageEnv
-❯ julia -JExampleSysimage.so --trace-compile=stderr -e 'import Example; Example.hello("friend")'
+❯ julia -JExampleSysimage.so --trace-compile=stderr -e 'Example.hello("friend")'
 precompile(Tuple{typeof(Example.hello), String})
 ```
 
@@ -161,7 +161,7 @@ Using the just created system image, we can see that the `hello` function no lon
 
 ```
 ~/NewSysImageEnv
-❯ julia -JExampleSysimagePrecompile.so --trace-compile=stderr -e 'import Example; Example.hello("friend")'
+❯ julia -JExampleSysimagePrecompile.so --trace-compile=stderr -e 'Example.hello("friend")'
 
 ~/NewSysImageEnv
 ❯
