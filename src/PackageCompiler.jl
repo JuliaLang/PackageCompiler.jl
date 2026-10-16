@@ -567,7 +567,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
     arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
