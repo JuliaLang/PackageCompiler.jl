@@ -740,6 +740,8 @@ function create_sysimg_object_file(object_file::String,
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
+    # Kept when the build fails, so the staging code can be inspected.
+    rm(outputo_file; force=true)
     return
 end
 
