@@ -329,11 +329,7 @@ end
 function get_julia_cmd()
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
     color = Base.have_color === nothing ? "auto" : Base.have_color ? "yes" : "no"
-    if isdefined(Base, :Linking) # pkgimage support feature flag
-        `$julia_path --color=$color --startup-file=no --pkgimages=no`
-    else
-        `$julia_path --color=$color --startup-file=no`
-    end
+    `$julia_path --color=$color --startup-file=no --pkgimages=no`
 end
 
 supports_sysimage_compression() = hasfield(typeof(Base.JLOptions()), :compress_sysimage)
@@ -390,6 +386,32 @@ function julia_base_sources_mtime()
     return newest
 end
 
+# hashing the default sysimage takes over a second, so remember the hash for a given
+# path, size and modification time
+function file_sha256(path::String)
+    st = stat(path)
+    key = bytes2hex(sha256(join([path, string(st.size), string(st.mtime)], '\0')))[1:16]
+    hash_file = joinpath(get_scratch!(@__MODULE__, "file_hashes"), key)
+    # another process may be replacing the file, and a cache miss is only slower
+    hash = try
+        isfile(hash_file) ? read(hash_file, String) : ""
+    catch e
+        e isa Base.IOError || rethrow()
+        ""
+    end
+    occursin(r"^[0-9a-f]{64}$", hash) && return hash
+    hash = bytes2hex(open(sha256, path))
+    tmp = tempname(dirname(hash_file))
+    write(tmp, hash)
+    try
+        mv(tmp, hash_file; force=true)
+    catch e
+        e isa Base.IOError || rethrow()
+        rm(tmp; force=true)
+    end
+    return hash
+end
+
 function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd,
                                   sysimage_source::String)
     get(ENV, "PACKAGECOMPILER_CACHE_BASE_SYSIMAGE", "") in ("0", "false") && return nothing
@@ -397,9 +419,8 @@ function base_sysimage_cache_path(; cpu_target::String, sysimage_build_args::Cmd
     # commit, which cannot distinguish different builds of the same Julia)
     default_sysimage = joinpath(julia_private_libdir(), "sys." * Libdl.dlext)
     isfile(default_sysimage) || (default_sysimage = unsafe_string(Base.JLOptions().image_file))
-    sysimage_hash = open(io -> sha256(io), default_sysimage)
     key = bytes2hex(sha256(join([string(BASE_SYSIMAGE_CACHE_VERSION),
-                                 bytes2hex(sysimage_hash),
+                                 file_sha256(default_sysimage),
                                  bytes2hex(sha256(sysimage_source)),
                                  string(julia_base_sources_mtime()),
                                  cpu_target, sysimage_build_args.exec...], '\0')))[1:16]
@@ -489,11 +510,11 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
             TerminalSpinners.@spin spinner begin
                 # Create corecompiler object file
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                    --output-o $tmp_corecompiler_o $sysimage_build_args
+                    --output-o $tmp_corecompiler_o $sysimage_build_args --threads=1
                     $compiler_source_path $compiler_args`
                 @debug "running $cmd"
 
-                read(cmd)
+                @monitor_oom read(cmd)
 
                 # Create shared library from object file
                 create_sysimg_from_object_file(String[tmp_corecompiler_o],
@@ -509,13 +530,13 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
                 new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
                 write(new_sysimage_source_path, new_sysimage_content)
                 try
-                    cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                        --sysimage=$tmp_corecompiler_sl --threads=1
-                        $sysimage_build_args --output-o=$tmp_sys_o
-                        $new_sysimage_source_path $compiler_args`)
+                    cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                        --sysimage=$tmp_corecompiler_sl
+                        $sysimage_build_args --threads=1 --output-o=$tmp_sys_o
+                        $new_sysimage_source_path $compiler_args`
                     @debug "running $cmd"
 
-                    read(cmd)
+                    @monitor_oom read(cmd)
 
                     create_sysimg_from_object_file(String[tmp_sys_o],
                                             tmp_sys_sl;
@@ -557,8 +578,15 @@ function ensurecompiled(project, packages, sysimage)
     # Base.Precompilation is in the sysimage and does the actual work anyway.
     # On Julia 1.11 `precompilepkgs` requires FileWatching to be loaded (for the
     # pidlock), otherwise it silently compiles nothing (#1134).
-    code = isdefined(Base, :Precompilation) ?
-        "using FileWatching; Base.Precompilation.precompilepkgs()" : "using Pkg; Pkg.precompile()"
+    # Both functions throw when none of the listed packages is outside the sysimage.
+    using_mod, precompile = isdefined(Base, :Precompilation) ?
+        ("FileWatching", "Base.Precompilation.precompilepkgs") : ("Pkg", "Pkg.precompile")
+    code = """
+        using $using_mod
+        pkgs = filter(p -> (id = Base.identify_package(p)) === nothing || !Base.in_sysimage(id),
+                      $(repr(String.(packages))))
+        isempty(pkgs) || $precompile(pkgs)
+        """
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $code`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
@@ -571,7 +599,7 @@ function run_precompilation_script(project::String, sysimg::String, precompile_f
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
     arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --compile=all --trace-compile=$tracefile $arg`
+    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
@@ -744,6 +772,8 @@ function create_sysimg_object_file(object_file::String,
     non = incremental ? "" : "non"
     spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: compiling $(non)incremental system image")
     @monitor_oom TerminalSpinners.@spin spinner run(cmd)
+    # Kept when the build fails, so the staging code can be inspected.
+    rm(outputo_file; force=true)
     return
 end
 
@@ -823,6 +853,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          import_into_main::Bool=true,
+                         instantiate::Bool=true,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -860,15 +891,17 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     # Instantiate the project
 
-    @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    if instantiate
+        @debug "instantiating project at $(repr(project))"
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    end
 
     cpu_target = expand_sysimage_cpu_target(cpu_target,
         something(base_sysimage, unsafe_string(Base.JLOptions().image_file)))
 
     if !incremental
         if base_sysimage !== nothing
-            error("cannot specify `base_sysimage`  when `incremental=false`")
+            error("cannot specify `base_sysimage` when `incremental=false`")
         end
         base_sysimage = create_fresh_base_sysimage(; cpu_target, sysimage_build_args)
     else
@@ -1168,7 +1201,8 @@ function create_app(package_dir::String,
                     compress_sysimage,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
-                    script)
+                    script,
+                    instantiate = false)
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
@@ -1182,8 +1216,7 @@ function create_executable_from_sysimg(exe_path::String,
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
-    m = something(march(), ``)
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $m -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $(march()) -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
 end
@@ -1262,15 +1295,15 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `filter_stdlibs::Bool`: If `true`, only include stdlibs that are in the project file.
   Defaults to `false`, only set to `true` if you know the potential pitfalls.
 
-- `force::Bool`: Remove the folder `compiled_lib` if it exists before creating the library.
+- `force::Bool`: Remove the folder `dest_dir` if it exists before creating the library.
 
 - `header_files::Vector{String}`: A list of header files to include in the library bundle.
 
-- `julia_init_c_file::::Union{String, Vector{String}}`: A file or list of files to include
+- `julia_init_c_file::Union{String, Vector{String}}`: A file or list of files to include
   in the system image with functions for initializing Julia from external code
   (default: `PackageCompiler.default_julia_init()`).
 
-- `julia_init_h_file::::Union{String, Vector{String}}`: A file or list of files to include
+- `julia_init_h_file::Union{String, Vector{String}}`: A file or list of files to include
   in the library bundle, with declarations for the functions defined in the file(s) provided
   via `julia_init_c_file` (default: `PackageCompiler.default_julia_init_header()`).
 
@@ -1291,7 +1324,7 @@ compiler (can also include extra arguments to the compiler, like `-g`).
   packages do not load all their dependencies when themselves are loaded. Defaults to `true`.
 
 - `include_preferences::Bool`: If `true`, store all preferences visible by the project in
-  `project_or_package` in the library bundle. Defaults to `true`.
+  `package_or_project` in the library bundle. Defaults to `true`.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -1402,7 +1435,8 @@ function create_library(package_or_project::String,
                     julia_init_c_file,
                     julia_init_h_file,
                     version,
-                    soname)
+                    soname,
+                    instantiate = false)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
@@ -1669,14 +1703,8 @@ function bundle_julia_libexec(ctx, dest_dir)
         return
     end
 
-    # Use Julia-private `libexec` folder if it exsts
     # (normpath is required in case `bin` does not exist in `dest_dir`)
-    libexecdir_rel = if isdefined(Base, :PRIVATE_LIBEXECDIR)
-        Base.PRIVATE_LIBEXECDIR
-    else
-        Base.LIBEXECDIR
-    end
-    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", libexecdir_rel))
+    bundle_libexec_dir = normpath(joinpath(dest_dir, "bin", Base.PRIVATE_LIBEXECDIR))
     mkpath(bundle_libexec_dir)
 
     p7zip_exe = basename(p7zip_path)
@@ -1690,11 +1718,11 @@ function recursive_dir_size(path)
     try
         for (root, dirs, files) in walkdir(path)
             for file in files
-                path = joinpath(root, file)
+                file_path = joinpath(root, file)
                 try
-                    size += lstat(path).size
+                    size += lstat(file_path).size
                 catch ex
-                    @error("Failed to calculate size of $path", exception=ex)
+                    @error("Failed to calculate size of $file_path", exception=ex)
                 end
             end
         end
@@ -1758,7 +1786,8 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool, quiet::Bo
         push!(source_paths_names, (pkg_source_path, pkg.name))
     end
     # Also want artifacts for the project itself
-    push!(source_paths_names, (dirname(ctx.env.project_file), ctx.env.project_file))
+    project_name = ctx.env.pkg === nothing ? basename(dirname(ctx.env.project_file)) : ctx.env.pkg.name
+    push!(source_paths_names, (dirname(ctx.env.project_file), project_name))
 
     bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
 
@@ -1936,8 +1965,6 @@ end
 
 # Write preferences for packages in project `project_dir` to `io`
 function dump_preferences(io::IO, project_dir)
-    # Note: in `command` we cannot just use `Base.get_preferences()`, since this API was
-    #       only introduced in Julia v1.8
     command = """
     # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
     pushfirst!(LOAD_PATH, "@stdlib")
@@ -1949,7 +1976,7 @@ function dump_preferences(io::IO, project_dir)
     filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
     """
-    prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
+    prefs = read(`$(Base.julia_cmd()) --startup-file=no --project=$project_dir -e "$command"`, String)
     write(io, prefs)
 
     nothing
