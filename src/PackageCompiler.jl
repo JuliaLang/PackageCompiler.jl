@@ -507,7 +507,7 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
                     $compiler_source_path $compiler_args`
                 @debug "running $cmd"
 
-                read(cmd)
+                @monitor_oom read(cmd)
 
                 # Create shared library from object file
                 create_sysimg_from_object_file(String[tmp_corecompiler_o],
@@ -529,7 +529,7 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
                         $new_sysimage_source_path $compiler_args`
                     @debug "running $cmd"
 
-                    read(cmd)
+                    @monitor_oom read(cmd)
 
                     create_sysimg_from_object_file(String[tmp_sys_o],
                                             tmp_sys_sl;
