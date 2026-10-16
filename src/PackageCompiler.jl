@@ -478,7 +478,7 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
             TerminalSpinners.@spin spinner begin
                 # Create corecompiler object file
                 cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
-                    --output-o $tmp_corecompiler_o $sysimage_build_args
+                    --output-o $tmp_corecompiler_o $sysimage_build_args --threads=1
                     $compiler_source_path $compiler_args`
                 @debug "running $cmd"
 
@@ -498,10 +498,10 @@ function build_or_reuse_base_sysimage(cache_path::Union{Nothing, String}, base_d
                 new_sysimage_source_path = joinpath(tmp, "sysimage_packagecompiler_$(uuid1()).jl")
                 write(new_sysimage_source_path, new_sysimage_content)
                 try
-                    cmd = addenv(`$(get_julia_cmd()) --cpu-target $cpu_target
-                        --sysimage=$tmp_corecompiler_sl --threads=1
-                        $sysimage_build_args --output-o=$tmp_sys_o
-                        $new_sysimage_source_path $compiler_args`)
+                    cmd = `$(get_julia_cmd()) --cpu-target $cpu_target
+                        --sysimage=$tmp_corecompiler_sl
+                        $sysimage_build_args --threads=1 --output-o=$tmp_sys_o
+                        $new_sysimage_source_path $compiler_args`
                     @debug "running $cmd"
 
                     read(cmd)
