@@ -1786,7 +1786,8 @@ function bundle_artifacts(ctx, dest_dir; include_lazy_artifacts::Bool, quiet::Bo
         push!(source_paths_names, (pkg_source_path, pkg.name))
     end
     # Also want artifacts for the project itself
-    push!(source_paths_names, (dirname(ctx.env.project_file), ctx.env.project_file))
+    project_name = ctx.env.pkg === nothing ? basename(dirname(ctx.env.project_file)) : ctx.env.pkg.name
+    push!(source_paths_names, (dirname(ctx.env.project_file), project_name))
 
     bundled_artifacts = Pair{String, Vector{Pair{String, String}}}[]
 
