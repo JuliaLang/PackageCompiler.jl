@@ -821,6 +821,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          compat_level::String="major",
                          extra_precompiles::String = "",
                          import_into_main::Bool=true,
+                         instantiate::Bool=true,
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
@@ -858,8 +859,10 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
 
     # Instantiate the project
 
-    @debug "instantiating project at $(repr(project))"
-    Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    if instantiate
+        @debug "instantiating project at $(repr(project))"
+        Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
+    end
 
     cpu_target = expand_sysimage_cpu_target(cpu_target,
         something(base_sysimage, unsafe_string(Base.JLOptions().image_file)))
@@ -1166,7 +1169,8 @@ function create_app(package_dir::String,
                     compress_sysimage,
                     include_transitive_dependencies,
                     extra_precompiles = join(precompiles, "\n"),
-                    script)
+                    script,
+                    instantiate = false)
 
     for (app_name, julia_main) in executables
         create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
@@ -1400,7 +1404,8 @@ function create_library(package_or_project::String,
                     julia_init_c_file,
                     julia_init_h_file,
                     version,
-                    soname)
+                    soname,
+                    instantiate = false)
 
     if version !== nothing && Sys.isunix()
         cd(dirname(sysimg_path)) do
