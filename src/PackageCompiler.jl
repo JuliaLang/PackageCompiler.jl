@@ -1977,7 +1977,7 @@ function dump_preferences(io::IO, project_dir)
     filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
     """
-    prefs = read(`$(Base.julia_cmd()) --project=$project_dir -e "$command"`, String)
+    prefs = read(`$(Base.julia_cmd()) --startup-file=no --project=$project_dir -e "$command"`, String)
     write(io, prefs)
 
     nothing
