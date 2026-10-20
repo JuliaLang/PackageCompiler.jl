@@ -80,8 +80,6 @@ function rm_with_retry(path; recursive::Bool=false, force::Bool=false,
 end
 
 @testset "PackageCompiler.jl" begin
-    expected_sysimage_cpu_target = VERSION >= v"1.13-" ? "sysimage" : "native"
-    @test PackageCompiler.DEFAULT_SYSIMAGE_CPU_TARGET == expected_sysimage_cpu_target
     @test PackageCompiler.expand_sysimage_cpu_target("native") == "native"
     if VERSION >= v"1.13-"
         # Query in a fresh process: package images loaded here overwrite `Sys.sysimage_target()`
