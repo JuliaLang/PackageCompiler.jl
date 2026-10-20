@@ -37,6 +37,8 @@ function app_configurations()
         ((true, false),)
     elseif app_configuration == "filtered"
         ((false, true),)
+    elseif app_configuration == "package_images"
+        ()
     else
         error("unknown PACKAGECOMPILER_TEST_APP_CONFIGURATION=$(repr(app_configuration))")
     end
@@ -315,6 +317,163 @@ end
         end
     end # testset
 
+    if app_configuration in ("all", "package_images") && VERSION < v"1.11"
+        @testset "create_app with package images requires Julia 1.11" begin
+            @test_throws "requires Julia v1.11" create_app(joinpath(@__DIR__, "..", "examples/MyApp/"),
+                                                          joinpath(tmp, "unused"); sysimage_packages=String[])
+        end
+    elseif app_configuration in ("all", "package_images")
+        @testset "create_app with package images" begin
+            tmp_app_source_dir = joinpath(tmp, "MyAppPackageImages")
+            cp(joinpath(@__DIR__, "..", "examples/MyApp/"), tmp_app_source_dir)
+            # The app folder is inside the project, which must not be copied into the app
+            app_compiled_dir = joinpath(tmp_app_source_dir, "build")
+            # Path dependencies with extensions
+            function write_path_package(name, uuid, trigger, trigger_uuid)
+                dir = joinpath(tmp, name)
+                mkpath(joinpath(dir, "src"))
+                mkpath(joinpath(dir, "ext"))
+                write(joinpath(dir, "Project.toml"), """
+                    name = "$name"
+                    uuid = "$uuid"
+                    version = "0.1.0"
+
+                    [weakdeps]
+                    $trigger = "$trigger_uuid"
+
+                    [extensions]
+                    $(name)$(trigger)Ext = "$trigger"
+                    """)
+                write(joinpath(dir, "src", "$name.jl"), "module $name\nend\n")
+                write(joinpath(dir, "ext", "$(name)$(trigger)Ext.jl"),
+                      "module $(name)$(trigger)Ext\nusing $name, $trigger\nend\n")
+                return dir
+            end
+            # PathDep goes into the sysimage, Example, which triggers its extension, does not
+            path_deps = [write_path_package("PathDep", "6f2e1a2c-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+                                            "Example", "7876af07-990d-54b4-ab0e-23690620f79a"),
+                         write_path_package("PathDep2", "7a3f2b3d-4c5e-4f60-9bac-1d2e3f4a5b6c",
+                                            "Crayons", "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f")]
+            old_project = Base.ACTIVE_PROJECT[]
+            Base.ACTIVE_PROJECT[] = tmp_app_source_dir
+            try
+                Pkg.develop([Pkg.PackageSpec(path=dir) for dir in path_deps])
+            finally
+                Base.ACTIVE_PROJECT[] = old_project
+            end
+            # The app reads a file beside its source code when it is precompiled
+            mkpath(joinpath(tmp_app_source_dir, "templates"))
+            write(joinpath(tmp_app_source_dir, "templates", "greeting.txt"), "hello from a template")
+            app_source = joinpath(tmp_app_source_dir, "src", "MyApp.jl")
+            write(app_source, replace(read(app_source, String), "module MyApp\n" =>
+                "module MyApp\nconst GREETING = read(joinpath(@__DIR__, \"..\", \"templates\", \"greeting.txt\"), String)\n"))
+            # The app reads a preference of its own when it is precompiled
+            write(joinpath(tmp_app_source_dir, "LocalPreferences.toml"), "[MyApp]\nbackend = \"from preferences\"\n")
+            write(app_source, replace(read(app_source, String), "module MyApp\n" => """
+                module MyApp
+                const BACKEND = let uuid = Base.UUID("f943f3d7-887a-4ed5-b0c0-a1d6899aa8f5")
+                    Base.record_compiletime_preference(uuid, "backend")
+                    get(Base.get_preferences(uuid), "backend", "default")
+                end
+                """))
+            # The first file does not end with a newline
+            statements_files = [joinpath(tmp, "statements1.jl"), joinpath(tmp, "statements2.jl")]
+            write(statements_files[1], "precompile(Tuple{typeof(MyApp.second_main)})")
+            write(statements_files[2], "precompile(Tuple{typeof(MyApp.erroring)})\n")
+            # A different absolute path, with a space, stands in for another machine
+            app_dir = joinpath(tmp, "moved", "MyApp with package images")
+            try
+                # Builders often set JULIA_PROJECT, which must not change what is precompiled
+                withenv("JULIA_PROJECT" => tmp_app_source_dir) do
+                    create_app(tmp_app_source_dir, app_compiled_dir; sysimage_packages=["Crayons", "PathDep"],
+                               force=true, include_lazy_artifacts=true,
+                               precompile_execution_file=joinpath(tmp_app_source_dir, "precompile_app.jl"),
+                               precompile_statements_file=statements_files,
+                               executables=["MyApp" => "julia_main", "SecondApp" => "second_main"])
+                end
+                @test_throws "not in project" create_app(tmp_app_source_dir, joinpath(tmp, "unused");
+                                                        sysimage_packages=["NotAPackage"])
+                mkpath(dirname(app_dir))
+                mv(app_compiled_dir, app_dir)
+            finally
+                rm_with_retry(tmp_app_source_dir; recursive=true)
+                foreach(dir -> rm_with_retry(dir; recursive=true), path_deps)
+                # The app must not need the depot it was built from
+                rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
+                rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
+                rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            end
+
+            share_dir = joinpath(app_dir, "share", "julia")
+            @test !ispath(joinpath(share_dir, "path_packages", "MyApp", "build"))
+            app_path(app_name) = joinpath(app_dir, "bin", app_name * (Sys.iswindows() ? ".exe" : ""))
+            julia = joinpath(app_dir, "bin", Base.julia_exename())
+            sysimage = joinpath(app_dir, "lib", "julia", "sys." * Libdl.dlext)
+            app_files() = sort!([joinpath(root, file) for (root, _, files) in walkdir(app_dir) for file in files])
+            files_before = app_files()
+
+            test_load_path = mktempdir()
+            test_depot_path = mktempdir()
+            # A package of the same name in the `dev` folder of a user depot must not shadow the app
+            mkpath(joinpath(test_depot_path, "dev", "MyApp", "src"))
+            write(joinpath(test_depot_path, "dev", "MyApp", "src", "MyApp.jl"), "module MyApp end\n")
+            trace = IOBuffer()
+            app_output = withenv("JULIA_DEPOT_PATH" => test_depot_path, "JULIA_LOAD_PATH" => test_load_path) do
+                # `strict` fails instead of compiling a package that has no usable package image
+                cmd = `$(app_path("MyApp")) I get --args --julia-args --compiled-modules=strict --threads=3 --trace-compile=stderr`
+                read(pipeline(cmd; stderr=trace), String)
+            end
+            @test app_files() == files_before
+            @test occursin("Example.domath", app_output)
+            @test occursin("Hello, World!", app_output)
+            @test occursin("Artifact printed: Hello, World!", app_output)
+            @test occursin("HelloWorld artifact at $(realpath(app_dir))", app_output)
+            @test occursin("""ARGS = ["I", "get", "--args"]""", app_output)
+            @test occursin("is_crayons_loaded() = true", app_output)
+            @test occursin("myrand: ok", app_output)
+            @test occursin("DEPOT_PATH = [\"$(escape_string(test_depot_path))", app_output)
+            @test occursin("LOAD_PATH = [\"$(escape_string(test_load_path))", app_output)
+            @test occursin("n = 20000000", app_output)
+            @test occursin("From worker 2:\t8", app_output)
+            @test occursin("LLVMExtra path: ok!", app_output)
+            @test occursin("micromamba_jll path: ok!", app_output)
+            # The precompile execution file compiled `julia_main` ahead of time
+            @test !occursin("precompile(Tuple{typeof(MyApp.julia_main)})", String(take!(trace)))
+
+            # The package images carry the generic CPU target that the app is built for
+            second_output = read(`$(app_path("SecondApp")) --julia-args --compiled-modules=strict -C generic`, String)
+            @test occursin("Hello from second main", second_output)
+
+            crayons = Base.PkgId(Base.UUID("a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"), "Crayons")
+            path_dep = Base.PkgId(Base.UUID("6f2e1a2c-3b4d-4e5f-8a9b-0c1d2e3f4a5b"), "PathDep")
+            example = Base.PkgId(Base.UUID("7876af07-990d-54b4-ab0e-23690620f79a"), "Example")
+            code = "print(Base.in_sysimage.(($(repr(crayons)), $(repr(path_dep)), $(repr(example)))))"
+            @test read(`$julia --startup-file=no --sysimage=$sysimage -e $code`, String) == "(true, true, false)"
+
+            statements = read(joinpath(share_dir, "path_packages", "MyAppPrecompiles", "src",
+                                       "precompile_statements.jl"), String)
+            @test occursin("precompile(Tuple{typeof(MyApp.second_main)})\nprecompile(Tuple{typeof(MyApp.erroring)})", statements)
+
+            code = """
+                manifest = Base.parsed_toml(joinpath(only(LOAD_PATH), "Manifest.toml"))
+                shipped = [Base.PkgId(Base.UUID(only(entries)["uuid"]), name) for (name, entries) in manifest["deps"]]
+                filter!(!Base.in_sysimage, shipped)
+                println(join(sort!([pkg.name for pkg in shipped if !Base.isrelocatable(pkg)]), ", "))
+                using PathDep, PathDep2, Example, MyApp
+                println(Base.get_extension(PathDep, :PathDepExampleExt) !== nothing)
+                println(Base.get_extension(PathDep2, :PathDep2CrayonsExt) !== nothing)
+                println(startswith(pkgdir(Example), $(repr(share_dir))))
+                println(pkgversion(MyApp))
+                println(MyApp.GREETING)
+                println(MyApp.BACKEND)
+                """
+            output = withenv("JULIA_DEPOT_PATH" => share_dir, "JULIA_LOAD_PATH" => share_dir) do
+                read(`$julia --startup-file=no --sysimage=$sysimage --compiled-modules=strict -e $code`, String)
+            end
+            @test output == "\ntrue\ntrue\ntrue\n0.1.0\nhello from a template\nfrom preferences\n"
+        end
+    end
+
     if !is_slow_ci && extended_tests in ("all", "library")
         @testset "create_library" begin
             # Test library creation
@@ -393,6 +552,101 @@ end
         pkgids = PackageCompiler.package_ids_for_sysimage(ctx, ["Example"];
                                                           include_transitive_dependencies=false)
         @test only(pkgids).name == "Example"
+    end
+
+    if VERSION >= v"1.12-"
+        @testset "source_path in a workspace" begin
+            workspace = mktempdir()
+            write(joinpath(workspace, "Project.toml"), """
+                [workspace]
+                projects = ["App", "Sibling"]
+                """)
+            mkpath(joinpath(workspace, "App"))
+            write(joinpath(workspace, "App", "Project.toml"), """
+                name = "App"
+                uuid = "5e1d2c3b-4a59-4687-9c8b-7a6f5e4d3c2b"
+
+                [deps]
+                Sibling = "6f2e3d4c-5b6a-4798-8d9c-8b7a6f5e4d3c"
+                """)
+            mkpath(joinpath(workspace, "Sibling"))
+            write(joinpath(workspace, "Sibling", "Project.toml"), """
+                name = "Sibling"
+                uuid = "6f2e3d4c-5b6a-4798-8d9c-8b7a6f5e4d3c"
+                """)
+            write(joinpath(workspace, "Manifest.toml"), """
+                manifest_format = "2.0"
+
+                [[deps.App]]
+                deps = ["Sibling"]
+                path = "App"
+                uuid = "5e1d2c3b-4a59-4687-9c8b-7a6f5e4d3c2b"
+
+                [[deps.Sibling]]
+                path = "Sibling"
+                uuid = "6f2e3d4c-5b6a-4798-8d9c-8b7a6f5e4d3c"
+                """)
+            ctx = PackageCompiler.create_pkg_context(joinpath(workspace, "App"))
+            sibling = only(filter(pkg -> pkg.name == "Sibling", PackageCompiler.load_all_deps(ctx)))
+            @test PackageCompiler.source_path(ctx, sibling) == realpath(joinpath(workspace, "Sibling"))
+        end
+    end
+
+    @testset "warn_if_cache_flags_in_build_args" begin
+        @test_logs (:warn, r"`-O1 --check-bounds=yes -g2`") PackageCompiler.warn_if_cache_flags_in_build_args(
+            `-O1 --threads=2 --check-bounds=yes -g2`)
+        @test_logs PackageCompiler.warn_if_cache_flags_in_build_args(`--threads=2 --heap-size-hint=1G`)
+    end
+
+    @testset "bundled_manifest" begin
+        project = mktempdir()
+        write(joinpath(project, "Project.toml"), """
+            name = "App"
+            uuid = "0b3c1a3e-8a65-4a2f-9d7b-5a0f2b7c9e11"
+
+            [deps]
+            Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+            Local = "3c1f0a8e-2b7d-4e9a-8f6c-1d2e3f4a5b6c"
+            """)
+        write(joinpath(project, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.Example]]
+            git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+            repo-rev = "master"
+            repo-url = "https://github.com/JuliaLang/Example.jl.git"
+            uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+            version = "0.5.4"
+
+            [[deps.Local]]
+            path = "../somewhere/Local"
+            uuid = "3c1f0a8e-2b7d-4e9a-8f6c-1d2e3f4a5b6c"
+            version = "0.1.0"
+
+            [[deps.Unused]]
+            path = "../somewhere/Unused"
+            uuid = "4d2e1b9f-3c8e-4fab-9a7d-2e3f4a5b6c7d"
+            version = "0.1.0"
+            """)
+        ctx = PackageCompiler.create_pkg_context(project)
+        manifest = PackageCompiler.bundled_manifest(ctx)
+        example = manifest[Base.UUID("7876af07-990d-54b4-ab0e-23690620f79a")]
+        @test example.repo == Pkg.Types.GitRepo()
+        @test example.tree_hash == Base.SHA1("46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc")
+        @test manifest[Base.UUID("3c1f0a8e-2b7d-4e9a-8f6c-1d2e3f4a5b6c")].path == "path_packages/Local"
+        # entries that the project cannot load, such as those of other projects in a workspace,
+        # are left out on Julia versions with workspaces
+        if isdefined(Pkg.Operations, :load_all_deps_loadable)
+            @test !haskey(manifest, Base.UUID("4d2e1b9f-3c8e-4fab-9a7d-2e3f4a5b6c7d"))
+        end
+        # the app ships as a package of the bundled environment, also where the manifest has no
+        # entry for the project
+        app = manifest[Base.UUID("0b3c1a3e-8a65-4a2f-9d7b-5a0f2b7c9e11")]
+        @test app.path == "path_packages/App"
+        @test app.deps == Dict("Example" => Base.UUID("7876af07-990d-54b4-ab0e-23690620f79a"),
+                               "Local" => Base.UUID("3c1f0a8e-2b7d-4e9a-8f6c-1d2e3f4a5b6c"))
+        # the project's own manifest is left as it was
+        @test ctx.env.manifest[Base.UUID("3c1f0a8e-2b7d-4e9a-8f6c-1d2e3f4a5b6c")].path == "../somewhere/Local"
     end
 
     @test applicable(create_sysimage, "Example")

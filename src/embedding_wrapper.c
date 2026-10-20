@@ -163,6 +163,11 @@ int main(int argc, char *argv[]) {
     JL_GC_POP();
 #endif
 
+#ifdef JULIA_LOAD_APP
+    // load the app from its package images
+    checked_eval_string(JULIA_LOAD_APP);
+#endif
+
     // call the work function, and get back a value
     jl_value_t *jl_retcode = checked_eval_string(JULIA_MAIN "()");
     int32_t retcode = 0;

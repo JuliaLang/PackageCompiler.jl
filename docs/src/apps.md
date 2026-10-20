@@ -129,6 +129,28 @@ function main_A()::Cint
 end
 ```
 
+### [Package images](@id package-images)
+
+Windows does not load a DLL with an image of about 2 GB or more, so a large app can outgrow a single sysimage. With the keyword argument `sysimage_packages`, only the listed packages and their dependencies go into the sysimage. The app ships every other package as source code and a [package image](https://docs.julialang.org/en/v1/devdocs/pkgimg/) in `<app_dir>/share/julia`, with one library for each package, and loads them when it starts:
+
+```julia
+create_app("MyApp", "MyAppCompiled"; sysimage_packages=String[])
+```
+
+With `String[]`, the sysimage holds only Base and the standard libraries that it holds by default. This feature requires Julia 1.11 or later.
+
+The package images refer to their source files relative to the depot, so the app runs from any folder. They are compiled for `cpu_target`, the same as the sysimage. A generated package, `<package name>Precompiles`, holds the code that `precompile_execution_file` and `precompile_statements_file` compile, and the app loads it before it calls `julia_main`. At the end of the build, PackageCompiler checks that the app can load every package image.
+
+The differences from an app with a single sysimage are:
+
+- The app starts more slowly. Julia validates each package image when it loads it, which includes checksums of the image and of its source files.
+- The source code of the packages outside the sysimage ships with the app.
+- The package images are precompiled with the preferences that the app ships. With `include_preferences=false` they use the default preferences.
+- Julia uses a package image only with the flags that it was built with. The package images use the default flags, because the app starts with them. The flags `--check-bounds` and `--inline=no`, a debug level above `-g1` and an optimization level above `-O2` in `--julia-args` make the package images unusable. Julia then tries to precompile the packages again. This fails if the app folder is read-only, and makes the app much slower if it is not. Pass `--compiled-modules=strict` in `--julia-args` to get an error that names the package instead. Such flags in `sysimage_build_args` apply only to the sysimage.
+- A change to a package image makes it unusable, because its `.ji` file records a checksum of its library. This includes code signing. To sign the libraries in `share/julia/compiled`, update the checksums in the `.ji` files after signing.
+- A package that disables precompilation with `__precompile__(false)` cannot be a package image. Put it in `sysimage_packages`.
+- A custom `c_driver_program` must load the app before it calls the Julia function, as the default driver does with `JULIA_LOAD_APP`.
+
 ## [Relocatability](@id relocatability)
 
 Since we want to send the app to other machines the app we create must be

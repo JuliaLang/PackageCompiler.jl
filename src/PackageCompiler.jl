@@ -9,7 +9,7 @@ using SHA: sha256
 using Scratch: get_scratch!, delete_scratch!
 using Artifacts
 using LazyArtifacts
-using UUIDs: UUID, uuid1
+using UUIDs: UUID, uuid1, uuid5
 using RelocatableFolders
 using TOML
 using Glob
@@ -111,7 +111,7 @@ function load_all_deps(ctx)
 end
 
 function source_path(ctx, pkg)
-    Pkg.Operations.source_path(ctx.env.project_file, pkg)
+    Pkg.Operations.source_path(ctx.env.manifest_file, pkg)
 end
 
 const _STDLIBS = readdir(Sys.STDLIB)
@@ -595,15 +595,19 @@ function ensurecompiled(project, packages, sysimage)
     return
 end
 
-function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String)
+# With `pkgimage_depot_path`, the script loads the package images in those depots.
+function run_precompilation_script(project::String, sysimg::String, precompile_file::Union{String, Nothing}, precompile_dir::String;
+                                   pkgimage_depot_path::Union{Nothing, Vector{String}}=nothing)
     tracefile, io = mktemp(precompile_dir; cleanup=false)
     close(io)
     arg = precompile_file === nothing ? `-e ''` : `$precompile_file`
-    cmd = `$(get_julia_cmd()) --sysimage=$(sysimg) --trace-compile=$tracefile $arg`
+    pkgimages = pkgimage_depot_path === nothing ? `` : `--pkgimages=yes`
+    cmd = `$(get_julia_cmd()) $pkgimages --sysimage=$(sysimg) --trace-compile=$tracefile $arg`
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
     cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    pkgimage_depot_path === nothing || (cmd = addenv(cmd, "JULIA_DEPOT_PATH" => join(pkgimage_depot_path, splitter)))
     precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
     precompile_file === nothing || @info "PackageCompiler: Done"
@@ -1150,6 +1154,12 @@ compiler (can also include extra arguments to the compiler, like `-g`).
 - `include_preferences::Bool`: If `true`, store all preferences visible by the project in
   `package_dir` in the app bundle. Defaults to `true`.
 
+- `sysimage_packages::Vector{String}`: The packages to put into the sysimage, together with
+  their dependencies. The app ships every other package as source code and a package image
+  in `share/julia`, and loads them when it starts. Package images make a large app possible
+  on Windows, which does not load a sysimage of about 2 GB or more. If `nothing`, all packages
+  go into the sysimage. Requires Julia v1.11 or later. Defaults to `nothing`.
+
 ### Advanced keyword arguments
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image.
@@ -1178,8 +1188,12 @@ function create_app(package_dir::String,
                     compress_sysimage::Bool=false,
                     include_transitive_dependencies::Bool=true,
                     include_preferences::Bool=true,
+                    sysimage_packages::Union{Nothing, Vector{String}}=nothing,
                     script::Union{Nothing, String}=nothing,
                     quiet::Bool=false)
+    if sysimage_packages !== nothing && VERSION < v"1.11"
+        error("`sysimage_packages` requires Julia v1.11 or later")
+    end
     if filter_stdlibs && incremental
         error("must use `incremental=false` to use `filter_stdlibs=true`")
     end
@@ -1189,6 +1203,14 @@ function create_app(package_dir::String,
 
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
+    if sysimage_packages !== nothing
+        check_packages_in_project(ctx, sysimage_packages)
+        precompile_package = precompile_package_id(ctx)
+        if any(((_, entry),) -> entry.name == precompile_package.name, ctx.env.manifest)
+            error("the app depends on a package called $(precompile_package.name), the name of the ",
+                  "package that holds the precompile statements of an app with `sysimage_packages`")
+        end
+    end
     Pkg.instantiate(ctx, verbose=true, allow_autoprecomp = false)
 
     if executables === nothing
@@ -1203,8 +1225,10 @@ function create_app(package_dir::String,
     artifact_info = bundle_artifacts(ctx, app_dir; include_lazy_artifacts, quiet)
     bundle_julia_libexec(ctx, app_dir)
     bundle_julia_executable(app_dir)
-    bundle_project(ctx, app_dir)
-    include_preferences && bundle_preferences(ctx, app_dir)
+    # an app with package images writes its environment together with the package images
+    sysimage_packages === nothing && bundle_project(ctx, app_dir)
+    # The package images of the app are precompiled with these preferences, including the app's
+    include_preferences && bundle_preferences(ctx, app_dir; include_project = sysimage_packages !== nothing)
     bundle_cert(app_dir)
     quiet || print_bundle_info(library_info, artifact_info)
 
@@ -1215,43 +1239,335 @@ function create_app(package_dir::String,
     project = dirname(ctx.env.project_file)
 
     # add precompile statements for functions that will be called from the C main() wrapper
-    precompiles = String[]
+    main_precompiles = String[]
     for (_, julia_main) in executables
-        push!(precompiles, "@isdefined($package_name) || (import $package_name)")
-        push!(precompiles, "isdefined($package_name, :$julia_main) && precompile(Tuple{typeof($package_name.$julia_main)})")
+        push!(main_precompiles, "@isdefined($package_name) || (import $package_name)")
+        push!(main_precompiles, "isdefined($package_name, :$julia_main) && precompile(Tuple{typeof($package_name.$julia_main)})")
     end
-    push!(precompiles, "precompile(Tuple{typeof(append!), Vector{String}, Vector{Any}})")
-    push!(precompiles, "precompile(Tuple{typeof(empty!), Vector{String}})")
-    push!(precompiles, "precompile(Tuple{typeof(popfirst!), Vector{String}})")
+    driver_precompiles = ["precompile(Tuple{typeof(append!), Vector{String}, Vector{Any}})",
+                          "precompile(Tuple{typeof(empty!), Vector{String}})",
+                          "precompile(Tuple{typeof(popfirst!), Vector{String}})"]
 
-    create_sysimage([package_name]; sysimage_path, project,
-                    incremental,
-                    filter_stdlibs,
-                    precompile_execution_file,
-                    precompile_statements_file,
-                    cpu_target,
-                    sysimage_build_args,
-                    compress_sysimage,
-                    include_transitive_dependencies,
-                    extra_precompiles = join(precompiles, "\n"),
-                    script,
-                    instantiate = false)
+    if sysimage_packages === nothing
+        create_sysimage([package_name]; sysimage_path, project,
+                        incremental,
+                        filter_stdlibs,
+                        precompile_execution_file,
+                        precompile_statements_file,
+                        cpu_target,
+                        sysimage_build_args,
+                        compress_sysimage,
+                        include_transitive_dependencies,
+                        extra_precompiles = join(vcat(main_precompiles, driver_precompiles), "\n"),
+                        script,
+                        instantiate = false)
+        load_app = nothing
+    else
+        warn_if_cache_flags_in_build_args(sysimage_build_args)
+        create_sysimage(sysimage_packages; sysimage_path, project,
+                        incremental,
+                        filter_stdlibs,
+                        cpu_target,
+                        sysimage_build_args,
+                        compress_sysimage,
+                        include_transitive_dependencies,
+                        extra_precompiles = join(driver_precompiles, "\n"),
+                        script,
+                        instantiate = false)
+        bundle_package_images(ctx, app_dir; sysimage_path, cpu_target, precompile_package,
+                              precompile_execution_file = vcat(precompile_execution_file),
+                              precompile_statements_file = vcat(precompile_statements_file),
+                              main_precompiles)
+        load_app = "import $(precompile_package.name), $package_name"
+    end
 
     for (app_name, julia_main) in executables
-        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program, string(package_name, ".", julia_main))
+        create_executable_from_sysimg(joinpath(app_dir, "bin", app_name), c_driver_program,
+                                      string(package_name, ".", julia_main); load_app)
     end
 end
 
 
+# `load_app` is Julia code that the executable runs before `julia_main`, to load the app
+# from package images.
 function create_executable_from_sysimg(exe_path::String,
                                        c_driver_program::String,
-                                       julia_main::String)
+                                       julia_main::String;
+                                       load_app::Union{Nothing, String}=nothing)
     c_driver_program = abspath(c_driver_program)
     mkpath(dirname(exe_path))
     flags = Base.shell_split(join((cflags(), ldflags(), ldlibs()), " "))
-    cmd = `-DJULIA_MAIN=\"$julia_main\" $TLS_SYNTAX $(bitflag()) $(march()) -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
+    load_app_define = load_app === nothing ? `` : `-DJULIA_LOAD_APP=\"$load_app\"`
+    cmd = `-DJULIA_MAIN=\"$julia_main\" $load_app_define $TLS_SYNTAX $(bitflag()) $(march()) -o $(exe_path) $(c_driver_program) $(rpath_executable()) $flags`
     run_compiler(cmd)
     return nothing
+end
+
+
+##################
+# Package images #
+##################
+
+# Julia loads a package image only with the flags it was built with (`Base.CacheFlags`).
+# An app starts with the default flags, so its package images are built with them.
+function warn_if_cache_flags_in_build_args(sysimage_build_args::Cmd)
+    cache_flags = ("-O", "--optimize", "-g", "--debug-info", "--check-bounds", "--inline", "--pkgimages")
+    flags = filter(arg -> any(flag -> startswith(arg, flag), cache_flags), sysimage_build_args.exec)
+    isempty(flags) && return
+    @warn "The flags `$(join(flags, " "))` in `sysimage_build_args` apply only to the system image. " *
+          "The package images use the default flags, which the app starts with."
+    return
+end
+
+# The package that loads the app and its dependencies, and holds the code that the precompile
+# statements compile
+function precompile_package_id(ctx)
+    name = ctx.env.pkg.name * "Precompiles"
+    return Base.PkgId(uuid5(ctx.env.pkg.uuid, name), name)
+end
+
+# The folder of the depot of an app with package images that holds the path-tracked packages,
+# the app among them. Julia resolves a cached source path to the first depot that has the file,
+# so the folder must not be one that user depots have, such as `dev`.
+const PATH_PACKAGES_DIR = "path_packages"
+
+# The manifest of the environment that an app with package images ships: the packages that the
+# app loads, the path-tracked ones pointing at their copies, without repository locations.
+function bundled_manifest(ctx)
+    manifest = deepcopy(ctx.env.manifest)
+    loadable = Set(pkg.uuid for pkg in load_all_deps(ctx))
+    filter!(((uuid, _),) -> uuid in loadable, manifest.deps)
+    for (_, entry) in manifest
+        entry.repo = Pkg.Types.GitRepo()
+        entry.path === nothing || (entry.path = "$PATH_PACKAGES_DIR/$(entry.name)")
+    end
+    # Only manifests of Julia 1.12 and later have an entry for the project
+    project = ctx.env.project
+    manifest[project.uuid] = Pkg.Types.PackageEntry(; project.name, project.uuid, project.version,
+        path="$PATH_PACKAGES_DIR/$(project.name)", project.deps, project.weakdeps, project.exts)
+    return manifest
+end
+
+# Julia skips the extensions of sysimage packages when it precompiles an environment, and
+# compiles them when their triggers load. Returns the sysimage packages with extensions that
+# have a trigger outside the sysimage, and those triggers.
+function sysimage_extensions(manifest, sysimage_uuids::Set{UUID})
+    parents = Set{UUID}()
+    triggers = Set{Base.PkgId}()
+    for (uuid, entry) in manifest
+        uuid in sysimage_uuids || continue
+        for ext_triggers in values(entry.exts)
+            trigger_ids = map(name -> Base.PkgId(get(() -> entry.deps[name], entry.weakdeps, name), name),
+                              vcat(ext_triggers))
+            all(id -> haskey(manifest, id.uuid), trigger_ids) || continue
+            all(id -> id.uuid in sysimage_uuids, trigger_ids) && continue
+            push!(parents, uuid)
+            union!(triggers, trigger_ids)
+        end
+    end
+    return parents, triggers
+end
+
+function sysimage_package_uuids(sysimage_path::String)
+    code = "foreach(pkg -> pkg.uuid === nothing || println(pkg.uuid), keys(Base.loaded_modules))"
+    return Set(UUID.(readlines(`$(get_julia_cmd()) --sysimage=$sysimage_path -e $code`)))
+end
+
+# Copies the source tree of a package, without its git repository and the entries that `skip`
+# returns `true` for.
+function copy_package_tree(src::String, dest::String; skip=entry -> false)
+    mkpath(dest)
+    for entry in readdir(src)
+        entry == ".git" || skip(entry) || cp(joinpath(src, entry), joinpath(dest, entry))
+    end
+    return
+end
+
+# Copies the source code of the dependencies into the depot of the app, except for those in
+# `without_sources`. Returns the names of the stdlibs among them, whose source code is copied
+# after precompilation.
+function bundle_package_sources(ctx, depot::String, without_sources::Set{UUID})
+    stdlibs = String[]
+    for pkg in load_all_deps(ctx)
+        pkg.uuid in without_sources && continue
+        pkg_source_path = source_path(ctx, pkg)
+        pkg_source_path === nothing && continue
+        if startswith(pkg_source_path, Sys.STDLIB)
+            push!(stdlibs, pkg.name)
+        elseif ctx.env.manifest[pkg.uuid].path === nothing
+            # keep the slug, so that the git tree hash in the manifest finds the copy
+            copy_package_tree(pkg_source_path, joinpath(depot, "packages", pkg.name, basename(pkg_source_path)))
+        else
+            copy_package_tree(pkg_source_path, joinpath(depot, PATH_PACKAGES_DIR, pkg.name))
+        end
+    end
+    return stdlibs
+end
+
+# Copies the app into the depot of the app as a package, without its environment and without
+# the app folder if that is inside the project.
+function bundle_app_package(ctx, depot::String)
+    project = ctx.env.project
+    project_dir = dirname(ctx.env.project_file)
+    # compare real paths, which is what the project folder from Pkg is
+    sep = Base.Filesystem.path_separator
+    app_dir = realpath(joinpath(depot, "..", ".."))
+    function skip(entry)
+        path = joinpath(project_dir, entry)
+        return entry in Base.project_names || occursin(r"^(Julia)?Manifest(-v\d+\.\d+)?\.toml$", entry) ||
+               (ispath(path) && startswith(app_dir * sep, realpath(path) * sep))
+    end
+    app_package_dir = joinpath(depot, PATH_PACKAGES_DIR, project.name)
+    copy_package_tree(project_dir, app_package_dir; skip)
+    # The project file of the app keeps only what loading the app reads
+    app_project = Dict{String, Any}("name" => project.name, "uuid" => project.uuid, "deps" => project.deps)
+    project.version === nothing || (app_project["version"] = project.version)
+    isempty(project.weakdeps) || (app_project["weakdeps"] = project.weakdeps)
+    isempty(project.exts) || (app_project["extensions"] = project.exts)
+    Pkg.Types.write_project(app_project, joinpath(app_package_dir, "Project.toml"))
+    return
+end
+
+# The depot that ships with Julia, which holds the stdlibs
+julia_bundled_depot() = normpath(Sys.STDLIB, "..", "..")
+
+# Writes the package that loads the app and its dependencies. The file
+# `src/precompile_statements.jl` holds its precompile statements.
+function write_precompile_package(dir::String, pkg::Base.PkgId, deps::Dict{String, UUID},
+                                  main_precompiles::Vector{String})
+    mkpath(joinpath(dir, "src"))
+    Pkg.Types.write_project(Dict("name" => pkg.name, "uuid" => pkg.uuid, "deps" => deps),
+                            joinpath(dir, "Project.toml"))
+    touch(joinpath(dir, "src", "precompile_statements.jl"))
+    write(joinpath(dir, "src", pkg.name * ".jl"), """
+        module $(pkg.name)
+
+        import $(join(sort!(collect(keys(deps))), ", "))
+
+        $(join(main_precompiles, "\n"))
+
+        module PrecompileStagingArea end
+        using Base.Meta: isexpr
+        const precompile_files = [joinpath(@__DIR__, "precompile_statements.jl")]
+        include_dependency(only(precompile_files))
+        $PRECOMPILE_STATEMENTS_CODE
+
+        end # module
+        """)
+    return
+end
+
+# The caches record their source files relative to a depot (`@depot`), so they stay valid when
+# the app moves. The depot of the Julia that builds the app is in the depot path too, so the
+# stdlibs it compiles are recorded relative to it, and their source code is copied into the
+# app afterwards.
+function precompile_package_images(depot::String, sysimage_path::String, cpu_target::String,
+                                   extension_triggers::Set{Base.PkgId})
+    splitter = Sys.iswindows() ? ';' : ':'
+    filewatching = Base.PkgId(UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching")
+    # On Julia 1.11 `precompilepkgs` requires FileWatching to be loaded (#1134). Loading the
+    # triggers of the extensions of sysimage packages precompiles those extensions.
+    code = """
+        if Base.in_sysimage($(repr(filewatching))) || VERSION < v"1.12-"
+            Base.require($(repr(filewatching)))
+        end
+        Base.Precompilation.precompilepkgs(; strict=true)
+        foreach(Base.require, $(repr(collect(extension_triggers))))
+        """
+    # `--project` keeps a `JULIA_PROJECT` of the build environment from changing what is precompiled
+    cmd = `$(get_julia_cmd()) --pkgimages=yes --project=$depot --sysimage=$sysimage_path -e $code`
+    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => "$depot$splitter$(julia_bundled_depot())", "JULIA_LOAD_PATH" => depot,
+                 "JULIA_CPU_TARGET" => cpu_target)
+    @debug "precompile_package_images: running $cmd"
+    run(cmd)
+    return
+end
+
+# Checks that the app, started from its own folder, loads every package image without
+# recompiling it, also after the app moves.
+function verify_package_images(app_dir::String, sysimage_path::String)
+    depot = joinpath(app_dir, "share", "julia")
+    julia = joinpath(app_dir, "bin", Base.julia_exename())
+    code = """
+        manifest = Base.parsed_toml(joinpath(only(LOAD_PATH), "Manifest.toml"))
+        for (name, entries) in manifest["deps"], entry in entries
+            uuid = Base.UUID(entry["uuid"])
+            pkgs = [Base.PkgId(uuid, name)]
+            # the extensions whose triggers the app has
+            for (ext, triggers) in get(Dict{String, Any}, entry, "extensions")
+                all(in(keys(manifest["deps"])), vcat(triggers)) && push!(pkgs, Base.PkgId(Base.uuid5(uuid, ext), ext))
+            end
+            for pkg in pkgs
+                Base.in_sysimage(pkg) || (Base.isprecompiled(pkg) && Base.isrelocatable(pkg)) || println(pkg.name)
+            end
+        end
+        """
+    cmd = addenv(`$julia --startup-file=no --sysimage=$sysimage_path -e $code`,
+                 "JULIA_DEPOT_PATH" => depot, "JULIA_LOAD_PATH" => depot)
+    unusable = readlines(cmd)
+    isempty(unusable) || error("the app cannot load the package images of $(join(unusable, ", "))")
+    return
+end
+
+# Ships every package that is not in the system image as source code and a package image in
+# the depot of the app, so that a large app does not have to fit into one system image.
+function bundle_package_images(ctx, app_dir::String; sysimage_path::String, cpu_target::String,
+                               precompile_package::Base.PkgId,
+                               precompile_execution_file::Vector{String},
+                               precompile_statements_file::Vector{String},
+                               main_precompiles::Vector{String})
+    depot = joinpath(app_dir, "share", "julia")
+    cpu_target = expand_sysimage_cpu_target(cpu_target, sysimage_path)
+    sysimage_uuids = sysimage_package_uuids(sysimage_path)
+    manifest = bundled_manifest(ctx)
+    extension_parents, extension_triggers = sysimage_extensions(manifest, sysimage_uuids)
+    stdlibs = bundle_package_sources(ctx, depot, setdiff(sysimage_uuids, extension_parents))
+    bundle_app_package(ctx, depot)
+
+    precompile_package_dir = joinpath(depot, PATH_PACKAGES_DIR, precompile_package.name)
+    deps = merge(ctx.env.project.deps, Dict(ctx.env.pkg.name => ctx.env.pkg.uuid))
+    write_precompile_package(precompile_package_dir, precompile_package, deps, main_precompiles)
+    manifest[precompile_package.uuid] = Pkg.Types.PackageEntry(; name=precompile_package.name,
+        uuid=precompile_package.uuid, path="$PATH_PACKAGES_DIR/$(precompile_package.name)", deps)
+    Pkg.Types.write_manifest(manifest, joinpath(depot, "Manifest.toml"))
+    # The environment names the same packages as the project, which makes the same preferences
+    # visible, and the app and its precompile package
+    project = ctx.env.project
+    environment = Dict{String, Any}("deps" => merge(deps, Dict(precompile_package.name => precompile_package.uuid)))
+    isempty(project.weakdeps) || (environment["weakdeps"] = project.weakdeps)
+    isempty(project.extras) || (environment["extras"] = project.extras)
+    Pkg.Types.write_project(environment, joinpath(depot, "Project.toml"))
+    precompile_package_images(depot, sysimage_path, cpu_target, extension_triggers)
+
+    # Traced with the package images loaded, the statements cover only the code they lack
+    if !isempty(precompile_execution_file) || !isempty(precompile_statements_file)
+        precompile_dir = mktempdir(; prefix="jl_packagecompiler_", cleanup=false)
+        # caches of the stdlibs that only the precompile execution files load
+        trace_depot = mktempdir(precompile_dir)
+        tracefiles = map(precompile_execution_file) do file
+            run_precompilation_script(depot, sysimage_path, file, precompile_dir;
+                                      pkgimage_depot_path=[trace_depot, depot, julia_bundled_depot()])
+        end
+        open(joinpath(precompile_package_dir, "src", "precompile_statements.jl"), "w") do io
+            for file in vcat(tracefiles, precompile_statements_file)
+                write(io, read(file))
+                println(io)
+            end
+        end
+        precompile_package_images(depot, sysimage_path, cpu_target, extension_triggers)
+    end
+
+    stdlib_dir = joinpath(depot, relpath(Sys.STDLIB, julia_bundled_depot()))
+    mkpath(stdlib_dir)
+    for name in stdlibs
+        cp(joinpath(Sys.STDLIB, name), joinpath(stdlib_dir, name))
+    end
+    # debug information of the package images on macOS
+    dsyms = [joinpath(root, dir) for (root, dirs, _) in walkdir(joinpath(depot, "compiled"))
+                                  for dir in dirs if endswith(dir, ".dSYM")]
+    foreach(dsym -> rm(dsym; recursive=true), dsyms)
+    verify_package_images(app_dir, sysimage_path)
+    return
 end
 
 
@@ -1997,7 +2313,8 @@ function bundle_cert(dest_dir)
 end
 
 # Write preferences for packages in project `project_dir` to `io`
-function dump_preferences(io::IO, project_dir)
+# With `include_project`, the preferences of the project itself are written too.
+function dump_preferences(io::IO, project_dir; include_project::Bool=false)
     command = """
     # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
     pushfirst!(LOAD_PATH, "@stdlib")
@@ -2005,6 +2322,8 @@ function dump_preferences(io::IO, project_dir)
     popfirst!(LOAD_PATH)
     # For each dependency pair (UUID => PackageInfo), store preferences in Dict
     prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
+    project = Pkg.project()
+    $include_project && project.uuid !== nothing && (prefs[project.name] = Base.get_preferences(project.uuid))
     # Filter out packages without preferences
     filter!(p -> !isempty(last(p)), prefs)
     TOML.print(prefs, sorted=true)
@@ -2018,14 +2337,14 @@ dump_preferences(project_dir) = dump_preferences(stdout, project_dir)
 
 # Collect all preferences of the active project and store them in the `LOAD_PATH`
 # Note: for apps/libraries, the `LOAD_PATH` defaults to `<dest_dir>/share/julia`
-function bundle_preferences(ctx, dest_dir)
+function bundle_preferences(ctx, dest_dir; include_project::Bool=false)
     share_path = joinpath(dest_dir, "share", "julia")
     mkpath(share_path)
     preferences_path = joinpath(share_path, "LocalPreferences.toml")
     project_dir = dirname(ctx.env.project_file)
 
     open(preferences_path, "w") do io
-        dump_preferences(io, project_dir)
+        dump_preferences(io, project_dir; include_project)
     end
 
     return
