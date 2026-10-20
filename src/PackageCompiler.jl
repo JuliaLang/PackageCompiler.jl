@@ -634,6 +634,51 @@ function infer_once_code()
     return start, stop
 end
 
+# Precompiles the statements in the files `precompile_files`, evaluating the types they name
+# in the module `PrecompileStagingArea`.
+const PRECOMPILE_STATEMENTS_CODE = """
+    for file in precompile_files, statement in eachline(file)
+        # println(statement)
+        # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
+        ps = try
+            Meta.parse(statement)
+        catch
+            # guard against precompile statements that are not valid Julia syntax
+            continue
+        end
+        isexpr(ps, :call) || continue
+        popfirst!(ps.args) # precompile(...)
+        ps.head = :tuple
+        # println(ps)
+        local ps
+        while true
+            try
+                ps = Core.eval(PrecompileStagingArea, ps)
+                break
+            catch e
+                if e isa UndefVarError
+                    dep = string(e.var)
+                    mods = filter(p -> p.first.name == dep, Base.loaded_modules)
+                    if length(mods) != 1
+                        @debug "zero or multiple modules loaded with name \$dep"
+                        @goto skip_precompile
+                    else
+                        _, mod = only(mods)
+                        @debug "importing \$dep into PrecompileStagingArea"
+                        Base.eval(PrecompileStagingArea, :(\$(Symbol(dep)) = \$(mod)))
+                    end
+                else
+                    # See julia issue #28808
+                    @debug "failed to execute \$statement: \$e"
+                    @goto skip_precompile
+                end
+            end
+        end
+        precompile(ps...)
+        @label skip_precompile
+    end
+    """
+
 function create_sysimg_object_file(object_file::String,
                             packages::Vector{String},
                             packages_sysimg::Set{Base.PkgId};
@@ -686,46 +731,7 @@ function create_sysimg_object_file(object_file::String,
             precompile_files = String[
                 $(join(map(repr, precompile_files), "\n" * " " ^ 8))
             ]
-            for file in precompile_files, statement in eachline(file)
-                # println(statement)
-                # This is taken from https://github.com/JuliaLang/julia/blob/2c9e051c460dd9700e6814c8e49cc1f119ed8b41/contrib/generate_precompile.jl#L375-L393
-                ps = try
-                    Meta.parse(statement)
-                catch
-                    # guard against precompile statements that are not valid Julia syntax
-                    continue
-                end
-                isexpr(ps, :call) || continue
-                popfirst!(ps.args) # precompile(...)
-                ps.head = :tuple
-                # println(ps)
-                local ps
-                while true
-                    try
-                        ps = Core.eval(PrecompileStagingArea, ps)
-                        break
-                    catch e
-                        if e isa UndefVarError
-                            dep = string(e.var)
-                            mods = filter(p -> p.first.name == dep, Base.loaded_modules)
-                            if length(mods) != 1
-                                @debug "zero or multiple modules loaded with name \$dep"
-                                @goto skip_precompile
-                            else
-                                _, mod = only(mods)
-                                @debug "importing \$dep into PrecompileStagingArea"
-                                Base.eval(PrecompileStagingArea, :(\$(Symbol(dep)) = \$(mod)))
-                            end
-                        else
-                            # See julia issue #28808
-                            @debug "failed to execute \$statement: \$e"
-                            @goto skip_precompile
-                        end
-                    end
-                end
-                precompile(ps...)
-                @label skip_precompile
-            end
+            $PRECOMPILE_STATEMENTS_CODE
 
             @eval PrecompileStagingArea begin
                 $extra_precompiles
