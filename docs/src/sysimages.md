@@ -199,4 +199,8 @@ in your current project.
 
 - When creating a sysimage incrementally, you can use a different sysimage as the "base sysimage" by passing the `base_sysimage` keyword argument.
 - The "cpu target" can be specified with the `cpu_target` keyword. For more information about the syntax of this option, see the [Julia manual](https://docs.julialang.org/en/v1/devdocs/sysimg/#Specifying-multiple-system-image-targets).
+  The default, `"native"`, compiles only for the CPU of the machine building the sysimage, so the sysimage may not load on a machine with an older or different CPU.
+  To keep the flexibility of the base sysimage, pass `cpu_target="sysimage"` (Julia 1.13+), which compiles for the same set of targets as the base sysimage.
+  Each target is compiled separately, so for large sysimages this can take several times as long and more than twice the memory.
+  On older Julia versions, pass an explicit list of targets instead, for example `PackageCompiler.default_app_cpu_target()`.
 - If you need to run some code in the process creating the sysimage, the `script` argument that points to a file can be passed.

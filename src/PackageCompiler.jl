@@ -26,11 +26,7 @@ include("library_selection.jl")
 # Arch utils #
 ##############
 
-const DEFAULT_SYSIMAGE_CPU_TARGET = @static if VERSION >= v"1.13-"
-    "sysimage"
-else
-    "native"
-end
+const NATIVE_CPU_TARGET = "native"
 const TLS_SYNTAX = `-DNEW_DEFINE_FAST_TLS_SYNTAX`
 
 # Resolve the `sysimage` cpu target keyword (Julia 1.13+) to the concrete target of
@@ -848,7 +844,10 @@ compiler (can also include extra arguments to the compiler, like `-g`).
    Keyword argument `incremental` must be `true` if `base_sysimage` is not `nothing`.
 
 - `cpu_target::String`: The value to use for `JULIA_CPU_TARGET` when building the system image. Defaults
-  to the target of the base sysimage on Julia 1.13+ and `native` on older versions.
+  to `native`, which gives a sysimage that only runs on CPUs with the same features as the machine that
+  built it. On Julia 1.13+, pass `"sysimage"` to compile for the same targets as the base sysimage, so the
+  new sysimage runs wherever the base one does. This compiles code once per target, so the build can take
+  several times as long and more than twice the memory.
 
 - `script::String`: Path to a file that gets executed in the `--output-o` process.
 
@@ -866,7 +865,7 @@ function create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String}
                          precompile_statements_file::Union{String, Vector{String}}=String[],
                          incremental::Bool=true,
                          filter_stdlibs::Bool=false,
-                         cpu_target::String=DEFAULT_SYSIMAGE_CPU_TARGET,
+                         cpu_target::String=NATIVE_CPU_TARGET,
                          script::Union{Nothing, String}=nothing,
                          sysimage_build_args::Cmd=``,
                          compress_sysimage::Bool=false,
