@@ -82,6 +82,21 @@ jobs:
             coverage: 'false'
             app-configuration: default
             extended-tests: none
+          - julia-version: '1.11' # minimum version for apps with package images
+            github-runner: ubuntu-latest
+            coverage: 'false'
+            app-configuration: package_images
+            extended-tests: none
+          - julia-version: '1.13'
+            github-runner: windows-latest
+            coverage: 'false'
+            app-configuration: package_images
+            extended-tests: none
+          - julia-version: '1.13'
+            github-runner: macos-15 # Apple Silicon
+            coverage: 'false'
+            app-configuration: package_images
+            extended-tests: none
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
