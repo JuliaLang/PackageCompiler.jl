@@ -1110,7 +1110,9 @@ function _create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String
                 end
             end
         end
-        create_sysimg_from_object_file(object_files,
+        # Plain lines, because a redrawn spinner line would garble the linker's warnings
+        spinner = TerminalSpinners.Spinner(msg = "PackageCompiler: linking system image", enabled = false)
+        TerminalSpinners.@spin spinner create_sysimg_from_object_file(object_files,
                                     sysimage_path;
                                     compat_level,
                                     version,
