@@ -42,6 +42,7 @@ tostring(f::Function) = f()
 Base.@kwdef mutable struct Spinner{IO_t <: IO}
     frames::Vector{String} =  ["⠋", "⠙", "⠸", "⢰", "⣠", "⣄", "⡆", "⠇"]
     freq::Float64 = 10.0 # [1/s]
+    heartbeat_interval::Float64 = 300.0 # [s], between plain lines when the spinner is disabled
     msg::Any = ""
     stream::IO_t = stderr
     timer::Union{Nothing, Timer} = nothing
@@ -112,6 +113,17 @@ function render_plain(s::Spinner, status=nothing)
     println(s.stream, "- ", tostring(s.msg), suffix)
 end
 
+function start_timer!(f, s::Spinner, delay, interval)
+    s.timer = Timer(delay; interval) do timer
+        try
+            f()
+        catch e
+            @error "internal error in spinner" exception=(e, catch_backtrace())
+            stop!(s)
+        end
+    end
+end
+
 function start!(s::Spinner)
     s.silent && return
     s.frame_idx = 1
@@ -120,22 +132,19 @@ function start!(s::Spinner)
 
     if !s.enabled
         render_plain(s)
+        start_timer!(s, s.heartbeat_interval, s.heartbeat_interval) do
+            render_plain(s, "still running, $(elapsed_string(s)) elapsed")
+        end
         return
     end
 
     s.hidecursor && hide_cursor!(s.stream)
 
-    t = Timer(0.0; interval=1/s.freq) do timer
-        try
-            render(s)
-            s.first = false
-            advance_frame!(s)
-        catch e
-            @error "internal error in spinner" exception=(e, catch_backtrace())
-            stop!(s)
-        end
+    start_timer!(s, 0.0, 1/s.freq) do
+        render(s)
+        s.first = false
+        advance_frame!(s)
     end
-    s.timer = t
     return s
 end
 
