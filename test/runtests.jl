@@ -185,6 +185,18 @@ end
         sleep(0.3)
         @test isempty(printed())
 
+        # A log file shows each line while the step runs, not when the process exits
+        log_path = tempname()
+        logged() = mask_seconds(read(log_path, String))
+        open(log_path, "w") do file
+            TS.spin(spinner(stream=file, heartbeat_interval=0.1)) do
+                @test logged() == start
+                sleep(0.3)
+                @test startswith(logged(), start * heartbeat)
+            end
+            @test endswith(logged(), done)
+        end
+
         TS.spin(() -> sleep(0.3), spinner(silent=true, heartbeat_interval=0.1))
         @test isempty(printed())
 
