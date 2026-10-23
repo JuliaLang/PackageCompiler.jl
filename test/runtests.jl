@@ -174,6 +174,7 @@ end
         mask_seconds(out) = replace(out, r"00m:\d\ds" => "00m:SSs")
         printed() = mask_seconds(String(take!(io)))
         start = "- working\n"
+        heartbeat = "- working (still running, 00m:SSs elapsed)\n"
         done = "- working (done in 00m:SSs)\n"
         failed = "- working (failed after 00m:SSs)\n"
 
@@ -189,11 +190,31 @@ end
         @test_throws ErrorException TS.spin(() -> error("boom"), spinner(clear_on_finish=true))
         @test printed() == start * failed
 
-        TS.spin(() -> sleep(0.3), spinner(silent=true))
+        # While a step runs, heartbeat lines show that it is not stuck
+        s = spinner(heartbeat_interval=0.1)
+        TS.spin(() -> sleep(0.5), s)
+        out = printed()
+        @test startswith(out, start)
+        @test occursin(heartbeat, out)
+        @test endswith(out, done)
+        @test !occursin('\e', out)
+        @test s.timer === nothing
+
+        s = spinner(heartbeat_interval=0.1)
+        @test_throws ErrorException TS.spin(() -> (sleep(0.5); error("boom")), s)
+        out = printed()
+        @test occursin(heartbeat, out)
+        @test endswith(out, failed)
+        @test s.timer === nothing
+        # The heartbeat stops with the step
+        sleep(0.3)
+        @test isempty(printed())
+
+        TS.spin(() -> sleep(0.3), spinner(silent=true, heartbeat_interval=0.1))
         @test isempty(printed())
 
         # In a terminal the spinner redraws its line and prints no plain lines
-        TS.spin(() -> sleep(0.3), spinner(enabled=true))
+        TS.spin(() -> sleep(0.3), spinner(enabled=true, heartbeat_interval=0.1))
         out = printed()
         @test occursin("\e[", out)
         @test occursin("✔ [00m:SSs] working", out)
