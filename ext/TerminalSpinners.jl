@@ -111,6 +111,8 @@ end
 function render_plain(s::Spinner, status=nothing)
     suffix = status === nothing ? "" : " ($status)"
     println(s.stream, "- ", tostring(s.msg), suffix)
+    # A log file is buffered, so flush to show the line while the step runs
+    flush(s.stream)
 end
 
 function start_timer!(f, s::Spinner, delay, interval)
