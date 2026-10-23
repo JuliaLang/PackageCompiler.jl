@@ -53,7 +53,7 @@ Base.@kwdef mutable struct Spinner{IO_t <: IO}
     color::Symbol = Base.info_color()
     nlines::Int=0
     first::Bool=false
-    clear_on_finish::Bool=false # on success, erase the spinner output instead of leaving a final line
+    clear_on_finish::Bool=false # on success, leave no final line, and in a terminal erase the spinner output
 end
 
 getframe(s::Spinner) = s.frames[s.frame_idx]
@@ -73,22 +73,25 @@ function erase_and_reset(io::IO, n_lines::Int)
     cursor_horizontal_absolute!(io, 1)
 end
 
+function elapsed_string(s::Spinner)
+    # Round before splitting, so 59.6 s carries into the minutes instead of printing as 60 s
+    elapsed = round(Int, time() - s.start)
+    (minutes, seconds) = fldmod(elapsed, 60)
+    (hours, minutes) = fldmod(minutes, 60)
+
+    if hours == 0
+        return @sprintf("%02dm:%02ds", minutes, seconds)
+    else
+        return @sprintf("%02dh:%02dm:%02ds", hours, minutes, seconds)
+    end
+end
+
 function getline(s::Spinner, spinner, color)
     ioc = IOContext(s.stream, :displaysize=>displaysize(s.stream)) # https://github.com/JuliaLang/julia/issues/42649
     return sprint(; context=ioc) do io
         s.first || erase_and_reset(io, s.nlines)
         printstyled(io, spinner; color, bold=true)
-
-        # Round before splitting, so 59.6 s carries into the minutes instead of printing as 60 s
-        elapsed = round(Int, time() - s.start)
-        (minutes, seconds) = fldmod(elapsed, 60)
-        (hours, minutes) = fldmod(minutes, 60)
-
-        if hours == 0
-            printstyled(io, @sprintf(" [%02dm:%02ds]", minutes, seconds); color, bold=true)
-        else
-            printstyled(io, @sprintf(" [%02dh:%02dm:%02ds]", hours, minutes, seconds); color, bold=true)
-        end
+        printstyled(io, " [", elapsed_string(s), "]"; color, bold=true)
 
         msg = tostring(s.msg)
         print(io, " ", msg)
@@ -103,6 +106,12 @@ function render(s::Spinner, spinner=getframe(s), color=s.color)
     return
 end
 
+# Logs that can't redraw a line, such as CI logs, get a plain line per status instead
+function render_plain(s::Spinner, status=nothing)
+    suffix = status === nothing ? "" : " ($status)"
+    println(s.stream, "- ", tostring(s.msg), suffix)
+end
+
 function start!(s::Spinner)
     s.silent && return
     s.frame_idx = 1
@@ -110,7 +119,7 @@ function start!(s::Spinner)
     s.start = time()
 
     if !s.enabled
-        println(s.stream, "- ", tostring(s.msg))
+        render_plain(s)
         return
     end
 
@@ -152,23 +161,20 @@ function clear!(s::Spinner)
     s.hidecursor && show_cursor!(s.stream)
 end
 
-function success!(s)
+function finish!(s, glyph, color, status; clear=false)
     # Stop the timer before the final render so a pending tick can't
-    # overwrite the ✔ line with a spinner frame.
+    # overwrite the result line with a spinner frame.
     close_timer!(s)
     if s.enabled && !s.silent
-        s.clear_on_finish && return clear!(s)
-        render(s, "✔", :light_green)
+        clear && return clear!(s)
+        render(s, glyph, color)
+    elseif !s.silent && !clear
+        render_plain(s, "$status $(elapsed_string(s))")
     end
     stop!(s)
 end
-function fail!(s)
-    close_timer!(s)
-    if s.enabled && !s.silent
-        render(s, "✖", :light_red)
-    end
-    stop!(s)
-end
+success!(s) = finish!(s, "✔", :light_green, "done in"; clear=s.clear_on_finish)
+fail!(s) = finish!(s, "✖", :light_red, "failed after")
 
 macro spin(s, work)
     return quote

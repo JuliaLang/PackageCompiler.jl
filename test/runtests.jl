@@ -166,6 +166,38 @@ end
         @test occursin("[01m:00s]", line_after(59.7))
         @test occursin("[05m:00s]", line_after(299.7))
         @test occursin("[01h:00m:00s]", line_after(3599.7))
+
+        # An `IOBuffer` is not a TTY, so a spinner on it prints plain lines
+        io = IOBuffer()
+        spinner(; kw...) = TS.Spinner(; msg="working", stream=io, kw...)
+        # The seconds vary between runs, so the checks compare output with them masked
+        mask_seconds(out) = replace(out, r"00m:\d\ds" => "00m:SSs")
+        printed() = mask_seconds(String(take!(io)))
+        start = "- working\n"
+        done = "- working (done in 00m:SSs)\n"
+        failed = "- working (failed after 00m:SSs)\n"
+
+        @test TS.spin(() -> 42, spinner()) == 42
+        @test printed() == start * done
+
+        @test_throws ErrorException TS.spin(() -> error("boom"), spinner())
+        @test printed() == start * failed
+
+        # On success the start line stays, as plain lines can't be erased, but no result line follows it
+        TS.spin(() -> nothing, spinner(clear_on_finish=true))
+        @test printed() == start
+        @test_throws ErrorException TS.spin(() -> error("boom"), spinner(clear_on_finish=true))
+        @test printed() == start * failed
+
+        TS.spin(() -> sleep(0.3), spinner(silent=true))
+        @test isempty(printed())
+
+        # In a terminal the spinner redraws its line and prints no plain lines
+        TS.spin(() -> sleep(0.3), spinner(enabled=true))
+        out = printed()
+        @test occursin("\e[", out)
+        @test occursin("✔ [00m:SSs] working", out)
+        @test !occursin("- working", out)
     end
 
     @testset "concurrent builds reuse the published base sysimage" begin
