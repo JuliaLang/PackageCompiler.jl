@@ -190,7 +190,8 @@ end
                                                                           "precompile_statements2.jl"]),
                             script,
                             sysimage_build_args=`-O1`,
-                            compress_sysimage)
+                            compress_sysimage,
+                            show_timing=true)
 
             # Check we can load sysimage and that Example is available in Main
             str = read(`$(Base.julia_cmd()) -J $(sysimage_path) -e 'println(Example.hello("foo")); script_func(); print_opt()'`, String)
@@ -226,7 +227,8 @@ end
                                     "ReturnType" => "wrong_return_type",
                                     "Error" => "erroring",
                                     "Undefined" => "undefined",
-                                    ])
+                                    ],
+                       show_timing=true)
             finally
             rm_with_retry(tmp_app_source_dir; recursive=true)
             # Get rid of some local state
@@ -330,7 +332,8 @@ end
             create_library(tmp_lib_src_dir, lib_target_dir; incremental=incremental, force=true, filter_stdlibs=filter,
                            precompile_execution_file=joinpath(lib_source_dir, "build", "generate_precompile.jl"),
                            precompile_statements_file=joinpath(lib_source_dir, "build", "additional_precompile.jl"),
-                           lib_name=lib_name, version=v"1.0.0", compat_level="patch")
+                           lib_name=lib_name, version=v"1.0.0", compat_level="patch",
+                           show_timing=true)
             @test !isfile(splitext(PackageCompiler.default_julia_init())[1] * ".o")
             rm_with_retry(tmp_lib_src_dir; recursive=true)
         end
