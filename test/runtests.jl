@@ -259,7 +259,15 @@ end
             # Get rid of some local state
             rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
             rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
-            rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            # The C compiler artifact takes most of a minute to download on Windows
+            # and the app never uses it, so keep it for the next build.
+            compiler_hash = PackageCompiler.Artifacts.artifact_hash("mingw-w64",
+                joinpath(pkgdir(PackageCompiler), "Artifacts.toml"))
+            artifacts_dir = joinpath(new_depot, "artifacts")
+            for name in (isdir(artifacts_dir) ? readdir(artifacts_dir) : String[])
+                name == string(compiler_hash) && continue
+                rm_with_retry(joinpath(artifacts_dir, name); recursive=true, force=true)
+            end
             end # try
             if !incremental
                 # the build should have left a base sysimage in the cache
