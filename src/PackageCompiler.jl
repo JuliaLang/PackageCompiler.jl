@@ -995,7 +995,7 @@ function _create_sysimage(packages::Union{Nothing, String, Symbol, Vector{String
                          )
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
-    get_compiler_cmd()
+    @timeit TO "find C compiler" get_compiler_cmd()
 
     if isdir(sysimage_path)
         error("The provided sysimage_path is a directory: $(sysimage_path). Please specify a full path including the sysimage filename.")
@@ -1300,7 +1300,7 @@ function _create_app(package_dir::String,
     end
     # We call this at the very beginning to make sure that the user has a compiler available. Therefore, if no compiler
     # is found, we throw an error immediately, instead of making the user wait a while before the error is thrown.
-    get_compiler_cmd()
+    @timeit TO "find C compiler" get_compiler_cmd()
 
     ctx = create_pkg_context(package_dir)
     ctx.env.pkg === nothing && error("expected package to have a `name` and `uuid`")
