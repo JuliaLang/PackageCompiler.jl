@@ -645,21 +645,41 @@ end
     return tracefile
 end
 
-# `t_end === nothing` means the process is still running.
-function print_output_o_steps(steps_file::String, t_start::Float64, t_end::Union{Nothing, Float64})
+# `t_end === nothing` means the process is still running. `peak` is the peak memory of the
+# whole process, when known.
+function print_output_o_steps(steps_file::String, t_start::Float64, t_end::Union{Nothing, Float64},
+                              peak::Union{Nothing, UInt64}=nothing)
     names = ["startup"]
     times = [t_start]
+    last_rss = nothing
     if isfile(steps_file)
         for line in eachline(steps_file)
-            name, t = split(line, '\t')
+            name, t, rss = split(line, '\t')
             push!(names, name)
             push!(times, parse(Float64, t))
+            last_rss = parse(UInt64, rss)
         end
     end
     push!(times, something(t_end, time()))
     steps = [@sprintf("%s %.1fs", names[i], times[i+1] - times[i]) for i in eachindex(names)]
     t_end === nothing && (steps[end] *= " (still running)")
     println("PackageCompiler: --output-o process steps: ", join(steps, ", "))
+    if last_rss !== nothing
+        mem = "$(Base.format_bytes(last_rss)) before $(names[end])"
+        peak === nothing || (mem *= ", $(Base.format_bytes(peak)) in total")
+        println("PackageCompiler: --output-o process peak memory: ", mem)
+    end
+end
+
+# The largest peak memory of any child process this process has waited for, or `nothing`
+# where that is not available.
+function children_maxrss()
+    (Sys.iswindows() || Sys.WORD_SIZE != 64) && return nothing
+    # `struct rusage` is 144 bytes on 64-bit Linux and macOS, with `ru_maxrss` at byte 32.
+    usage = zeros(Int64, 18)
+    ccall(:getrusage, Cint, (Cint, Ptr{Int64}), -1 #= RUSAGE_CHILDREN =#, usage) == 0 || return nothing
+    # Linux reports kilobytes and macOS bytes.
+    return UInt64(usage[5]) * (Sys.isapple() ? 1 : 1024)
 end
 
 # Julia 1.13 writes a sysimage by inferring code for every method in it, but then throws
@@ -705,7 +725,7 @@ end
     # so a build that is killed still shows how far it got.
     steps_file = show_timing ? tempname() : nothing
     mark_step(name) = steps_file === nothing ? "" : """
-        let io = open($(repr(steps_file)), "a"); println(io, $(repr(name)), '\t', time()); close(io); end
+        let io = open($(repr(steps_file)), "a"); println(io, $(repr(name)), '\t', time(), '\t', Sys.maxrss()); close(io); end
         println(stderr, "PackageCompiler: ", $(repr(name)))
         """
     infer_once_start, infer_once_stop = infer_once_code()
@@ -864,12 +884,16 @@ end
         @timeit TO "compile --output-o" @monitor_oom TerminalSpinners.@spin spinner run(cmd)
     else
         t_start = time()
+        maxrss_before = children_maxrss()
         OUTPUT_O_STEPS[] = (steps_file, t_start)
         try
             @timeit TO "compile --output-o" @monitor_oom TerminalSpinners.@spin spinner run(cmd)
         finally
             OUTPUT_O_STEPS[] = nothing
-            print_output_o_steps(steps_file, t_start, time())
+            # Only a new maximum can be attributed to this process.
+            maxrss_after = children_maxrss()
+            peak = something(maxrss_after, 0) > something(maxrss_before, typemax(UInt64)) ? maxrss_after : nothing
+            print_output_o_steps(steps_file, t_start, time(), peak)
             rm(steps_file; force=true)
         end
     end
