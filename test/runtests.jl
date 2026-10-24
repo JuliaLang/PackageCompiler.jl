@@ -6,7 +6,7 @@ using Pkg
 # Make a new depot
 const new_depot = mktempdir()
 mkpath(joinpath(new_depot, "registries"))
-ENV["JULIA_DEPOT_PATH"] = new_depot
+ENV["JULIA_DEPOT_PATH"] = new_depot * (Sys.iswindows() ? ";" : ":")
 Base.init_depot_path()
 
 # A generic CI variable, not specific to any single CI provider.
@@ -103,6 +103,31 @@ end
         # builds are the exception: they keep the private libraries in `Frameworks/`.
         if !Base.DARWIN_FRAMEWORK
             @test private_libdir in (lib_dir, joinpath(lib_dir, "julia"))
+        end
+    end
+
+    @testset "dump_preferences" begin
+        mktempdir() do dir
+            write(joinpath(dir, "Project.toml"), """
+                [deps]
+                Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+
+                [[deps.Example]]
+                git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+                uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+                version = "0.5.3"
+                """)
+            write(joinpath(dir, "LocalPreferences.toml"), """
+                [Example]
+                foo = 1
+                """)
+            load_path = copy(LOAD_PATH)
+            prefs = PackageCompiler.TOML.parse(sprint(PackageCompiler.dump_preferences, dir))
+            @test prefs == Dict("Example" => Dict("foo" => 1))
+            @test LOAD_PATH == load_path
         end
     end
 
@@ -234,7 +259,15 @@ end
             # Get rid of some local state
             rm_with_retry(joinpath(new_depot, "packages"); recursive=true, force=true)
             rm_with_retry(joinpath(new_depot, "compiled"); recursive=true, force=true)
-            rm_with_retry(joinpath(new_depot, "artifacts"); recursive=true, force=true)
+            # The C compiler artifact takes most of a minute to download on Windows
+            # and the app never uses it, so keep it for the next build.
+            compiler_hash = PackageCompiler.Artifacts.artifact_hash("mingw-w64",
+                joinpath(pkgdir(PackageCompiler), "Artifacts.toml"))
+            artifacts_dir = joinpath(new_depot, "artifacts")
+            for name in (isdir(artifacts_dir) ? readdir(artifacts_dir) : String[])
+                name == string(compiler_hash) && continue
+                rm_with_retry(joinpath(artifacts_dir, name); recursive=true, force=true)
+            end
             end # try
             if !incremental
                 # the build should have left a base sysimage in the cache

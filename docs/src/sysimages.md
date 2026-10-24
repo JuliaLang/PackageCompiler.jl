@@ -202,5 +202,6 @@ in your current project.
   The default, `"native"`, compiles only for the CPU of the machine building the sysimage, so the sysimage may not load on a machine with an older or different CPU.
   To keep the flexibility of the base sysimage, pass `cpu_target="sysimage"` (Julia 1.13+), which compiles for the same set of targets as the base sysimage.
   Each target is compiled separately, so for large sysimages this can take several times as long and more than twice the memory.
+  For example, on Julia 1.13 an incremental sysimage of about 470 packages (Makie, Plots, DataFrames and their dependencies) needed about 38 GB of memory for `"native"` and about 54 GB for three targets. A build that runs short of memory swaps and can become many times slower, so check the memory of CI runners for large sysimages.
   On older Julia versions, pass an explicit list of targets instead, for example `PackageCompiler.default_app_cpu_target()`.
 - If you need to run some code in the process creating the sysimage, the `script` argument that points to a file can be passed.
