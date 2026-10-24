@@ -156,6 +156,83 @@ end
         @test readdir(cache_dir) == ["keep.so"]  # everything but the kept entry pruned
     end
 
+    @testset "TerminalSpinners" begin
+        TS = PackageCompiler.TerminalSpinners
+        line_after(seconds) = TS.getline(TS.Spinner(start=time() - seconds, stream=IOBuffer()), "✔", :light_green)
+        # Compile before the timed checks, so the time spent compiling doesn't round them up
+        line_after(0)
+        @test occursin("[02m:05s]", line_after(125))
+        # Seconds that round up to a full minute carry into the minutes
+        @test occursin("[01m:00s]", line_after(59.7))
+        @test occursin("[05m:00s]", line_after(299.7))
+        @test occursin("[01h:00m:00s]", line_after(3599.7))
+
+        # An `IOBuffer` is not a TTY, so a spinner on it prints plain lines
+        io = IOBuffer()
+        spinner(; kw...) = TS.Spinner(; msg="working", stream=io, kw...)
+        # The seconds vary between runs, so the checks compare output with them masked
+        mask_seconds(out) = replace(out, r"00m:\d\ds" => "00m:SSs")
+        printed() = mask_seconds(String(take!(io)))
+        start = "- working\n"
+        heartbeat = "- working (still running, 00m:SSs elapsed)\n"
+        done = "- working (done in 00m:SSs)\n"
+        failed = "- working (failed after 00m:SSs)\n"
+
+        @test TS.spin(() -> 42, spinner()) == 42
+        @test printed() == start * done
+
+        @test_throws ErrorException TS.spin(() -> error("boom"), spinner())
+        @test printed() == start * failed
+
+        # On success the start line stays, as plain lines can't be erased, but no result line follows it
+        TS.spin(() -> nothing, spinner(clear_on_finish=true))
+        @test printed() == start
+        @test_throws ErrorException TS.spin(() -> error("boom"), spinner(clear_on_finish=true))
+        @test printed() == start * failed
+
+        # While a step runs, heartbeat lines show that it is not stuck
+        s = spinner(heartbeat_interval=0.1)
+        TS.spin(() -> sleep(0.5), s)
+        out = printed()
+        @test startswith(out, start)
+        @test occursin(heartbeat, out)
+        @test endswith(out, done)
+        @test !occursin('\e', out)
+        @test s.timer === nothing
+
+        s = spinner(heartbeat_interval=0.1)
+        @test_throws ErrorException TS.spin(() -> (sleep(0.5); error("boom")), s)
+        out = printed()
+        @test occursin(heartbeat, out)
+        @test endswith(out, failed)
+        @test s.timer === nothing
+        # The heartbeat stops with the step
+        sleep(0.3)
+        @test isempty(printed())
+
+        # A log file shows each line while the step runs, not when the process exits
+        log_path = tempname()
+        logged() = mask_seconds(read(log_path, String))
+        open(log_path, "w") do file
+            TS.spin(spinner(stream=file, heartbeat_interval=0.1)) do
+                @test logged() == start
+                sleep(0.3)
+                @test startswith(logged(), start * heartbeat)
+            end
+            @test endswith(logged(), done)
+        end
+
+        TS.spin(() -> sleep(0.3), spinner(silent=true, heartbeat_interval=0.1))
+        @test isempty(printed())
+
+        # In a terminal the spinner redraws its line and prints no plain lines
+        TS.spin(() -> sleep(0.3), spinner(enabled=true, heartbeat_interval=0.1))
+        out = printed()
+        @test occursin("\e[", out)
+        @test occursin("✔ [00m:SSs] working", out)
+        @test !occursin("- working", out)
+    end
+
     @testset "concurrent builds reuse the published base sysimage" begin
         withenv("PACKAGECOMPILER_CACHE_BASE_SYSIMAGE" => nothing) do
             cpu_target = "native"
