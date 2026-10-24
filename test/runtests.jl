@@ -106,6 +106,31 @@ end
         end
     end
 
+    @testset "dump_preferences" begin
+        mktempdir() do dir
+            write(joinpath(dir, "Project.toml"), """
+                [deps]
+                Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+                """)
+            write(joinpath(dir, "Manifest.toml"), """
+                manifest_format = "2.0"
+
+                [[deps.Example]]
+                git-tree-sha1 = "46e44e869b4d90b96bd8ed1fdcf32244fddfb6cc"
+                uuid = "7876af07-990d-54b4-ab0e-23690620f79a"
+                version = "0.5.3"
+                """)
+            write(joinpath(dir, "LocalPreferences.toml"), """
+                [Example]
+                foo = 1
+                """)
+            load_path = copy(LOAD_PATH)
+            prefs = PackageCompiler.TOML.parse(sprint(PackageCompiler.dump_preferences, dir))
+            @test prefs == Dict("Example" => Dict("foo" => 1))
+            @test LOAD_PATH == load_path
+        end
+    end
+
     @testset "base_sysimage_cache_path" begin
         cache_path(; kwargs...) = PackageCompiler.base_sysimage_cache_path(;
             cpu_target="native", sysimage_build_args=`-O1`, sysimage_source="src", kwargs...)

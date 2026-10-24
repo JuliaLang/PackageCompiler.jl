@@ -2126,19 +2126,19 @@ end
 
 # Write preferences for packages in project `project_dir` to `io`
 function dump_preferences(io::IO, project_dir)
-    command = """
-    # Ensure that `@stdlib` is part of `LOAD_PATH` such that we get TOML and Pkg
-    pushfirst!(LOAD_PATH, "@stdlib")
-    using TOML, Pkg
-    popfirst!(LOAD_PATH)
-    # For each dependency pair (UUID => PackageInfo), store preferences in Dict
-    prefs = Dict{String,Any}(last(dep).name => Base.get_preferences(first(dep)) for dep in Pkg.dependencies())
-    # Filter out packages without preferences
+    project_file = Pkg.Types.projectfile_path(project_dir; strict=true)
+    manifest = Pkg.Types.EnvCache(project_file).manifest
+    # Reading preferences in this process avoids a second julia that has to load Pkg,
+    # which costs minutes when the stdlib caches are not on the depot path.
+    old_load_path = copy(LOAD_PATH)
+    prefs = try
+        copy!(LOAD_PATH, [p == "@" ? project_file : p for p in old_load_path])
+        Dict{String,Any}(pkg.name => Base.get_preferences(uuid) for (uuid, pkg) in manifest)
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
     filter!(p -> !isempty(last(p)), prefs)
-    TOML.print(prefs, sorted=true)
-    """
-    prefs = read(`$(Base.julia_cmd()) --startup-file=no --project=$project_dir -e "$command"`, String)
-    write(io, prefs)
+    TOML.print(io, prefs; sorted=true)
 
     nothing
 end
