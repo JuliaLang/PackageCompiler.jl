@@ -287,8 +287,22 @@ end
 macro monitor_oom(ex)
     quote
         lowest_free_mem = Sys.free_memory()
+        low_mem_seconds = 0
         mem_monitor = Timer(0, interval = 1) do t
-            lowest_free_mem = min(lowest_free_mem, Sys.free_memory())
+            free_mem = Sys.free_memory()
+            lowest_free_mem = min(lowest_free_mem, free_mem)
+            # A build that runs short of memory slows down instead of failing, and a CI
+            # timeout can kill it before the catch below runs, so warn while it runs.
+            # On macOS free memory leaves out reclaimable caches, so it is always low there.
+            low_mem = (Sys.islinux() || Sys.iswindows()) && free_mem < Sys.total_memory() ÷ 20
+            low_mem_seconds = low_mem ? low_mem_seconds + 1 : 0
+            if low_mem_seconds == 60
+                @warn """
+                Available system memory has stayed below 5% of the total for a minute during sysimage compilation.
+                The build may be swapping, which can make it many times slower.
+                Compiling for fewer CPU targets, or leaving large packages out of the sysimage, needs less memory.
+                """
+            end
         end
         try
             $(esc(ex))
