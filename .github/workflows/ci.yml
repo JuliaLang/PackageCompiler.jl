@@ -87,6 +87,21 @@ jobs:
             coverage: 'false'
             app-configuration: default
             extended-tests: none
+          - julia-version: 'nightly'
+            github-runner: windows-latest
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: library
+          - julia-version: 'nightly'
+            github-runner: macos-15 # Apple Silicon
+            coverage: 'false'
+            app-configuration: default
+            extended-tests: library
+          - julia-version: 'nightly'
+            github-runner: macos-15-intel
+            coverage: 'false'
+            app-configuration: incremental
+            extended-tests: none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: julia-actions/setup-julia@da908477b5db94c10ffce8cfea9f2b3b9d5db687 # v3.0.3
