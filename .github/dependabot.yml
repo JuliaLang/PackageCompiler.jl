@@ -12,3 +12,10 @@ updates:
       all-updates:
         patterns:
           - "*"
+  - package-ecosystem: "julia"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "julia"
