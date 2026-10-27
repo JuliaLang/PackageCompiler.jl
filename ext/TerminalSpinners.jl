@@ -79,7 +79,8 @@ function getline(s::Spinner, spinner, color)
         s.first || erase_and_reset(io, s.nlines)
         printstyled(io, spinner; color, bold=true)
 
-        elapsed = time() - s.start
+        # Round before splitting, so 59.6 s carries into the minutes instead of printing as 60 s
+        elapsed = round(Int, time() - s.start)
         (minutes, seconds) = fldmod(elapsed, 60)
         (hours, minutes) = fldmod(minutes, 60)
 

@@ -156,6 +156,18 @@ end
         @test readdir(cache_dir) == ["keep.so"]  # everything but the kept entry pruned
     end
 
+    @testset "TerminalSpinners" begin
+        TS = PackageCompiler.TerminalSpinners
+        line_after(seconds) = TS.getline(TS.Spinner(start=time() - seconds, stream=IOBuffer()), "✔", :light_green)
+        # Compile before the timed checks, so the time spent compiling doesn't round them up
+        line_after(0)
+        @test occursin("[02m:05s]", line_after(125))
+        # Seconds that round up to a full minute carry into the minutes
+        @test occursin("[01m:00s]", line_after(59.7))
+        @test occursin("[05m:00s]", line_after(299.7))
+        @test occursin("[01h:00m:00s]", line_after(3599.7))
+    end
+
     @testset "concurrent builds reuse the published base sysimage" begin
         withenv("PACKAGECOMPILER_CACHE_BASE_SYSIMAGE" => nothing) do
             cpu_target = "native"
