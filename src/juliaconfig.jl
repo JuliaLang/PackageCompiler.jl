@@ -77,10 +77,6 @@ function cflags()
     if Sys.iswindows()
         print(flags, " -municode")
     end
-    if Sys.isapple()
-        # julia.h triggers thousands of these warnings from Apple clang
-        print(flags, " -Wno-nullability-completeness")
-    end
     return String(take!(flags))
 end
 
