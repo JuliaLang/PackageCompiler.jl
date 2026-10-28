@@ -68,16 +68,14 @@ function cflags()
     print(flags, " -Werror-implicit-function-declaration")
     print(flags, " -O2 -std=gnu11")
     include = shell_escape(julia_includedir())
-    print(flags, " -I", include)
+    # `-isystem` so warnings from Julia's own headers (e.g. `-Wnullability-completeness`
+    # with Apple clang on 1.13+) do not flood the build output
+    print(flags, " -isystem ", include)
     if Sys.isunix()
         print(flags, " -fPIC")
     end
     if Sys.iswindows()
         print(flags, " -municode")
-    end
-    if Sys.isapple()
-        # julia.h triggers thousands of these warnings from Apple clang
-        print(flags, " -Wno-nullability-completeness")
     end
     return String(take!(flags))
 end
