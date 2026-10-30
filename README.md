@@ -4,13 +4,15 @@
 [![Codecov](https://codecov.io/gh/JuliaLang/PackageCompiler.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/PackageCompiler.jl)
 [![][docs-stable-img]][docs-stable-url]
 
-PackageCompiler is a Julia package with three main purposes:
+PackageCompiler is a Julia package with four main purposes:
 
   1. Creating custom sysimages for reduced latency when working locally with packages that have high startup times.
 
   2. Creating "apps" which are a bundle of files including an executable that can be sent and run on other machines without Julia being installed on that machine.
 
   3. Creating a relocatable C library bundle form of Julia code.
+
+  4. Creating custom Julia distributions that look like the official binaries but ship with extra packages baked into the sysimage.
 
 For installation and usage instructions, see the [documentation][docs-stable-url].
 
