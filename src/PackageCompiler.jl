@@ -89,13 +89,14 @@ const DEFAULT_JULIA_INIT_HEADER = @path joinpath(@__DIR__, "julia_init.h")
 default_julia_init() = String(DEFAULT_JULIA_INIT)
 default_julia_init_header() = String(DEFAULT_JULIA_INIT_HEADER)
 
-# See https://github.com/JuliaCI/julia-buildbot/blob/489ad6dee5f1e8f2ad341397dc15bb4fce436b26/master/inventory.py
+# x86_64 matches the official binaries, see `JULIA_CPU_TARGETS` in
+# https://github.com/JuliaCI/julia-buildkite/blob/main/utilities/build_envs.sh
 function default_app_cpu_target()
-    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                        :
-    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"  :
-    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                          :
-    Sys.ARCH === :aarch64     ?  "generic"   #= is this really the best here? =#                   :
-    Sys.ARCH === :powerpc64le ?  "pwr8"                                                            :
+    Sys.ARCH === :i686        ?  "pentium4;sandybridge,-xsaveopt,clone_all"                                                  :
+    Sys.ARCH === :x86_64      ?  "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1)"  :
+    Sys.ARCH === :arm         ?  "armv7-a;armv7-a,neon;armv7-a,neon,vfp4"                                                    :
+    Sys.ARCH === :aarch64     ?  "generic"   #= is this really the best here? =#                                             :
+    Sys.ARCH === :powerpc64le ?  "pwr8"                                                                                      :
         "generic"
 end
 
