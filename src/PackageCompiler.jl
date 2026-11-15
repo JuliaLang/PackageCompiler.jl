@@ -639,7 +639,7 @@ end
     cmd = `$(get_julia_cmd()) --sysimage=$sysimage -e $code`
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "ensurecompiled: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
-    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib", "JULIA_PROJECT" => nothing)
     run(cmd)
     return
 end
@@ -652,7 +652,7 @@ end
     # --project is not propagated well with Distributed, so use environment
     splitter = Sys.iswindows() ? ';' : ':'
     @debug "run_precompilation_script: running $cmd" JULIA_LOAD_PATH = "$project$(splitter)@stdlib"
-    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib")
+    cmd = addenv(cmd, "JULIA_LOAD_PATH" => "$project$(splitter)@stdlib", "JULIA_PROJECT" => nothing)
     precompile_file === nothing || @info "PackageCompiler: Executing $(abspath(precompile_file)) => $(tracefile)"
     run(cmd)  # `Run` this command so that we'll display stdout from the user's script.
     precompile_file === nothing || @info "PackageCompiler: Done"
